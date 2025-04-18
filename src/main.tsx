@@ -9,7 +9,9 @@ const root = document.getElementById('root');
 
 // Make sure the root element exists before rendering
 if (root) {
-  createRoot(root).render(
+  const reactRoot = createRoot(root);
+  
+  reactRoot.render(
     <React.StrictMode>
       <App />
     </React.StrictMode>
