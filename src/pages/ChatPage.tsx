@@ -24,25 +24,37 @@ const ChatPage = () => {
               : "fixed inset-y-0 left-0 z-50 w-64 transform -translate-x-full"
           } transition-transform duration-300 ease-in-out md:relative md:translate-x-0 bg-secondary border-r`}
         >
-          <ChatHistory onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
+          <div className="flex flex-col h-full">
+            <div className="h-14 border-b flex items-center px-4">
+              <Logo />
+              {isMobile && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto"
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <X size={20} />
+                </Button>
+              )}
+            </div>
+            <ChatHistory onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
+          </div>
         </div>
 
         {/* Main content */}
         <div className="flex flex-col flex-1 h-full overflow-hidden">
           {/* Header */}
-          <header className="h-14 border-b flex items-center justify-between px-4">
-            <div className="flex items-center gap-2">
-              {isMobile && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                >
-                  {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-                </Button>
-              )}
-              <Logo />
-            </div>
+          <header className="h-14 border-b flex items-center px-4">
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+              >
+                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+              </Button>
+            )}
           </header>
 
           {/* Chat content */}

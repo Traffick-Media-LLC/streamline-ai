@@ -2,7 +2,7 @@
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, X, PlusCircle } from "lucide-react";
+import { MessageSquare, PlusCircle } from "lucide-react";
 
 const ChatHistory = ({
   onClose,
@@ -37,16 +37,7 @@ const ChatHistory = ({
   });
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="font-semibold">Chat History</h2>
-        {isMobile && (
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X size={18} />
-          </Button>
-        )}
-      </div>
-      
+    <div className="flex flex-col flex-1">
       <div className="p-2">
         <Button 
           variant="outline" 
@@ -59,6 +50,10 @@ const ChatHistory = ({
           <PlusCircle size={16} />
           New Chat
         </Button>
+      </div>
+
+      <div className="px-2 py-1">
+        <h2 className="text-sm font-medium text-muted-foreground">Chat History</h2>
       </div>
       
       <div className="flex-1 overflow-y-auto p-2">
