@@ -1,5 +1,6 @@
 
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface ChatModeToggleProps {
   mode: "simple" | "complex";
@@ -8,24 +9,24 @@ interface ChatModeToggleProps {
 
 const ChatModeToggle = ({ mode, onModeChange }: ChatModeToggleProps) => {
   return (
-    <div className="flex justify-center mb-4">
-      <ToggleGroup
-        type="single"
-        value={mode}
-        onValueChange={(value) => {
-          if (value) onModeChange(value as "simple" | "complex");
-        }}
-        className="border rounded-lg"
-      >
-        <ToggleGroupItem value="simple" aria-label="Simple mode">
+    <div className="flex items-center justify-center gap-4 mb-4">
+      <div className="flex items-center gap-2">
+        <Label htmlFor="mode-toggle" className="text-sm font-medium">
           Simple
-        </ToggleGroupItem>
-        <ToggleGroupItem value="complex" aria-label="Complex mode">
+        </Label>
+        <Switch
+          id="mode-toggle"
+          checked={mode === "complex"}
+          onCheckedChange={(checked) => onModeChange(checked ? "complex" : "simple")}
+          className="data-[state=checked]:bg-primary"
+        />
+        <Label htmlFor="mode-toggle" className="text-sm font-medium">
           Complex
-        </ToggleGroupItem>
-      </ToggleGroup>
+        </Label>
+      </div>
     </div>
   );
 };
 
 export default ChatModeToggle;
+
