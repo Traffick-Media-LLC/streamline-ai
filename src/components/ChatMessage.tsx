@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Message } from "../types/chat";
 import { formatTimestamp } from "../utils/chatUtils";
@@ -25,10 +26,14 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
     // Remove pound signs for headings while preserving the content
     formattedContent = formattedContent.replace(/^#+\s*(.*)/gm, '$1');
     
-    // Remove TLDR sections
-    formattedContent = formattedContent.replace(/TL;DR:?[\s\n]+(.*?)(\n|$)/gi, '');
+    // Remove any summary sections at the start that use colons
+    formattedContent = formattedContent.replace(/^Summary:?[\s\n]+(.*?)(\n|$)/gi, '');
+    formattedContent = formattedContent.replace(/^Key points:?[\s\n]+(.*?)(\n|$)/gi, '');
     
-    return formattedContent.trim();
+    // Add paragraph spacing for better readability
+    formattedContent = formattedContent.replace(/\n\n/g, '\n').trim();
+    
+    return formattedContent;
   };
 
   return (
