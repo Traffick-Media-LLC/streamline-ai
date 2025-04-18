@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Message } from "../types/chat";
 import { formatTimestamp } from "../utils/chatUtils";
@@ -23,10 +22,13 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
     // Remove asterisks for bold
     let formattedContent = content.replace(/\*\*(.*?)\*\*/g, '$1');
     
-    // Remove pound signs for headings
+    // Remove pound signs for headings while preserving the content
     formattedContent = formattedContent.replace(/^#+\s*(.*)/gm, '$1');
     
-    return formattedContent;
+    // Remove TLDR sections
+    formattedContent = formattedContent.replace(/TL;DR:?[\s\n]+(.*?)(\n|$)/gi, '');
+    
+    return formattedContent.trim();
   };
 
   return (
