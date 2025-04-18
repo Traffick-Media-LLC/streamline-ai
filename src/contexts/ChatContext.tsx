@@ -1,4 +1,3 @@
-
 import { createContext, useState, useEffect, useContext } from "react";
 import { Chat, Message } from "../types/chat";
 import { generateChatTitle } from "../utils/chatUtils";
@@ -76,7 +75,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
   const updateChatTitle = async (chatId: string, firstMessage: string) => {
     const title = await generateChatTitle(firstMessage);
-    
     setChats((prev) =>
       prev.map((chat) =>
         chat.id === chatId ? { ...chat, title } : chat
@@ -99,7 +97,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       timestamp: Date.now(),
     };
 
-    // Update chat with user message
     setChats((prev) =>
       prev.map((chat) => {
         if (chat.id === chatId) {
@@ -123,7 +120,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     setIsLoadingResponse(true);
 
     try {
-      // Get the current chat's messages
       const currentChat = chats.find(chat => chat.id === chatId);
       const chatMessages = currentChat ? [...currentChat.messages, userMessage] : [userMessage];
 
@@ -131,7 +127,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         body: { 
           content, 
           mode,
-          messages: chatMessages // Send the full message history
+          messages: chatMessages
         },
       });
 

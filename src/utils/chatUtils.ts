@@ -1,5 +1,6 @@
 
 import { Message } from "../types/chat";
+import { supabase } from "@/integrations/supabase/client";
 
 export const formatTimestamp = (timestamp: number): string => {
   const date = new Date(timestamp);
@@ -24,11 +25,27 @@ export const formatDate = (timestamp: number): string => {
 };
 
 export const generateChatTitle = async (firstMessage: string): Promise<string> => {
-  // In a real app, you might want to use AI to generate a title based on the first message
-  // For now, we'll just take the first few words
-  const words = firstMessage.split(' ');
-  const title = words.slice(0, 3).join(' ');
-  return title.length < 20 ? title : title.substring(0, 20) + '...';
+  try {
+    const { data, error } = await supabase.functions.invoke('chat', {
+      body: { 
+        content: `Summarize this message in 3-4 words as a chat title: "${firstMessage}"`,
+        mode: "simple",
+        messages: [] // No context needed for title generation
+      },
+    });
+
+    if (error) throw error;
+    
+    // Clean up the title - remove quotes and limit length
+    const title = data.message.replace(/["']/g, '').trim();
+    return title.length < 30 ? title : title.substring(0, 27) + '...';
+  } catch (error) {
+    console.error("Error generating chat title:", error);
+    // Fallback to using first few words if AI title generation fails
+    const words = firstMessage.split(' ');
+    const title = words.slice(0, 3).join(' ');
+    return title.length < 30 ? title : title.substring(0, 27) + '...';
+  }
 };
 
 export const getMessagesByDate = (messages: Message[]) => {
@@ -41,3 +58,4 @@ export const getMessagesByDate = (messages: Message[]) => {
     return acc;
   }, {});
 };
+
