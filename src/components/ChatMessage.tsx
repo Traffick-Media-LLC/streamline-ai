@@ -35,11 +35,11 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
             break-words whitespace-pre-wrap
           `}
         >
-          <p className="leading-relaxed text-[15px] font-normal text-foreground">
+          <div className="text-[15px] font-normal leading-relaxed">
             {renderTextWithLinks(message.content)}
-          </p>
+          </div>
         </div>
-        <span className="text-xs text-muted-foreground px-2">{formattedTime}</span>
+        <span className="text-xs font-medium text-muted-foreground mt-1 px-2">{formattedTime}</span>
       </div>
       
       {isUser && (

@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -84,19 +85,23 @@
   }
 
   h1 {
-    @apply text-3xl font-bold tracking-tight mb-4;
+    @apply text-3xl font-bold tracking-tight mb-4 text-foreground;
   }
 
   h2 {
-    @apply text-2xl font-semibold tracking-tight mb-3;
+    @apply text-2xl font-semibold tracking-tight mb-3 text-foreground;
   }
 
   h3 {
-    @apply text-xl font-medium tracking-tight mb-2;
+    @apply text-xl font-medium tracking-tight mb-2 text-foreground;
   }
 
   p {
-    @apply leading-7 [&:not(:first-child)]:mt-4;
+    @apply leading-relaxed [&:not(:first-child)]:mt-4 text-foreground;
+  }
+
+  a {
+    @apply text-blue-600 hover:text-blue-800 transition-colors font-medium;
   }
 }
 
@@ -111,11 +116,11 @@
 }
 
 .chat-message-user {
-  @apply bg-secondary text-secondary-foreground p-4 rounded-lg text-sm leading-relaxed break-words;
+  @apply bg-secondary text-secondary-foreground p-4 rounded-lg text-[15px] leading-relaxed break-words;
 }
 
 .chat-message-assistant {
-  @apply bg-white border border-border p-4 rounded-lg text-sm leading-relaxed break-words;
+  @apply bg-white border border-border p-4 rounded-lg text-[15px] leading-relaxed break-words shadow-sm;
 }
 
 .typing-indicator {
