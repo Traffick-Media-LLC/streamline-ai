@@ -1,6 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,9 +14,31 @@ serve(async (req) => {
   }
 
   const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
   try {
     const { content, mode, messages } = await req.json();
+
+    // Initialize Supabase client
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Search for relevant knowledge entries based on the user's message
+    const { data: relevantEntries, error: searchError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content')
+      .filter('is_active', 'eq', true)
+      .textSearch('content', content.split(' ').join(' | '));
+
+    if (searchError) {
+      console.error('Error searching knowledge base:', searchError);
+    }
+
+    // Format knowledge base entries for the prompt
+    const knowledgeBaseContext = relevantEntries?.length
+      ? "\n\nRelevant information from our knowledge base:\n" + 
+        relevantEntries.map(entry => `${entry.title}:\n${entry.content}`).join('\n\n')
+      : '';
 
     // Base system prompt that establishes the AI's role and behavior
     const baseSystemPrompt = mode === 'simple' 
@@ -26,14 +49,12 @@ serve(async (req) => {
     const conversationMessages = [
       {
         role: 'system',
-        content: `${baseSystemPrompt} Maintain context from the entire conversation when answering follow-up questions.`
+        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation when answering follow-up questions.`
       },
-      // Include previous messages to maintain context
       ...messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
         content: msg.content
       })),
-      // Add the current message
       { role: 'user', content }
     ];
 
