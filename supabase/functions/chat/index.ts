@@ -36,20 +36,20 @@ serve(async (req) => {
 
     // Format knowledge base entries for the prompt
     const knowledgeBaseContext = relevantEntries?.length
-      ? "\n\nRelevant information from our knowledge base:\n" + 
+      ? "\n\nVerified information from our knowledge base:\n" + 
         relevantEntries.map(entry => `${entry.title}:\n${entry.content}`).join('\n\n')
       : '';
 
     // Base system prompt that establishes the AI's role and behavior
     const baseSystemPrompt = mode === 'simple' 
-      ? 'You are a legal assistant providing brief, direct answers about regulated industries. Use plain English and only mention legality status and immediate sales restrictions.'
-      : 'You are a legal assistant providing detailed breakdowns about regulated industries. Include references to specific laws, regulatory decisions, and external links to legal documents. Start with a TL;DR summary.';
+      ? 'You are a legal assistant providing clear, direct answers about regulated industries. Use plain English and focus on current legality status and immediate sales restrictions. Always cite the most recent regulatory updates when available.'
+      : 'You are a legal assistant providing comprehensive analysis about regulated industries. Include specific references to current laws, recent regulatory decisions, and relevant legal documents. Emphasize the most up-to-date information available and note any pending changes or updates to regulations.';
 
     // Create the messages array with the system prompt and conversation history
     const conversationMessages = [
       {
         role: 'system',
-        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation when answering follow-up questions.`
+        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation when answering follow-up questions. Always prioritize the most recent and authoritative sources. If information seems outdated, explicitly state that and suggest where to find current updates.`
       },
       ...messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
