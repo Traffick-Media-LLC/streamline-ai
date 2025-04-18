@@ -26,14 +26,24 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
     // Remove pound signs for headings while preserving the content
     formattedContent = formattedContent.replace(/^#+\s*(.*)/gm, '$1');
     
-    // Remove any summary sections at the start that use colons
+    // Remove any summary sections that use colons
     formattedContent = formattedContent.replace(/^Summary:?[\s\n]+(.*?)(\n|$)/gi, '');
     formattedContent = formattedContent.replace(/^Key points:?[\s\n]+(.*?)(\n|$)/gi, '');
+    formattedContent = formattedContent.replace(/^Detailed review:?[\s\n]+(.*?)(\n|$)/gi, '');
     
-    // Add paragraph spacing for better readability
-    formattedContent = formattedContent.replace(/\n\n/g, '\n').trim();
+    // Fix spacing for numbered lists (ensure proper spacing between items)
+    formattedContent = formattedContent.replace(/(\d+\..*?)(\n)(?=\d+\.)/g, '$1\n\n');
     
-    return formattedContent;
+    // Fix spacing for bullet points
+    formattedContent = formattedContent.replace(/(-\s.*?)(\n)(?=-\s)/g, '$1\n\n');
+    
+    // Fix double spacing issues that might be created
+    formattedContent = formattedContent.replace(/\n{3,}/g, '\n\n');
+    
+    // Remove any references to TL;DR
+    formattedContent = formattedContent.replace(/TL;DR:?[\s\n]+(.*?)(\n|$)/gi, '');
+    
+    return formattedContent.trim();
   };
 
   return (
