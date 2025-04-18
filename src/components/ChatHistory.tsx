@@ -8,13 +8,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
 
-const ChatHistory = ({
-  onClose,
-  isMobile,
-}: {
-  onClose?: () => void;
-  isMobile?: boolean;
-}) => {
+const ChatHistory = ({ onClose, isMobile }: { onClose?: () => void; isMobile?: boolean }) => {
   const { chats, currentChatId, selectChat, createNewChat } = useChatContext();
   const { user, signOut } = useAuth();
   const [userProfile, setUserProfile] = useState<{ first_name?: string; last_name?: string }>({});
@@ -24,24 +18,20 @@ const ChatHistory = ({
     const fetchUserProfile = async () => {
       if (!user?.id) return;
 
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('first_name, last_name')
-          .eq('id', user.id)
-          .single();
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', user.id)
+        .single();
 
-        if (error) throw error;
-        setUserProfile(data || {});
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
+      if (!error && profile) {
+        setUserProfile(profile);
       }
     };
 
     fetchUserProfile();
   }, [user?.id]);
 
-  // Group chats by date
   const chatsByDate = chats.reduce<Record<string, typeof chats>>(
     (acc, chat) => {
       const date = formatDate(chat.createdAt);
@@ -54,7 +44,6 @@ const ChatHistory = ({
     {}
   );
 
-  // Sort dates newest to oldest
   const sortedDates = Object.keys(chatsByDate).sort((a, b) => {
     if (a === "Today") return -1;
     if (b === "Today") return 1;
@@ -64,13 +53,13 @@ const ChatHistory = ({
     return new Date(b).getTime() - new Date(a).getTime();
   });
 
-  // Get user initials for avatar fallback
   const getUserInitials = () => {
-    if (!user?.email) return "U";
-    return user.email.charAt(0).toUpperCase();
+    if (userProfile.first_name && userProfile.last_name) {
+      return `${userProfile.first_name[0]}${userProfile.last_name[0]}`;
+    }
+    return user?.email?.[0].toUpperCase() || 'U';
   };
 
-  // Render user display name
   const getUserDisplayName = () => {
     if (userProfile.first_name && userProfile.last_name) {
       return `${userProfile.first_name} ${userProfile.last_name}`;
@@ -132,7 +121,6 @@ const ChatHistory = ({
         )}
       </div>
 
-      {/* Bottom menu */}
       <div className="border-t p-2">
         <div className="flex items-center justify-between px-2">
           <div className="flex items-center gap-2">

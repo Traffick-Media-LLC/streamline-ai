@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "../contexts/AuthContext";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "@/components/ui/use-toast";
 import { useNavigate } from 'react-router-dom';
 
 const ProfilePage = () => {
@@ -17,15 +17,26 @@ const ProfilePage = () => {
     const fetchUserProfile = async () => {
       if (!user?.id) return;
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('first_name, last_name')
-        .eq('id', user.id)
-        .single();
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
 
-      if (data) {
-        setFirstName(data.first_name || '');
-        setLastName(data.last_name || '');
+        if (error) throw error;
+
+        if (profile) {
+          setFirstName(profile.first_name || '');
+          setLastName(profile.last_name || '');
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load profile",
+        });
       }
     };
 
@@ -36,7 +47,11 @@ const ProfilePage = () => {
     e.preventDefault();
 
     if (!user?.id) {
-      toast.error("User not found");
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "User not found",
+      });
       return;
     }
 
@@ -51,11 +66,18 @@ const ProfilePage = () => {
 
       if (error) throw error;
 
-      toast.success("Profile updated successfully");
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      });
       navigate('/');
     } catch (error) {
-      toast.error("Failed to update profile");
       console.error('Profile update error:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update profile",
+      });
     }
   };
 
