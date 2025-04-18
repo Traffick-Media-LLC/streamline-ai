@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -26,7 +25,7 @@ serve(async (req) => {
     // Search for relevant knowledge entries based on the user's message
     const { data: relevantEntries, error: searchError } = await supabase
       .from('knowledge_entries')
-      .select('title, content')
+      .select('title, content, updated_at')
       .filter('is_active', 'eq', true)
       .textSearch('content', content.split(' ').join(' | '));
 
@@ -37,7 +36,9 @@ serve(async (req) => {
     // Format knowledge base entries for the prompt
     const knowledgeBaseContext = relevantEntries?.length
       ? "\n\nVerified information from our knowledge base:\n" + 
-        relevantEntries.map(entry => `${entry.title}:\n${entry.content}`).join('\n\n')
+        relevantEntries.map(entry => 
+          `${entry.title} (Last Updated: ${new Date(entry.updated_at).toLocaleDateString()}):\n${entry.content}`
+        ).join('\n\n')
       : '';
 
     // Base system prompt that establishes the AI's role and behavior
