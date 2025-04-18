@@ -18,6 +18,17 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
   
   const isUser = message.role === "user";
   
+  // Function to convert markdown-like formatting to readable text
+  const formatMessageContent = (content: string) => {
+    // Remove asterisks for bold
+    let formattedContent = content.replace(/\*\*(.*?)\*\*/g, '$1');
+    
+    // Remove pound signs for headings
+    formattedContent = formattedContent.replace(/^#+\s*(.*)/gm, '$1');
+    
+    return formattedContent;
+  };
+
   return (
     <div className={`flex items-start ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -38,7 +49,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
           `}
         >
           <div className="text-[15px] font-normal leading-relaxed">
-            {renderTextWithLinks(message.content)}
+            {renderTextWithLinks(formatMessageContent(message.content))}
           </div>
         </div>
         <span className="text-xs font-medium text-muted-foreground mt-1 px-2">{formattedTime}</span>
@@ -56,4 +67,3 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
 };
 
 export default ChatMessage;
-
