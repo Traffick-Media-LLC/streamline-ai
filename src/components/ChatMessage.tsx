@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Message } from "../types/chat";
 import { formatTimestamp } from "../utils/chatUtils";
+import { renderTextWithLinks } from "../utils/textUtils";
 import { User, Bot } from "lucide-react";
 
 interface ChatMessageProps {
@@ -27,9 +28,16 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
         </div>
       )}
       
-      <div className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-        <div className={isUser ? "chat-message-user" : "chat-message-assistant"}>
-          <p className="whitespace-pre-wrap">{message.content}</p>
+      <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[85%]`}>
+        <div 
+          className={`
+            ${isUser ? "chat-message-user" : "chat-message-assistant"} 
+            break-words whitespace-pre-wrap
+          `}
+        >
+          <p className="leading-relaxed">
+            {renderTextWithLinks(message.content)}
+          </p>
         </div>
         <span className="text-xs text-muted-foreground px-2">{formattedTime}</span>
       </div>
