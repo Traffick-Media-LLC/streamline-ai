@@ -1,8 +1,8 @@
-
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, PlusCircle } from "lucide-react";
+import { MessageSquare, PlusCircle, Settings, HelpCircle } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const ChatHistory = ({
   onClose,
@@ -88,6 +88,26 @@ const ChatHistory = ({
             </div>
           ))
         )}
+      </div>
+
+      {/* Bottom menu */}
+      <div className="border-t p-2">
+        <div className="flex items-center justify-between px-2">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src="/placeholder.svg" />
+              <AvatarFallback>U</AvatarFallback>
+            </Avatar>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <HelpCircle className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
