@@ -18,34 +18,6 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
   
   const isUser = message.role === "user";
   
-  // Function to convert markdown-like formatting to readable text
-  const formatMessageContent = (content: string) => {
-    // Remove asterisks for bold
-    let formattedContent = content.replace(/\*\*(.*?)\*\*/g, '$1');
-    
-    // Remove pound signs for headings while preserving the content
-    formattedContent = formattedContent.replace(/^#+\s*(.*)/gm, '$1');
-    
-    // Remove any summary sections that use colons
-    formattedContent = formattedContent.replace(/^Summary:?[\s\n]+(.*?)(\n|$)/gi, '');
-    formattedContent = formattedContent.replace(/^Key points:?[\s\n]+(.*?)(\n|$)/gi, '');
-    formattedContent = formattedContent.replace(/^Detailed review:?[\s\n]+(.*?)(\n|$)/gi, '');
-    
-    // Fix spacing for numbered lists (ensure proper spacing between items)
-    formattedContent = formattedContent.replace(/(\d+\..*?)(\n)(?=\d+\.)/g, '$1\n\n');
-    
-    // Fix spacing for bullet points
-    formattedContent = formattedContent.replace(/(-\s.*?)(\n)(?=-\s)/g, '$1\n\n');
-    
-    // Fix double spacing issues that might be created
-    formattedContent = formattedContent.replace(/\n{3,}/g, '\n\n');
-    
-    // Remove any references to TL;DR
-    formattedContent = formattedContent.replace(/TL;DR:?[\s\n]+(.*?)(\n|$)/gi, '');
-    
-    return formattedContent.trim();
-  };
-
   return (
     <div className={`flex items-start ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -66,7 +38,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
           `}
         >
           <div className="text-[15px] font-normal leading-relaxed">
-            {renderTextWithLinks(formatMessageContent(message.content))}
+            {renderTextWithLinks(message.content)}
           </div>
         </div>
         <span className="text-xs font-medium text-muted-foreground mt-1 px-2">{formattedTime}</span>
@@ -84,3 +56,4 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
 };
 
 export default ChatMessage;
+
