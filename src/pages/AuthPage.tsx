@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/sonner";
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [debug, setDebug] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Check for existing session
@@ -39,7 +40,12 @@ const AuthPage = () => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      // Display the current URL for debugging
+      const currentUrl = window.location.origin;
+      setDebug(`Attempting sign-in from: ${currentUrl}`);
+      console.log("Sign-in attempt from:", currentUrl);
+
+      const { error, data } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: window.location.origin,
@@ -51,12 +57,18 @@ const AuthPage = () => {
 
       if (error) {
         console.error("Google sign in error:", error);
+        setDebug(`Error: ${error.message}`);
         toast.error("Sign in failed", {
           description: error.message
         });
       }
-    } catch (error) {
+      
+      if (data) {
+        console.log("Auth data:", data);
+      }
+    } catch (error: any) {
       console.error("Unexpected error during sign in:", error);
+      setDebug(`Unexpected error: ${error.message || JSON.stringify(error)}`);
       toast.error("Sign in failed", {
         description: "An unexpected error occurred"
       });
@@ -98,6 +110,22 @@ const AuthPage = () => {
         
         <div className="text-center text-sm text-muted-foreground mt-4">
           <p>Secure sign in with your Google account</p>
+        </div>
+        
+        {debug && (
+          <div className="mt-4 p-4 bg-muted rounded-md overflow-auto max-h-32">
+            <p className="text-xs font-mono">{debug}</p>
+          </div>
+        )}
+        
+        <div className="mt-4 p-4 bg-muted rounded-md">
+          <h3 className="font-medium text-sm mb-2">Troubleshooting Tips:</h3>
+          <ul className="text-xs space-y-1 list-disc pl-4">
+            <li>Your current URL: {window.location.origin}</li>
+            <li>Make sure this URL is added to your Google OAuth authorized origins</li>
+            <li>Add this redirect URL in Google Console: {window.location.origin}</li>
+            <li>Add this redirect URL in Supabase Auth settings: {window.location.origin}</li>
+          </ul>
         </div>
       </div>
     </div>
