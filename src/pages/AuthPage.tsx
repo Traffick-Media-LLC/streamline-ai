@@ -42,16 +42,21 @@ const AuthPage = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin
+          redirectTo: window.location.origin,
+          queryParams: {
+            prompt: 'select_account' // Force the Google account selector to appear
+          }
         }
       });
 
       if (error) {
+        console.error("Google sign in error:", error);
         toast.error("Sign in failed", {
           description: error.message
         });
       }
     } catch (error) {
+      console.error("Unexpected error during sign in:", error);
       toast.error("Sign in failed", {
         description: "An unexpected error occurred"
       });
@@ -89,6 +94,10 @@ const AuthPage = () => {
             <FcGoogle className="h-5 w-5" />
             {loading ? "Signing in..." : "Sign in with Google"}
           </Button>
+        </div>
+        
+        <div className="text-center text-sm text-muted-foreground mt-4">
+          <p>Secure sign in with your Google account</p>
         </div>
       </div>
     </div>
