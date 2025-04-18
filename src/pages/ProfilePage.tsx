@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { toast } from "@/components/ui/use-toast";
 import { useNavigate } from 'react-router-dom';
 
-const ProfilePage = () => {
+const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState('');
