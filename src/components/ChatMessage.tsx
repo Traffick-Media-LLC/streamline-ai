@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Message } from "../types/chat";
 import { formatTimestamp } from "../utils/chatUtils";
 import { renderTextWithLinks } from "../utils/textUtils";
-import { User, Bot } from "lucide-react";
+import { User } from "lucide-react";
 
 interface ChatMessageProps {
   message: Message;
@@ -22,9 +22,11 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
     <div className={`flex items-start ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
         <div className="flex-shrink-0 mr-2 mt-1">
-          <div className="bg-streamline-red p-1 rounded-full text-white">
-            <Bot size={16} />
-          </div>
+          <img 
+            src="/lovable-uploads/ed09009c-763d-4847-b5cb-1d76525bd466.png" 
+            alt="AI Assistant"
+            className="w-6 h-6 rounded-full"
+          />
         </div>
       )}
       
@@ -54,3 +56,4 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
 };
 
 export default ChatMessage;
+
