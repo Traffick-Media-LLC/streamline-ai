@@ -18,7 +18,10 @@ const AuthPage = () => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        console.log("Session found:", session);
         setUser(session.user);
+      } else {
+        console.log("No active session found");
       }
     };
 
@@ -26,21 +29,27 @@ const AuthPage = () => {
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        console.log("Auth state change:", event, session);
         setUser(session?.user || null);
         if (session?.user) {
+          console.log("User authenticated:", session.user);
           navigate("/");
+        } else {
+          console.log("No authenticated user");
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log("Cleaning up auth subscriptions");
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      // Display the current URL for debugging
       const currentUrl = window.location.origin;
       setDebug(`Attempting sign-in from: ${currentUrl}`);
       console.log("Sign-in attempt from:", currentUrl);
@@ -50,7 +59,8 @@ const AuthPage = () => {
         options: {
           redirectTo: window.location.origin,
           queryParams: {
-            prompt: 'select_account' // Force the Google account selector to appear
+            prompt: 'select_account',
+            access_type: 'offline'
           }
         }
       });
@@ -64,7 +74,8 @@ const AuthPage = () => {
       }
       
       if (data) {
-        console.log("Auth data:", data);
+        console.log("Auth response data:", data);
+        console.log("Auth URL:", data.url);
       }
     } catch (error: any) {
       console.error("Unexpected error during sign in:", error);
@@ -79,6 +90,7 @@ const AuthPage = () => {
 
   // If user is already authenticated, redirect to home
   if (user) {
+    console.log("Redirecting authenticated user to home");
     return <Navigate to="/" />;
   }
 
