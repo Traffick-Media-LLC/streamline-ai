@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -16,11 +15,27 @@ serve(async (req) => {
   const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
   
   try {
-    const { content, mode } = await req.json();
+    const { content, mode, messages } = await req.json();
 
-    const systemPrompt = mode === 'simple' 
+    // Base system prompt that establishes the AI's role and behavior
+    const baseSystemPrompt = mode === 'simple' 
       ? 'You are a legal assistant providing brief, direct answers about regulated industries. Use plain English and only mention legality status and immediate sales restrictions.'
       : 'You are a legal assistant providing detailed breakdowns about regulated industries. Include references to specific laws, regulatory decisions, and external links to legal documents. Start with a TL;DR summary.';
+
+    // Create the messages array with the system prompt and conversation history
+    const conversationMessages = [
+      {
+        role: 'system',
+        content: `${baseSystemPrompt} Maintain context from the entire conversation when answering follow-up questions.`
+      },
+      // Include previous messages to maintain context
+      ...messages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      })),
+      // Add the current message
+      { role: 'user', content }
+    ];
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -30,13 +45,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          { role: 'user', content }
-        ],
+        messages: conversationMessages,
         temperature: 0.7,
       }),
     });
