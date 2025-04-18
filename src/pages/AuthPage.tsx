@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { FcGoogle } from "react-icons/fc";
 import Logo from "../components/Logo";
 import { toast } from "@/components/ui/sonner";
-
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
@@ -48,11 +47,13 @@ const AuthPage = () => {
       subscription.unsubscribe();
     };
   }, [navigate]);
-
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      const { error, data } = await supabase.auth.signInWithOAuth({
+      const {
+        error,
+        data
+      } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: window.location.origin,
@@ -94,9 +95,7 @@ const AuthPage = () => {
           <h1 className="mt-6 text-3xl font-bold tracking-tight">
             Sign in to Streamline AI
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your legal assistant for regulated industries
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground"></p>
         </div>
 
         <div className="mt-8 space-y-4">
