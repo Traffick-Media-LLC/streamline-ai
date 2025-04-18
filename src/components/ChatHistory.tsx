@@ -1,10 +1,12 @@
-
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, PlusCircle, Settings, HelpCircle, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "../contexts/AuthContext";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from 'react-router-dom';
 
 const ChatHistory = ({
   onClose,
@@ -15,6 +17,29 @@ const ChatHistory = ({
 }) => {
   const { chats, currentChatId, selectChat, createNewChat } = useChatContext();
   const { user, signOut } = useAuth();
+  const [userProfile, setUserProfile] = useState<{ first_name?: string; last_name?: string }>({});
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
+
+        if (error) throw error;
+        setUserProfile(data || {});
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user?.id]);
 
   // Group chats by date
   const chatsByDate = chats.reduce<Record<string, typeof chats>>(
@@ -43,6 +68,14 @@ const ChatHistory = ({
   const getUserInitials = () => {
     if (!user?.email) return "U";
     return user.email.charAt(0).toUpperCase();
+  };
+
+  // Render user display name
+  const getUserDisplayName = () => {
+    if (userProfile.first_name && userProfile.last_name) {
+      return `${userProfile.first_name} ${userProfile.last_name}`;
+    }
+    return user?.email?.split('@')[0] || "User";
   };
 
   return (
@@ -110,15 +143,20 @@ const ChatHistory = ({
               <AvatarFallback>{getUserInitials()}</AvatarFallback>
             </Avatar>
             <div className="text-sm font-medium truncate max-w-[120px]">
-              {user?.email?.split('@')[0] || "User"}
+              {getUserDisplayName()}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8" 
+              onClick={() => navigate('/profile')}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={signOut}>
               <LogOut className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <Settings className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <HelpCircle className="h-4 w-4" />
