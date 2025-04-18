@@ -18,13 +18,15 @@ const ChatWindow = () => {
 
   if (!currentChat) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-        <h2 className="text-2xl font-bold mb-2">Welcome to Streamline AI</h2>
-        <p className="text-muted-foreground mb-4">
+      <div className="flex flex-col items-center justify-center h-full p-4 text-center space-y-6">
+        <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-streamline-red to-streamline-darkGray">
+          Welcome to Streamline AI
+        </h1>
+        <h2 className="text-xl text-muted-foreground">
           Your legal assistant for regulated industries
-        </p>
+        </h2>
         <div className="max-w-md">
-          <p>
+          <p className="text-base text-muted-foreground">
             Start a new chat to get legal guidance on topics related to nicotine, 
             hemp-derived cannabinoids, kratom, and other regulated industries.
           </p>
@@ -42,7 +44,7 @@ const ChatWindow = () => {
     <div className="flex-1 overflow-y-auto p-4">
       {dates.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-center">
-          <p className="text-muted-foreground">
+          <p className="text-lg text-muted-foreground font-medium">
             Ask a question to start the conversation
           </p>
         </div>
@@ -50,7 +52,7 @@ const ChatWindow = () => {
         dates.map((date) => (
           <div key={date} className="mb-6">
             <div className="flex justify-center mb-4">
-              <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-md">
+              <span className="text-xs font-medium bg-muted/50 text-muted-foreground px-3 py-1 rounded-full">
                 {formatDate(new Date(date).getTime())}
               </span>
             </div>

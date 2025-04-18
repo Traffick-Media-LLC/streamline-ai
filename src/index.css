@@ -82,6 +82,22 @@
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 0 91% 51%;
   }
+
+  h1 {
+    @apply text-3xl font-bold tracking-tight mb-4;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold tracking-tight mb-3;
+  }
+
+  h3 {
+    @apply text-xl font-medium tracking-tight mb-2;
+  }
+
+  p {
+    @apply leading-7 [&:not(:first-child)]:mt-4;
+  }
 }
 
 @layer base {
