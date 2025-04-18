@@ -1,8 +1,10 @@
+
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, PlusCircle, Settings, HelpCircle } from "lucide-react";
+import { MessageSquare, PlusCircle, Settings, HelpCircle, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "../contexts/AuthContext";
 
 const ChatHistory = ({
   onClose,
@@ -12,6 +14,7 @@ const ChatHistory = ({
   isMobile?: boolean;
 }) => {
   const { chats, currentChatId, selectChat, createNewChat } = useChatContext();
+  const { user, signOut } = useAuth();
 
   // Group chats by date
   const chatsByDate = chats.reduce<Record<string, typeof chats>>(
@@ -35,6 +38,12 @@ const ChatHistory = ({
     
     return new Date(b).getTime() - new Date(a).getTime();
   });
+
+  // Get user initials for avatar fallback
+  const getUserInitials = () => {
+    if (!user?.email) return "U";
+    return user.email.charAt(0).toUpperCase();
+  };
 
   return (
     <div className="flex flex-col flex-1">
@@ -95,11 +104,19 @@ const ChatHistory = ({
         <div className="flex items-center justify-between px-2">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarImage src="/placeholder.svg" />
-              <AvatarFallback>U</AvatarFallback>
+              {user?.user_metadata?.avatar_url ? (
+                <AvatarImage src={user.user_metadata.avatar_url} alt="User avatar" />
+              ) : null}
+              <AvatarFallback>{getUserInitials()}</AvatarFallback>
             </Avatar>
+            <div className="text-sm font-medium truncate max-w-[120px]">
+              {user?.email?.split('@')[0] || "User"}
+            </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={signOut}>
+              <LogOut className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <Settings className="h-4 w-4" />
             </Button>
