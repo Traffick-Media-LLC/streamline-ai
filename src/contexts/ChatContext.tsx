@@ -1,7 +1,7 @@
-
 import { createContext, useState, useEffect, useContext } from "react";
 import { Chat, Message } from "../types/chat";
 import { generateChatTitle } from "../utils/chatUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChatContextType {
   chats: Chat[];
@@ -28,21 +28,18 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
 
-  // Load chats from localStorage on mount
   useEffect(() => {
     const savedChats = localStorage.getItem("streamlineChats");
     if (savedChats) {
       const parsedChats = JSON.parse(savedChats);
       setChats(parsedChats);
       
-      // Set current chat to the most recent one if it exists
       if (parsedChats.length > 0) {
         setCurrentChatId(parsedChats[0].id);
       }
     }
   }, []);
 
-  // Save chats to localStorage whenever they change
   useEffect(() => {
     if (chats.length > 0) {
       localStorage.setItem("streamlineChats", JSON.stringify(chats));
@@ -86,13 +83,11 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const sendMessage = async (content: string) => {
     if (!content.trim()) return;
 
-    // Get or create a chat
     let chatId = currentChatId;
     if (!chatId) {
       chatId = createNewChat();
     }
 
-    // Create user message
     const userMessage: Message = {
       id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       role: "user",
@@ -100,7 +95,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       timestamp: Date.now(),
     };
 
-    // Update chat with user message
     setChats((prev) =>
       prev.map((chat) => {
         if (chat.id === chatId) {
@@ -111,7 +105,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
             updatedAt: Date.now(),
           };
           
-          // If this is the first message, update the chat title
           if (isFirstMessage) {
             updateChatTitle(chatId!, content);
           }
@@ -122,27 +115,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       })
     );
 
-    // Start AI response
     setIsLoadingResponse(true);
 
     try {
-      // Get chat history for context
-      const currentChat = chats.find((chat) => chat.id === chatId);
-      const chatHistory = currentChat ? currentChat.messages : [];
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: { content },
+      });
 
-      // Dummy response for now - in a real app, this would call OpenAI API
-      // We'll simulate a delay for now
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // Create AI response message
+      if (error) throw error;
+
       const aiResponse: Message = {
         id: `assistant-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         role: "assistant",
-        content: `This is a simulated response. In a real implementation, we would make an API call to OpenAI GPT-4 Turbo here with your query about "${content}". This would typically return legal guidance related to regulated industries like nicotine, hemp-derived cannabinoids, and kratom.`,
+        content: data.message,
         timestamp: Date.now(),
       };
 
-      // Update chat with AI response
       setChats((prev) =>
         prev.map((chat) => {
           if (chat.id === chatId) {
@@ -158,7 +146,6 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (error) {
       console.error("Error getting AI response:", error);
       
-      // Add error message to chat
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         role: "assistant",
