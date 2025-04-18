@@ -2,13 +2,15 @@ import { createContext, useState, useEffect, useContext } from "react";
 import { Chat, Message } from "../types/chat";
 import { generateChatTitle } from "../utils/chatUtils";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 interface ChatContextType {
   chats: Chat[];
   currentChatId: string | null;
   isLoadingResponse: boolean;
   mode: "simple" | "complex";
-  createNewChat: () => string;
+  createNewChat: () => Promise<string | null>;
   selectChat: (chatId: string) => void;
   sendMessage: (content: string) => Promise<void>;
   getCurrentChat: () => Chat | null;
@@ -30,38 +32,90 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
   const [mode, setMode] = useState<"simple" | "complex">("simple");
+  const { user } = useAuth();
 
+  // Fetch chats from database when user is authenticated
   useEffect(() => {
-    const savedChats = localStorage.getItem("streamlineChats");
-    if (savedChats) {
-      const parsedChats = JSON.parse(savedChats);
-      setChats(parsedChats);
-      
-      if (parsedChats.length > 0) {
-        setCurrentChatId(parsedChats[0].id);
+    const fetchChats = async () => {
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('chats')
+        .select(`
+          id,
+          title,
+          created_at,
+          updated_at,
+          chat_messages (
+            id,
+            role,
+            content,
+            timestamp
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error("Error fetching chats:", error);
+        toast.error("Failed to load chats");
+        return;
       }
-    }
-  }, []);
 
-  useEffect(() => {
-    if (chats.length > 0) {
-      localStorage.setItem("streamlineChats", JSON.stringify(chats));
-    }
-  }, [chats]);
+      const formattedChats = data.map(chat => ({
+        id: chat.id,
+        title: chat.title,
+        messages: chat.chat_messages.map(msg => ({
+          id: msg.id,
+          role: msg.role as "user" | "assistant" | "system",
+          content: msg.content,
+          timestamp: new Date(msg.timestamp).getTime()
+        })),
+        createdAt: new Date(chat.created_at).getTime(),
+        updatedAt: new Date(chat.updated_at).getTime()
+      }));
 
-  const createNewChat = () => {
-    const newChatId = Date.now().toString();
-    const newChat: Chat = {
-      id: newChatId,
-      title: "New Chat",
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      setChats(formattedChats);
+      if (formattedChats.length > 0 && !currentChatId) {
+        setCurrentChatId(formattedChats[0].id);
+      }
     };
 
-    setChats((prev) => [newChat, ...prev]);
-    setCurrentChatId(newChatId);
-    return newChatId;
+    fetchChats();
+  }, [user]);
+
+  const createNewChat = async () => {
+    if (!user) {
+      toast.error("Please sign in to create a chat");
+      return null;
+    }
+
+    const { data: chat, error } = await supabase
+      .from('chats')
+      .insert({
+        user_id: user.id,
+        title: "New Chat"
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating chat:", error);
+      toast.error("Failed to create chat");
+      return null;
+    }
+
+    const newChat: Chat = {
+      id: chat.id,
+      title: chat.title,
+      messages: [],
+      createdAt: new Date(chat.created_at).getTime(),
+      updatedAt: new Date(chat.updated_at).getTime(),
+    };
+
+    setChats(prev => [newChat, ...prev]);
+    setCurrentChatId(newChat.id);
+    return newChat.id;
   };
 
   const selectChat = (chatId: string) => {
@@ -83,22 +137,44 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const sendMessage = async (content: string) => {
+    if (!user) {
+      toast.error("Please sign in to send messages");
+      return;
+    }
+
     if (!content.trim()) return;
 
     let chatId = currentChatId;
     if (!chatId) {
-      chatId = createNewChat();
+      chatId = await createNewChat();
+      if (!chatId) return;
     }
 
     const userMessage: Message = {
-      id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: `user-${Date.now()}`,
       role: "user",
       content,
       timestamp: Date.now(),
     };
 
-    setChats((prev) =>
-      prev.map((chat) => {
+    // Insert user message into database
+    const { error: msgError } = await supabase
+      .from('chat_messages')
+      .insert({
+        chat_id: chatId,
+        role: userMessage.role,
+        content: userMessage.content
+      });
+
+    if (msgError) {
+      console.error("Error saving message:", msgError);
+      toast.error("Failed to save message");
+      return;
+    }
+
+    // Update local state
+    setChats(prev =>
+      prev.map(chat => {
         if (chat.id === chatId) {
           const isFirstMessage = chat.messages.length === 0;
           const updatedChat = {
@@ -134,14 +210,29 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) throw error;
 
       const aiResponse: Message = {
-        id: `assistant-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: `assistant-${Date.now()}`,
         role: "assistant",
         content: data.message,
         timestamp: Date.now(),
       };
 
-      setChats((prev) =>
-        prev.map((chat) => {
+      // Save AI response to database
+      const { error: aiMsgError } = await supabase
+        .from('chat_messages')
+        .insert({
+          chat_id: chatId,
+          role: aiResponse.role,
+          content: aiResponse.content
+        });
+
+      if (aiMsgError) {
+        console.error("Error saving AI response:", aiMsgError);
+        toast.error("Failed to save AI response");
+        return;
+      }
+
+      setChats(prev =>
+        prev.map(chat => {
           if (chat.id === chatId) {
             return {
               ...chat,
