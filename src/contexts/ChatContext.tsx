@@ -7,10 +7,12 @@ interface ChatContextType {
   chats: Chat[];
   currentChatId: string | null;
   isLoadingResponse: boolean;
+  mode: "simple" | "complex";
   createNewChat: () => string;
   selectChat: (chatId: string) => void;
   sendMessage: (content: string) => Promise<void>;
   getCurrentChat: () => Chat | null;
+  setMode: (mode: "simple" | "complex") => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -27,6 +29,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
+  const [mode, setMode] = useState<"simple" | "complex">("simple");
 
   useEffect(() => {
     const savedChats = localStorage.getItem("streamlineChats");
@@ -119,7 +122,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       const { data, error } = await supabase.functions.invoke('chat', {
-        body: { content },
+        body: { content, mode },
       });
 
       if (error) throw error;
@@ -174,10 +177,12 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     chats,
     currentChatId,
     isLoadingResponse,
+    mode,
     createNewChat,
     selectChat,
     sendMessage,
     getCurrentChat,
+    setMode,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

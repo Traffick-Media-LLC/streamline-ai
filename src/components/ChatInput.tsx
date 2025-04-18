@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SendHorizontal, PlusCircle } from "lucide-react";
 import { useChatContext } from "../contexts/ChatContext";
+import ChatModeToggle from "./ChatModeToggle";
 
 const ChatInput = () => {
   const [message, setMessage] = useState("");
-  const { sendMessage, createNewChat, isLoadingResponse } = useChatContext();
+  const { sendMessage, createNewChat, isLoadingResponse, mode, setMode } = useChatContext();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +27,7 @@ const ChatInput = () => {
 
   return (
     <div className="border-t p-4 bg-background">
+      <ChatModeToggle mode={mode} onModeChange={setMode} />
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="relative">
           <Textarea

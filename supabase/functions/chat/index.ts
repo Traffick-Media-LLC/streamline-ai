@@ -16,7 +16,11 @@ serve(async (req) => {
   const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
   
   try {
-    const { content } = await req.json();
+    const { content, mode } = await req.json();
+
+    const systemPrompt = mode === 'simple' 
+      ? 'You are a legal assistant providing brief, direct answers about regulated industries. Use plain English and only mention legality status and immediate sales restrictions.'
+      : 'You are a legal assistant providing detailed breakdowns about regulated industries. Include references to specific laws, regulatory decisions, and external links to legal documents. Start with a TL;DR summary.';
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -29,7 +33,7 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: 'You are a knowledgeable legal assistant specializing in regulated industries including nicotine, hemp-derived cannabinoids, and kratom. Provide accurate, up-to-date information while maintaining a professional tone. If unsure about specific legal details, acknowledge limitations and suggest consulting with a qualified legal professional.'
+            content: systemPrompt
           },
           { role: 'user', content }
         ],
