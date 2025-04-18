@@ -16,20 +16,33 @@ const ChatPage = () => {
   return (
     <ChatProvider>
       <div className="flex h-screen bg-background">
+        {/* Sidebar for history */}
+        <div
+          className={`${
+            sidebarOpen
+              ? "fixed inset-y-0 left-0 z-50 w-64 transform translate-x-0"
+              : "fixed inset-y-0 left-0 z-50 w-64 transform -translate-x-full"
+          } transition-transform duration-300 ease-in-out md:relative md:translate-x-0 bg-secondary border-r`}
+        >
+          <ChatHistory onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
+        </div>
+
         {/* Main content */}
         <div className="flex flex-col flex-1 h-full overflow-hidden">
           {/* Header */}
           <header className="h-14 border-b flex items-center justify-between px-4">
-            {isMobile && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-              </Button>
-            )}
-            <Logo />
+            <div className="flex items-center gap-2">
+              {isMobile && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                >
+                  {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+                </Button>
+              )}
+              <Logo />
+            </div>
           </header>
 
           {/* Chat content */}
@@ -37,17 +50,6 @@ const ChatPage = () => {
             <ChatWindow />
             <ChatInput />
           </div>
-        </div>
-
-        {/* Sidebar for history - now on the right */}
-        <div
-          className={`${
-            sidebarOpen
-              ? "fixed inset-y-0 right-0 z-50 w-64 transform translate-x-0"
-              : "fixed inset-y-0 right-0 z-50 w-64 transform translate-x-full"
-          } transition-transform duration-300 ease-in-out md:relative md:translate-x-0 bg-secondary border-l`}
-        >
-          <ChatHistory onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
         </div>
       </div>
     </ChatProvider>

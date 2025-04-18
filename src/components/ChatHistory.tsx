@@ -50,7 +50,7 @@ const ChatHistory = ({
       <div className="p-2">
         <Button 
           variant="outline" 
-          className="w-full justify-start gap-2 mb-2" 
+          className="w-full justify-start gap-2" 
           onClick={() => {
             createNewChat();
             if (isMobile && onClose) onClose();
@@ -59,10 +59,6 @@ const ChatHistory = ({
           <PlusCircle size={16} />
           New Chat
         </Button>
-        
-        <h3 className="text-sm font-medium text-muted-foreground px-2 py-1">
-          Recent Conversations
-        </h3>
       </div>
       
       <div className="flex-1 overflow-y-auto p-2">
