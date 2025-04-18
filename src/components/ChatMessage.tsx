@@ -35,7 +35,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
             break-words whitespace-pre-wrap
           `}
         >
-          <p className="leading-relaxed">
+          <p className="leading-relaxed text-[15px] font-normal text-foreground">
             {renderTextWithLinks(message.content)}
           </p>
         </div>
