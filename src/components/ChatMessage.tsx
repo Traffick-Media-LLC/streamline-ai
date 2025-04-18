@@ -1,9 +1,9 @@
-
 import { useState, useEffect } from "react";
 import { Message } from "../types/chat";
 import { formatTimestamp } from "../utils/chatUtils";
 import { renderTextWithLinks } from "../utils/textUtils";
 import { User, Bot } from "lucide-react";
+import TypewriterText from "./TypewriterText";
 
 interface ChatMessageProps {
   message: Message;
@@ -11,10 +11,22 @@ interface ChatMessageProps {
 
 const ChatMessage = ({ message }: ChatMessageProps) => {
   const [formattedTime, setFormattedTime] = useState<string>("");
-
+  const [showFullText, setShowFullText] = useState(false);
+  
   useEffect(() => {
     setFormattedTime(formatTimestamp(message.timestamp));
   }, [message.timestamp]);
+  
+  // Show full text immediately for user messages, animate for AI
+  useEffect(() => {
+    if (message.role === "user") {
+      setShowFullText(true);
+    } else {
+      // Small delay before starting animation
+      const timer = setTimeout(() => setShowFullText(true), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [message.role]);
   
   const isUser = message.role === "user";
   
@@ -36,7 +48,11 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
           `}
         >
           <div className="text-[15px] font-normal leading-relaxed">
-            {renderTextWithLinks(message.content)}
+            {isUser || !showFullText ? (
+              message.content
+            ) : (
+              <TypewriterText text={message.content} />
+            )}
           </div>
         </div>
         <span className="text-xs font-medium text-muted-foreground mt-1 px-2">{formattedTime}</span>
