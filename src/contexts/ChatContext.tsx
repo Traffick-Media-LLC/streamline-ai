@@ -32,9 +32,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
   const [mode, setMode] = useState<"simple" | "complex">("simple");
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
 
-  // Fetch chats from database when user is authenticated
   useEffect(() => {
     const fetchChats = async () => {
       if (!user) return;
@@ -85,9 +84,22 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   const createNewChat = async () => {
-    if (!user) {
+    if (!user && !isGuest) {
       toast.error("Please sign in to create a chat");
       return null;
+    }
+
+    if (isGuest) {
+      const newChat: Chat = {
+        id: `guest-${Date.now()}`,
+        title: "New Chat",
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      setChats(prev => [newChat, ...prev]);
+      setCurrentChatId(newChat.id);
+      return newChat.id;
     }
 
     const { data: chat, error } = await supabase
@@ -137,7 +149,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const sendMessage = async (content: string) => {
-    if (!user) {
+    if (!user && !isGuest) {
       toast.error("Please sign in to send messages");
       return;
     }
@@ -157,41 +169,61 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       timestamp: Date.now(),
     };
 
-    // Insert user message into database
-    const { error: msgError } = await supabase
-      .from('chat_messages')
-      .insert({
-        chat_id: chatId,
-        role: userMessage.role,
-        content: userMessage.content
-      });
+    if (!isGuest && user) {
+      const { error: msgError } = await supabase
+        .from('chat_messages')
+        .insert({
+          chat_id: chatId,
+          role: userMessage.role,
+          content: userMessage.content
+        });
 
-    if (msgError) {
-      console.error("Error saving message:", msgError);
-      toast.error("Failed to save message");
-      return;
-    }
+      if (msgError) {
+        console.error("Error saving message:", msgError);
+        toast.error("Failed to save message");
+        return;
+      }
 
-    // Update local state
-    setChats(prev =>
-      prev.map(chat => {
-        if (chat.id === chatId) {
-          const isFirstMessage = chat.messages.length === 0;
-          const updatedChat = {
-            ...chat,
-            messages: [...chat.messages, userMessage],
-            updatedAt: Date.now(),
-          };
-          
-          if (isFirstMessage) {
-            updateChatTitle(chatId!, content);
+      setChats(prev =>
+        prev.map(chat => {
+          if (chat.id === chatId) {
+            const isFirstMessage = chat.messages.length === 0;
+            const updatedChat = {
+              ...chat,
+              messages: [...chat.messages, userMessage],
+              updatedAt: Date.now(),
+            };
+            
+            if (isFirstMessage) {
+              updateChatTitle(chatId!, content);
+            }
+            
+            return updatedChat;
           }
-          
-          return updatedChat;
-        }
-        return chat;
-      })
-    );
+          return chat;
+        })
+      );
+    } else {
+      setChats(prev =>
+        prev.map(chat => {
+          if (chat.id === chatId) {
+            const isFirstMessage = chat.messages.length === 0;
+            const updatedChat = {
+              ...chat,
+              messages: [...chat.messages, userMessage],
+              updatedAt: Date.now(),
+            };
+            
+            if (isFirstMessage) {
+              updateChatTitle(chatId!, content);
+            }
+            
+            return updatedChat;
+          }
+          return chat;
+        })
+      );
+    }
 
     setIsLoadingResponse(true);
 
@@ -216,19 +248,33 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         timestamp: Date.now(),
       };
 
-      // Save AI response to database
-      const { error: aiMsgError } = await supabase
-        .from('chat_messages')
-        .insert({
-          chat_id: chatId,
-          role: aiResponse.role,
-          content: aiResponse.content
-        });
+      if (!isGuest && user) {
+        const { error: aiMsgError } = await supabase
+          .from('chat_messages')
+          .insert({
+            chat_id: chatId,
+            role: aiResponse.role,
+            content: aiResponse.content
+          });
 
-      if (aiMsgError) {
-        console.error("Error saving AI response:", aiMsgError);
-        toast.error("Failed to save AI response");
-        return;
+        if (aiMsgError) {
+          console.error("Error saving AI response:", aiMsgError);
+          toast.error("Failed to save AI response");
+          return;
+        }
+
+        setChats(prev =>
+          prev.map(chat => {
+            if (chat.id === chatId) {
+              return {
+                ...chat,
+                messages: [...chat.messages, aiResponse],
+                updatedAt: Date.now(),
+              };
+            }
+            return chat;
+          })
+        );
       }
 
       setChats(prev =>
