@@ -6,6 +6,7 @@ import { FcGoogle } from "react-icons/fc";
 import { UserIcon } from "lucide-react";
 import Logo from "../components/Logo";
 import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/context/auth";
 
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
@@ -85,6 +86,9 @@ const AuthPage = () => {
   };
 
   const handleGuestAccess = () => {
+    setUser(null);
+    const { setIsGuest } = useAuth();
+    setIsGuest(true);
     navigate('/');
   };
 
