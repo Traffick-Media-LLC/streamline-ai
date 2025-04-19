@@ -38,7 +38,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
           `}
         >
           <div className="text-[15px] font-normal leading-relaxed">
-            {renderTextWithLinks(message.content)}
+            {renderTextWithLinks(message.content, message.sources)}
           </div>
         </div>
         <span className="text-xs font-medium text-muted-foreground mt-1 px-2">{formattedTime}</span>
@@ -56,4 +56,3 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
 };
 
 export default ChatMessage;
-

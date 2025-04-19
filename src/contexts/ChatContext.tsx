@@ -246,6 +246,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         role: "assistant",
         content: data.message,
         timestamp: Date.now(),
+        sources: data.sources || [] // Add sources to the message
       };
 
       if (!isGuest && user) {
