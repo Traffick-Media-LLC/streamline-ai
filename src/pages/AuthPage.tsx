@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
@@ -6,7 +7,7 @@ import { FcGoogle } from "react-icons/fc";
 import { UserIcon } from "lucide-react";
 import Logo from "../components/Logo";
 import { toast } from "@/components/ui/sonner";
-import { useAuth } from "@/context/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
