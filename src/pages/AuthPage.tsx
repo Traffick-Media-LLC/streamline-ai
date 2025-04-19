@@ -13,6 +13,7 @@ const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
+  const { setIsGuest } = useAuth();
 
   useEffect(() => {
     const checkSession = async () => {
@@ -88,8 +89,8 @@ const AuthPage = () => {
 
   const handleGuestAccess = () => {
     setUser(null);
-    const { setIsGuest } = useAuth();
     setIsGuest(true);
+    toast.success("Continuing as guest");
     navigate('/');
   };
 
