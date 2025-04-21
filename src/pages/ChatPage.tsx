@@ -15,14 +15,14 @@ const ChatPage = () => {
 
   return (
     <ChatProvider>
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen bg-background overflow-hidden">
         {/* Sidebar for history */}
         <div
           className={`${
             sidebarOpen
               ? "fixed inset-y-0 left-0 z-50 w-64 transform translate-x-0"
               : "fixed inset-y-0 left-0 z-50 w-64 transform -translate-x-full"
-          } transition-transform duration-300 ease-in-out md:relative md:translate-x-0 bg-secondary border-r`}
+          } transition-transform duration-300 ease-in-out md:relative md:translate-x-0 bg-secondary border-r h-full`}
         >
           <div className="flex flex-col h-full">
             <div className="h-14 border-b flex items-center px-4">
@@ -59,7 +59,7 @@ const ChatPage = () => {
 
           {/* Chat content with max-width container */}
           <div className="flex-1 overflow-hidden flex flex-col items-center">
-            <div className="w-full max-w-3xl flex-1 flex flex-col">
+            <div className="w-full max-w-3xl flex-1 flex flex-col overflow-hidden">
               <ChatWindow />
               <ChatInput />
             </div>

@@ -10,7 +10,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 const ChatWindow = () => {
   const { getCurrentChat, isLoadingResponse } = useChatContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const currentChat = getCurrentChat();
   
   // Scroll to bottom when messages change or when loading state changes
@@ -45,8 +44,8 @@ const ChatWindow = () => {
   );
 
   return (
-    <ScrollArea className="flex-1 h-full" ref={scrollAreaRef}>
-      <div className="p-4">
+    <ScrollArea className="flex-1 h-full overflow-y-auto pb-6">
+      <div className="p-4 min-h-full">
         {dates.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <p className="text-lg text-muted-foreground font-medium">
