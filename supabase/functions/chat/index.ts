@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -20,10 +19,8 @@ serve(async (req) => {
   try {
     const { content, mode, messages } = await req.json();
 
-    // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Search for relevant knowledge entries based on the user's message
     const { data: relevantEntries, error: searchError } = await supabase
       .from('knowledge_entries')
       .select('title, content, updated_at')
@@ -34,7 +31,6 @@ serve(async (req) => {
       console.error('Error searching knowledge base:', searchError);
     }
 
-    // Format knowledge base entries for the prompt
     const knowledgeBaseContext = relevantEntries?.length
       ? "\n\nVerified information from our knowledge base:\n" + 
         relevantEntries.map(entry => 
@@ -42,16 +38,14 @@ serve(async (req) => {
         ).join('\n\n')
       : '';
 
-    // Base system prompt that establishes the AI's role and behavior
     const baseSystemPrompt = mode === 'simple' 
-      ? 'You are a legal assistant providing clear, direct answers about regulated industries, specifically focusing on online and local retail shops that are not cannabis dispensaries. Use plain English and focus on current legality status and immediate sales restrictions for these specific retail environments. Always cite the most recent regulatory updates when available.'
-      : 'You are a legal assistant providing comprehensive analysis about regulated industries, specifically focusing on online and local retail shops that are not cannabis dispensaries. Include specific references to current laws, recent regulatory decisions, and relevant legal documents that apply to these retail environments. Emphasize the most up-to-date information available and note any pending changes or updates to regulations that affect these types of retail operations.';
+      ? 'You are a legal assistant specifically focused on product legality for a sales organization that sells regulated products through non-dispensary retail stores and online retail channels ONLY. When discussing legality, you must ONLY consider what is legal for these specific sales channels - not what is legal in general or through dispensaries. For example, if a product is only legal through dispensaries, you must state it is NOT legal for our purposes since we cannot sell through dispensaries. Use plain English and focus on current legality status and immediate sales restrictions that apply specifically to non-dispensary retail and online sales channels.'
+      : 'You are a legal assistant specifically focused on product legality for a sales organization that sells regulated products through non-dispensary retail stores and online retail channels ONLY. When discussing legality, you must ONLY consider what is legal for these specific sales channels - not what is legal in general or through dispensaries. Provide comprehensive analysis with specific references to current laws and regulations that apply to non-dispensary retail and online sales. For example, if a product is only legal through dispensaries, you must state it is NOT legal for our purposes since we cannot sell through dispensaries. Include detailed regulatory requirements, restrictions, and compliance needs specific to non-dispensary retail and online sales channels.';
 
-    // Create the messages array with the system prompt and conversation history
     const conversationMessages = [
       {
         role: 'system',
-        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation when answering follow-up questions. Always prioritize the most recent and authoritative sources. If information seems outdated, explicitly state that and suggest where to find current updates. Remember to specifically address implications for non-dispensary retail environments.`
+        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation and remember we ONLY operate through non-dispensary retail stores and online retail. Therefore, any product that requires dispensary distribution is effectively NOT legal for our purposes. Always consider the specific context of our sales channels when discussing legality. If information seems outdated, explicitly state that and suggest where to find current updates.`
       },
       ...messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
