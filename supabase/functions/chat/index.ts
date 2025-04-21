@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -43,14 +44,14 @@ serve(async (req) => {
 
     // Base system prompt that establishes the AI's role and behavior
     const baseSystemPrompt = mode === 'simple' 
-      ? 'You are a legal assistant providing clear, direct answers about regulated industries. Use plain English and focus on current legality status and immediate sales restrictions. Always cite the most recent regulatory updates when available.'
-      : 'You are a legal assistant providing comprehensive analysis about regulated industries. Include specific references to current laws, recent regulatory decisions, and relevant legal documents. Emphasize the most up-to-date information available and note any pending changes or updates to regulations.';
+      ? 'You are a legal assistant providing clear, direct answers about regulated industries, specifically focusing on online and local retail shops that are not cannabis dispensaries. Use plain English and focus on current legality status and immediate sales restrictions for these specific retail environments. Always cite the most recent regulatory updates when available.'
+      : 'You are a legal assistant providing comprehensive analysis about regulated industries, specifically focusing on online and local retail shops that are not cannabis dispensaries. Include specific references to current laws, recent regulatory decisions, and relevant legal documents that apply to these retail environments. Emphasize the most up-to-date information available and note any pending changes or updates to regulations that affect these types of retail operations.';
 
     // Create the messages array with the system prompt and conversation history
     const conversationMessages = [
       {
         role: 'system',
-        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation when answering follow-up questions. Always prioritize the most recent and authoritative sources. If information seems outdated, explicitly state that and suggest where to find current updates.`
+        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation when answering follow-up questions. Always prioritize the most recent and authoritative sources. If information seems outdated, explicitly state that and suggest where to find current updates. Remember to specifically address implications for non-dispensary retail environments.`
       },
       ...messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
