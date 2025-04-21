@@ -60,9 +60,7 @@ const ChatMessage = ({
         <div className="flex items-center gap-2 mt-1 px-2">
           <span className="text-xs font-medium text-muted-foreground">{formattedTime}</span>
           {!isUser && <button onClick={handleCopyMessage} className="text-xs text-blue-500 hover:text-blue-700 transition-colors">Copy</button>}
-          {isUser && <button onClick={() => setIsEditing(true)} className="text-xs text-blue-500 hover:text-blue-700 transition-colors">
-              Edit message
-            </button>}
+          {isUser && <button onClick={() => setIsEditing(true)} className="text-xs text-blue-500 hover:text-blue-700 transition-colors">Edit</button>}
         </div>
       </div>
       
