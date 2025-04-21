@@ -54,12 +54,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
       )}
       
       <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[85%]`}>
-        <div 
-          className={`
-            ${isUser ? "chat-message-user" : "chat-message-assistant"} 
-            break-words whitespace-pre-wrap relative group
-          `}
-        >
+        <div className={isUser ? "chat-message-user" : "chat-message-assistant"}>
           {isEditing && isUser ? (
             <form onSubmit={handleEditSubmit} className="w-full">
               <textarea
@@ -86,34 +81,30 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
               </div>
             </form>
           ) : (
-            <>
-              <div className="text-[15px] font-normal leading-relaxed">
-                {renderTextWithLinks(message.content)}
-              </div>
-              <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={handleCopyMessage}
-                >
-                  <Copy size={14} />
-                </Button>
-                {isUser && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Edit size={14} />
-                  </Button>
-                )}
-              </div>
-            </>
+            <div className="text-[15px] font-normal leading-relaxed break-words whitespace-pre-wrap">
+              {renderTextWithLinks(message.content)}
+            </div>
           )}
         </div>
-        <span className="text-xs font-medium text-muted-foreground mt-1 px-2">{formattedTime}</span>
+        <div className="flex items-center gap-2 mt-1 px-2">
+          <span className="text-xs font-medium text-muted-foreground">{formattedTime}</span>
+          {!isUser && (
+            <button 
+              onClick={handleCopyMessage}
+              className="text-xs text-blue-500 hover:text-blue-700 transition-colors"
+            >
+              Copy response
+            </button>
+          )}
+          {isUser && (
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="text-xs text-blue-500 hover:text-blue-700 transition-colors"
+            >
+              Edit message
+            </button>
+          )}
+        </div>
       </div>
       
       {isUser && (
