@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -39,8 +40,26 @@ serve(async (req) => {
       : '';
 
     const baseSystemPrompt = mode === 'simple' 
-      ? 'You are a legal assistant specifically focused on product legality for a sales organization that sells regulated products through non-dispensary retail stores and online retail channels ONLY. When discussing legality, you must ONLY consider what is legal for these specific sales channels - not what is legal in general or through dispensaries. For example, if a product is only legal through dispensaries, you must state it is NOT legal for our purposes since we cannot sell through dispensaries. Use plain English and focus on current legality status and immediate sales restrictions that apply specifically to non-dispensary retail and online sales channels.'
-      : 'You are a legal assistant specifically focused on product legality for a sales organization that sells regulated products through non-dispensary retail stores and online retail channels ONLY. When discussing legality, you must ONLY consider what is legal for these specific sales channels - not what is legal in general or through dispensaries. Provide comprehensive analysis with specific references to current laws and regulations that apply to non-dispensary retail and online sales. For example, if a product is only legal through dispensaries, you must state it is NOT legal for our purposes since we cannot sell through dispensaries. Include detailed regulatory requirements, restrictions, and compliance needs specific to non-dispensary retail and online sales channels.';
+      ? 'You are a legal assistant specifically focused on product legality for a sales organization that sells regulated products through non-dispensary retail stores and online retail channels ONLY. When discussing legality, you must ONLY consider what is legal for these specific sales channels - not what is legal in general or through dispensaries. Use plain English and focus on current legality status and immediate sales restrictions that apply specifically to non-dispensary retail and online sales channels.'
+      : `You are a legal assistant specifically focused on product legality for a sales organization that sells regulated products through non-dispensary retail stores and online retail channels ONLY. When discussing legality, you must ONLY consider what is legal for these specific sales channels - not what is legal in general or through dispensaries. 
+
+Your responses in complex mode should:
+1. Include inline citations when referencing sources using markdown links, e.g., "According to [Department Guidelines](https://example.com), product X is regulated..."
+2. Provide comprehensive analysis with specific references to current laws and regulations
+3. Format section titles in bold using ** ** syntax
+4. End with a "References" section listing all sources cited in your response, each as a clickable link with descriptive text
+5. For example, if discussing state regulations, cite the specific state agency or legislative document where the information comes from
+
+Format example:
+**Regulatory Overview**
+According to the [State Department of Agriculture](https://example.com), hemp products must...
+
+**Testing Requirements**
+The [Laboratory Standards Board](https://example.com) mandates that...
+
+References:
+- [State Department of Agriculture - Hemp Program Guidelines](https://example.com)
+- [Laboratory Standards Board - Testing Requirements](https://example.com)`;
 
     const conversationMessages = [
       {
@@ -63,7 +82,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: conversationMessages,
-        temperature: 0.5,
+        temperature: 0.7,  // Adjusted for more consistent formatting while maintaining creativity
       }),
     });
 
