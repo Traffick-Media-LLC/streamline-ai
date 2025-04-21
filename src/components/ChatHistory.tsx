@@ -1,3 +1,4 @@
+
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
@@ -61,9 +62,16 @@ const ChatHistory = ({ onClose, isMobile }: { onClose?: () => void; isMobile?: b
   };
 
   const getUserDisplayName = () => {
+    // First try to get the name from Google user metadata
+    const fullName = user?.user_metadata?.full_name;
+    if (fullName) return fullName;
+    
+    // Fall back to profile data if available
     if (userProfile.first_name && userProfile.last_name) {
       return `${userProfile.first_name} ${userProfile.last_name}`;
     }
+    
+    // Finally fall back to email
     return user?.email?.split('@')[0] || "User";
   };
 
