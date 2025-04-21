@@ -57,10 +57,12 @@ const ChatPage = () => {
             )}
           </header>
 
-          {/* Chat content */}
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <ChatWindow />
-            <ChatInput />
+          {/* Chat content with max-width container */}
+          <div className="flex-1 overflow-hidden flex flex-col items-center">
+            <div className="w-full max-w-3xl flex-1 flex flex-col">
+              <ChatWindow />
+              <ChatInput />
+            </div>
           </div>
         </div>
       </div>
