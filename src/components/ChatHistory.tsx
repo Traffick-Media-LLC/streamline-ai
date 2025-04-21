@@ -1,3 +1,4 @@
+
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
+import { ScrollArea } from "@/components/ui/scroll-area";
+
 const ChatHistory = ({
   onClose,
   isMobile
@@ -76,7 +79,7 @@ const ChatHistory = ({
     // Finally fall back to email
     return user?.email?.split('@')[0] || "User";
   };
-  return <div className="flex flex-col flex-1">
+  return <div className="flex flex-col h-full">
       <div className="p-2">
         <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {
         createNewChat();
@@ -91,28 +94,30 @@ const ChatHistory = ({
         <h2 className="text-sm font-medium text-muted-foreground">Chat History</h2>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-2">
-        {sortedDates.length === 0 ? <div className="text-center p-4 text-muted-foreground">
-            No chat history yet
-          </div> : sortedDates.map(date => <div key={date} className="mb-4">
-              <h3 className="text-xs font-medium text-muted-foreground px-2 mb-1">
-                {date}
-              </h3>
-              <div className="space-y-1">
-                {chatsByDate[date].map(chat => <Button key={chat.id} variant={currentChatId === chat.id ? "secondary" : "ghost"} className="w-full justify-start text-left text-sm h-auto py-2" onClick={() => {
-            selectChat(chat.id);
-            if (isMobile && onClose) onClose();
-          }}>
-                    <div className="flex items-center gap-2 w-full overflow-hidden">
-                      <MessageSquare size={16} />
-                      <span className="truncate">{chat.title}</span>
-                    </div>
-                  </Button>)}
-              </div>
-            </div>)}
-      </div>
+      <ScrollArea className="flex-1 pr-4">
+        <div className="p-2">
+          {sortedDates.length === 0 ? <div className="text-center p-4 text-muted-foreground">
+              No chat history yet
+            </div> : sortedDates.map(date => <div key={date} className="mb-4">
+                <h3 className="text-xs font-medium text-muted-foreground px-2 mb-1">
+                  {date}
+                </h3>
+                <div className="space-y-1">
+                  {chatsByDate[date].map(chat => <Button key={chat.id} variant={currentChatId === chat.id ? "secondary" : "ghost"} className="w-full justify-start text-left text-sm h-auto py-2" onClick={() => {
+              selectChat(chat.id);
+              if (isMobile && onClose) onClose();
+            }}>
+                      <div className="flex items-center gap-2 w-full overflow-hidden">
+                        <MessageSquare size={16} />
+                        <span className="truncate">{chat.title}</span>
+                      </div>
+                    </Button>)}
+                </div>
+              </div>)}
+        </div>
+      </ScrollArea>
 
-      <div className="border-t p-2">
+      <div className="border-t p-2 mt-auto">
         <div className="flex items-center justify-between px-2">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
@@ -124,11 +129,9 @@ const ChatHistory = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={signOut}>
               <LogOut className="h-4 w-4" />
             </Button>
-            
           </div>
         </div>
       </div>

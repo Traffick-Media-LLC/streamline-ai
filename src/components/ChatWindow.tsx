@@ -5,15 +5,19 @@ import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
 import { getMessagesByDate } from "../utils/chatUtils";
 import { formatDate } from "../utils/chatUtils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const ChatWindow = () => {
   const { getCurrentChat, isLoadingResponse } = useChatContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const currentChat = getCurrentChat();
   
   // Scroll to bottom when messages change or when loading state changes
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [currentChat?.messages, isLoadingResponse]);
 
   if (!currentChat) {
@@ -41,32 +45,34 @@ const ChatWindow = () => {
   );
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
-      {dates.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full text-center">
-          <p className="text-lg text-muted-foreground font-medium">
-            Ask a question to start the conversation
-          </p>
-        </div>
-      ) : (
-        dates.map((date) => (
-          <div key={date} className="mb-8">
-            <div className="flex justify-center mb-5">
-              <span className="text-xs font-semibold bg-muted/50 text-muted-foreground px-3 py-1.5 rounded-full">
-                {formatDate(new Date(date).getTime())}
-              </span>
-            </div>
-            <div className="space-y-6">
-              {messagesByDate[date].map((message) => (
-                <ChatMessage key={message.id} message={message} />
-              ))}
-            </div>
+    <ScrollArea className="flex-1 h-full" ref={scrollAreaRef}>
+      <div className="p-4">
+        {dates.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <p className="text-lg text-muted-foreground font-medium">
+              Ask a question to start the conversation
+            </p>
           </div>
-        ))
-      )}
-      {isLoadingResponse && <TypingIndicator />}
-      <div ref={messagesEndRef} />
-    </div>
+        ) : (
+          dates.map((date) => (
+            <div key={date} className="mb-8">
+              <div className="flex justify-center mb-5">
+                <span className="text-xs font-semibold bg-muted/50 text-muted-foreground px-3 py-1.5 rounded-full">
+                  {formatDate(new Date(date).getTime())}
+                </span>
+              </div>
+              <div className="space-y-6">
+                {messagesByDate[date].map((message) => (
+                  <ChatMessage key={message.id} message={message} />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+        {isLoadingResponse && <TypingIndicator />}
+        <div ref={messagesEndRef} />
+      </div>
+    </ScrollArea>
   );
 };
 
