@@ -9,7 +9,12 @@ interface ChatModeToggleProps {
 
 const ChatModeToggle = ({ mode, onModeChange }: ChatModeToggleProps) => {
   return (
-    <div className="flex items-center justify-center gap-4 mb-4">
+    <div className="flex flex-col items-center justify-center gap-4 mb-4">
+      <div className="text-center text-sm text-muted-foreground max-w-md">
+        Simple mode provides concise, straightforward legal guidance, 
+        while Complex mode offers comprehensive analysis with detailed 
+        regulatory references and in-depth explanations.
+      </div>
       <div className="flex items-center gap-2">
         <Label htmlFor="mode-toggle" className="text-sm font-medium">
           Simple
@@ -29,4 +34,3 @@ const ChatModeToggle = ({ mode, onModeChange }: ChatModeToggleProps) => {
 };
 
 export default ChatModeToggle;
-
