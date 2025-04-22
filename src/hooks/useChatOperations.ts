@@ -105,6 +105,28 @@ export const useChatOperations = () => {
     return newChat.id;
   };
 
+  const updateChatTitle = async (chatId: string, firstMessage: string) => {
+    const title = await generateChatTitle(firstMessage);
+    
+    if (!isGuest && user) {
+      const { error } = await supabase
+        .from('chats')
+        .update({ title })
+        .eq('id', chatId);
+
+      if (error) {
+        console.error("Error updating chat title:", error);
+        return;
+      }
+    }
+
+    setChats(prev =>
+      prev.map(chat =>
+        chat.id === chatId ? { ...chat, title } : chat
+      )
+    );
+  };
+
   const sendMessage = async (content: string) => {
     if (!user && !isGuest) {
       toast.error("Please sign in to send messages");
@@ -126,7 +148,23 @@ export const useChatOperations = () => {
       timestamp: Date.now(),
     };
 
-    const handleMessageUpdate = (message: Message) => {
+    const handleMessageUpdate = async (message: Message) => {
+      if (!isGuest && user) {
+        const { error } = await supabase
+          .from('chat_messages')
+          .insert({
+            chat_id: chatId,
+            role: message.role,
+            content: message.content
+          });
+
+        if (error) {
+          console.error("Error saving message:", error);
+          toast.error("Failed to save message");
+          return;
+        }
+      }
+
       setChats(prev =>
         prev.map(chat => {
           if (chat.id === chatId) {
@@ -141,23 +179,7 @@ export const useChatOperations = () => {
       );
     };
 
-    if (!isGuest && user) {
-      const { error: msgError } = await supabase
-        .from('chat_messages')
-        .insert({
-          chat_id: chatId,
-          role: userMessage.role,
-          content: userMessage.content
-        });
-
-      if (msgError) {
-        console.error("Error saving message:", msgError);
-        toast.error("Failed to save message");
-        return;
-      }
-    }
-
-    handleMessageUpdate(userMessage);
+    await handleMessageUpdate(userMessage);
     const currentChat = chats.find(chat => chat.id === chatId);
     if (currentChat?.messages.length === 0) {
       updateChatTitle(chatId, content);
@@ -185,46 +207,19 @@ export const useChatOperations = () => {
         timestamp: Date.now(),
       };
 
-      if (!isGuest && user) {
-        const { error: aiMsgError } = await supabase
-          .from('chat_messages')
-          .insert({
-            chat_id: chatId,
-            role: aiResponse.role,
-            content: aiResponse.content
-          });
-
-        if (aiMsgError) {
-          console.error("Error saving AI response:", aiMsgError);
-          toast.error("Failed to save AI response");
-          return;
-        }
-      }
-
-      handleMessageUpdate(aiResponse);
+      await handleMessageUpdate(aiResponse);
     } catch (error) {
       console.error("Error getting AI response:", error);
-      
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         role: "assistant",
         content: "I'm sorry, there was an error processing your request. Please try again.",
         timestamp: Date.now(),
       };
-      
-      handleMessageUpdate(errorMessage);
+      await handleMessageUpdate(errorMessage);
     } finally {
       setIsLoadingResponse(false);
     }
-  };
-
-  const updateChatTitle = async (chatId: string, firstMessage: string) => {
-    const title = await generateChatTitle(firstMessage);
-    setChats(prev =>
-      prev.map(chat =>
-        chat.id === chatId ? { ...chat, title } : chat
-      )
-    );
   };
 
   const selectChat = (chatId: string) => {

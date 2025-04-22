@@ -1,6 +1,6 @@
 
 import { createContext, useContext, useEffect } from "react";
-import { ChatContextType } from "../types/chatContext";
+import { ChatContextType } from "../types/chat";
 import { useChatOperations } from "../hooks/useChatOperations";
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
