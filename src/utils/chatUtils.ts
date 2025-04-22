@@ -59,3 +59,80 @@ export const getMessagesByDate = (messages: Message[]) => {
   }, {});
 };
 
+// Utility function to add/manage knowledge entries
+export const addKnowledgeEntry = async (title: string, content: string, tags: string[] = []) => {
+  try {
+    const { data, error } = await supabase
+      .from('knowledge_entries')
+      .insert({
+        title,
+        content,
+        tags,
+        is_active: true
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error adding knowledge entry:", error);
+    throw error;
+  }
+};
+
+// Utility to check for existing knowledge entry by title
+export const findKnowledgeEntryByTitle = async (title: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('knowledge_entries')
+      .select('*')
+      .ilike('title', title)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 is the error code when no rows are returned
+      console.error("Error finding knowledge entry:", error);
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error finding knowledge entry:", error);
+    return null;
+  }
+};
+
+// Get all brands from knowledge base
+export const getAllBrands = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('knowledge_entries')
+      .select('*')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"brand"}');
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error("Error fetching brands:", error);
+    return [];
+  }
+};
+
+// Get products for a specific brand
+export const getProductsByBrand = async (brandTitle: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('knowledge_entries')
+      .select('*')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"product"}')
+      .ilike('content', `%${brandTitle}%`);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error("Error fetching products by brand:", error);
+    return [];
+  }
+};

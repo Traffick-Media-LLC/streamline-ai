@@ -22,15 +22,98 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Search knowledge base entries
-    const { data: relevantEntries, error: searchError } = await supabase
+    // Extract potential brand and product names from the query
+    const words = content.split(' ');
+    const potentialBrands = words
+      .filter((word: string) => word.length > 2)
+      .map((word: string) => word.replace(/[^\w]/g, ''));
+    
+    // First search: Look for exact brand matches
+    let { data: brandEntries, error: brandError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content, updated_at, tags')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"brand"}')
+      .or(potentialBrands.map(brand => `title.ilike.%${brand}%`).join(','));
+    
+    if (brandError) {
+      console.error('Error searching for brands:', brandError);
+      brandEntries = [];
+    }
+
+    // Second search: Look for product matches
+    let { data: productEntries, error: productError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content, updated_at, tags')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"product"}')
+      .or(potentialBrands.map(term => `title.ilike.%${term}%`).join(','));
+    
+    if (productError) {
+      console.error('Error searching for products:', productError);
+      productEntries = [];
+    }
+
+    // Third search: General content search for regulatory info
+    let { data: regulatoryEntries, error: regulatoryError } = await supabase
       .from('knowledge_entries')
       .select('title, content, updated_at, tags')
       .filter('is_active', 'eq', true)
       .textSearch('content', content.split(' ').join(' | '));
+    
+    if (regulatoryError) {
+      console.error('Error searching regulatory content:', regulatoryError);
+      regulatoryEntries = [];
+    }
 
-    if (searchError) {
-      console.error('Error searching knowledge base:', searchError);
+    // Combine results, with brand/product matches first
+    const allEntries = [
+      ...(brandEntries || []), 
+      ...(productEntries || []),
+      ...(regulatoryEntries || []).filter(entry => 
+        !brandEntries?.some(b => b.id === entry.id) && 
+        !productEntries?.some(p => p.id === entry.id)
+      )
+    ];
+
+    console.log(`Found ${brandEntries?.length || 0} brand entries, ${productEntries?.length || 0} product entries, and ${regulatoryEntries?.length || 0} regulatory entries`);
+    
+    // Generate knowledge context
+    let knowledgeContext = "";
+    if (allEntries.length > 0) {
+      knowledgeContext = "Brand and Product Knowledge:\n\n";
+      
+      // Process brand entries first
+      const brandInfo = brandEntries?.map(entry => 
+        `Brand: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
+      ).join('\n\n');
+      
+      if (brandInfo) {
+        knowledgeContext += `${brandInfo}\n\n`;
+      }
+
+      // Process product entries next
+      const productInfo = productEntries?.map(entry => 
+        `Product: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
+      ).join('\n\n');
+      
+      if (productInfo) {
+        knowledgeContext += `${productInfo}\n\n`;
+      }
+
+      // Process other regulatory entries
+      const regulatoryInfo = regulatoryEntries
+        ?.filter(entry => 
+          !brandEntries?.some(b => b.id === entry.id) && 
+          !productEntries?.some(p => p.id === entry.id)
+        )
+        .map(entry => 
+          `Regulatory: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
+        ).join('\n\n');
+      
+      if (regulatoryInfo) {
+        knowledgeContext += `${regulatoryInfo}\n\n`;
+      }
     }
 
     // Distinct prompts for simple and complex modes
@@ -52,7 +135,13 @@ Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
 2. Hemp-derived THC Products (ONLY for non-dispensary retail)
 3. Kratom Products (raw materials and processed products)
-4. 7-Hydroxy Products and Derivatives`
+4. 7-Hydroxy Products and Derivatives
+
+Brand and Product Guidance:
+- When a specific brand or product is mentioned, prioritize that information
+- Address regulatory requirements specific to that brand or product's ingredients
+- Be explicit about which states allow sales of specific brands/products
+- When regulatory status varies by ingredient within a product, clarify this distinction`
       : `You are a specialized legal and regulatory assistant for non-dispensary retail channels.
 
 Response Format:
@@ -73,17 +162,24 @@ Regulated Products:
 3. Kratom Products (raw materials and processed products)
 4. 7-Hydroxy Products and Derivatives
 
-Guidelines:
-- Cite specific regulations and legal frameworks
-- Explain compliance requirements in detail
-- Provide comprehensive analysis of legal considerations
-- Include relevant industry standards and best practices`;
+Brand and Product Guidance:
+- When a user inquires about a specific brand or product, prioritize information related to that brand/product
+- Detail product-specific regulatory considerations based on the ingredients in that specific brand/product
+- For products with multiple regulated ingredients, break down regulatory status by ingredient
+- Include state-by-state analysis for specific brands or products when relevant
+- Explicitly mention when certain products within a brand may have different regulatory status
+- Cite the most up-to-date regulatory frameworks that apply to specific brand products`;
+
+    // Build the final system message with the knowledge context
+    let systemContent = baseSystemPrompt;
+    if (knowledgeContext) {
+      systemContent += `\n\n${knowledgeContext}`;
+    }
+    
+    systemContent += `\n\nMaintain the specified response format throughout the conversation. Focus on actionable guidance within non-dispensary retail context.`;
 
     const conversationMessages = [
-      {
-        role: 'system',
-        content: `${baseSystemPrompt}\n\nMaintain the specified response format throughout the conversation. Focus on actionable guidance within non-dispensary retail context.`
-      },
+      { role: 'system', content: systemContent },
       ...messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
         content: msg.content

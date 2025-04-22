@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
+import KnowledgeManager from "./components/KnowledgeManager";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import "./index.css";
@@ -37,6 +38,14 @@ const App = () => {
                 element={
                   <ProtectedRoute>
                     <ProfilePage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/knowledge" 
+                element={
+                  <ProtectedRoute>
+                    <KnowledgeManager />
                   </ProtectedRoute>
                 } 
               />

@@ -1,17 +1,20 @@
 
 import { useState } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import Logo from "../components/Logo";
 import ChatWindow from "../components/ChatWindow";
 import ChatInput from "../components/ChatInput";
 import ChatHistory from "../components/ChatHistory";
 import { ChatProvider } from "../contexts/ChatContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ChatPage = () => {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const { user } = useAuth();
 
   return (
     <ChatProvider>
@@ -56,6 +59,16 @@ const ChatPage = () => {
               >
                 {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
               </Button>
+            )}
+            {user && (
+              <div className="ml-auto">
+                <Link to="/knowledge">
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <Database size={16} />
+                    Knowledge Manager
+                  </Button>
+                </Link>
+              </div>
             )}
           </header>
 
