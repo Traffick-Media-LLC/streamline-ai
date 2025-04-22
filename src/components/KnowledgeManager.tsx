@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +22,7 @@ import {
   getAllBrands,
   getProductsByBrand 
 } from "@/utils/chatUtils";
+import KnowledgeCsvUploader from "./KnowledgeCsvUploader";
 
 type KnowledgeEntry = {
   id: string;
@@ -52,7 +52,6 @@ const KnowledgeManager = () => {
   const [brands, setBrands] = useState<KnowledgeEntry[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Check if user is admin (for demo purposes)
   useEffect(() => {
     const checkAdmin = async () => {
       if (!user) {
@@ -60,15 +59,12 @@ const KnowledgeManager = () => {
         return;
       }
       
-      // In a real app, you would check for admin role
-      // For this demo, we'll consider any logged-in user an admin
       setIsAdmin(true);
     };
     
     checkAdmin();
   }, [user]);
 
-  // Load all knowledge entries
   useEffect(() => {
     if (!isAdmin) return;
     
@@ -83,7 +79,6 @@ const KnowledgeManager = () => {
         if (error) throw error;
         setEntries(data || []);
         
-        // Set brands for the product form
         const brandEntries = (data || []).filter(entry => 
           entry.tags && entry.tags.includes('brand')
         );
@@ -109,22 +104,18 @@ const KnowledgeManager = () => {
     try {
       setIsLoading(true);
       
-      // Check if entry with same title already exists
       const existingEntry = await findKnowledgeEntryByTitle(title);
       if (existingEntry) {
         toast.error("An entry with this title already exists");
         return;
       }
       
-      // Prepare tags
       let tags = [selectedType];
       
-      // For products, add brand association
       if (selectedType === "product" && selectedBrand) {
         tags.push(`brand:${selectedBrand}`);
       }
       
-      // Add custom tags
       if (customTags) {
         const customTagsList = customTags.split(',')
           .map(tag => tag.trim())
@@ -132,7 +123,6 @@ const KnowledgeManager = () => {
         tags = [...tags, ...customTagsList];
       }
       
-      // For products, include brand name in content for better searching
       let finalContent = content;
       if (selectedType === "product" && selectedBrand) {
         const brandEntry = brands.find(b => b.id === selectedBrand);
@@ -148,7 +138,6 @@ const KnowledgeManager = () => {
       setContent("");
       setCustomTags("");
       
-      // Refresh entries
       const { data } = await supabase
         .from('knowledge_entries')
         .select('*')
@@ -156,7 +145,6 @@ const KnowledgeManager = () => {
       
       setEntries(data || []);
       
-      // Update brands list
       const brandEntries = (data || []).filter(entry => 
         entry.tags && entry.tags.includes('brand')
       );
@@ -208,19 +196,34 @@ const KnowledgeManager = () => {
   return (
     <div className="container py-6">
       <h1 className="text-2xl font-bold mb-6">Knowledge Base Manager</h1>
-      
       <Tabs defaultValue="add">
         <TabsList className="mb-4">
           <TabsTrigger value="add">Add Entry</TabsTrigger>
           <TabsTrigger value="view">View Entries</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="add">
           <Card>
             <CardHeader>
               <CardTitle>Add Knowledge Entry</CardTitle>
             </CardHeader>
             <CardContent>
+              <KnowledgeCsvUploader onComplete={async () => {
+                setIsLoading(true);
+                try {
+                  const { data } = await supabase
+                    .from('knowledge_entries')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                  setEntries(data || []);
+                  const brandEntries = (data || []).filter(entry =>
+                    entry.tags && entry.tags.includes('brand')
+                  );
+                  setBrands(brandEntries);
+                } finally {
+                  setIsLoading(false);
+                }
+              }} />
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block mb-2 text-sm font-medium">Entry Type</label>
