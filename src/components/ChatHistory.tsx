@@ -105,41 +105,43 @@ const ChatHistory = ({
         <h2 className="text-sm font-medium text-muted-foreground">Chat History</h2>
       </div>
       
-      <ScrollArea className="flex-1 overflow-y-auto">
-        <div className="p-2 pr-4">
-          {sortedDates.length === 0 ? (
-            <div className="text-center p-4 text-muted-foreground">
-              No chat history yet
-            </div>
-          ) : (
-            sortedDates.map(date => (
-              <div key={date} className="mb-4">
-                <h3 className="text-xs font-medium text-muted-foreground px-2 mb-1">
-                  {date}
-                </h3>
-                <div className="space-y-1">
-                  {chatsByDate[date].map(chat => (
-                    <Button 
-                      key={chat.id} 
-                      variant={currentChatId === chat.id ? "secondary" : "ghost"} 
-                      className="w-full justify-start text-left text-sm h-auto py-2" 
-                      onClick={() => {
-                        selectChat(chat.id);
-                        if (isMobile && onClose) onClose();
-                      }}
-                    >
-                      <div className="flex items-center gap-2 w-full overflow-hidden">
-                        <MessageSquare size={16} />
-                        <span className="truncate">{chat.title}</span>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-2 pr-4">
+            {sortedDates.length === 0 ? (
+              <div className="text-center p-4 text-muted-foreground">
+                No chat history yet
               </div>
-            ))
-          )}
-        </div>
-      </ScrollArea>
+            ) : (
+              sortedDates.map(date => (
+                <div key={date} className="mb-4">
+                  <h3 className="text-xs font-medium text-muted-foreground px-2 mb-1">
+                    {date}
+                  </h3>
+                  <div className="space-y-1">
+                    {chatsByDate[date].map(chat => (
+                      <Button 
+                        key={chat.id} 
+                        variant={currentChatId === chat.id ? "secondary" : "ghost"} 
+                        className="w-full justify-start text-left text-sm h-auto py-2" 
+                        onClick={() => {
+                          selectChat(chat.id);
+                          if (isMobile && onClose) onClose();
+                        }}
+                      >
+                        <div className="flex items-center gap-2 w-full overflow-hidden">
+                          <MessageSquare size={16} />
+                          <span className="truncate">{chat.title}</span>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </div>
 
       <div className="border-t p-2 mt-auto">
         <div className="flex items-center justify-between px-2">

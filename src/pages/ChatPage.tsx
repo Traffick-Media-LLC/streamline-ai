@@ -38,7 +38,9 @@ const ChatPage = () => {
                 </Button>
               )}
             </div>
-            <ChatHistory onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
+            <div className="flex-1 overflow-hidden">
+              <ChatHistory onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
+            </div>
           </div>
         </div>
 
