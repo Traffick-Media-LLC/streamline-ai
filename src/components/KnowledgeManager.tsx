@@ -23,6 +23,7 @@ import {
   getProductsByBrand 
 } from "@/utils/chatUtils";
 import KnowledgeCsvUploader from "./KnowledgeCsvUploader";
+import KnowledgeJsonUploader from "./KnowledgeJsonUploader";
 
 type KnowledgeEntry = {
   id: string;
@@ -37,7 +38,8 @@ type KnowledgeEntry = {
 const ENTRY_TYPES = [
   { value: "brand", label: "Brand" },
   { value: "product", label: "Product" },
-  { value: "regulatory", label: "Regulatory" }
+  { value: "regulatory", label: "Regulatory" },
+  { value: "json", label: "JSON Data" }
 ];
 
 const KnowledgeManager = () => {
@@ -123,6 +125,10 @@ const KnowledgeManager = () => {
         tags = [...tags, ...customTagsList];
       }
       
+      if (isJsonContent(content)) {
+        tags.push("json");
+      }
+      
       let finalContent = content;
       if (selectedType === "product" && selectedBrand) {
         const brandEntry = brands.find(b => b.id === selectedBrand);
@@ -178,6 +184,24 @@ const KnowledgeManager = () => {
     }
   };
 
+  const isJsonContent = (content: string): boolean => {
+    try {
+      JSON.parse(content);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const formatJsonContent = (content: string): string => {
+    try {
+      const parsed = JSON.parse(content);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return content;
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -224,6 +248,24 @@ const KnowledgeManager = () => {
                   setIsLoading(false);
                 }
               }} />
+              
+              <KnowledgeJsonUploader onComplete={async () => {
+                setIsLoading(true);
+                try {
+                  const { data } = await supabase
+                    .from('knowledge_entries')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                  setEntries(data || []);
+                  const brandEntries = (data || []).filter(entry =>
+                    entry.tags && entry.tags.includes('brand')
+                  );
+                  setBrands(brandEntries);
+                } finally {
+                  setIsLoading(false);
+                }
+              }} />
+              
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block mb-2 text-sm font-medium">Entry Type</label>
@@ -281,7 +323,7 @@ const KnowledgeManager = () => {
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder={`Enter ${selectedType} details including regulatory information...`}
-                    className="min-h-[200px]"
+                    className="min-h-[200px] font-mono"
                     required
                   />
                 </div>
@@ -332,7 +374,13 @@ const KnowledgeManager = () => {
                           </div>
                         </CardHeader>
                         <CardContent className="pb-2">
-                          <p className="text-sm whitespace-pre-line">{entry.content}</p>
+                          {entry.tags?.includes('json') ? (
+                            <pre className="text-xs whitespace-pre overflow-x-auto bg-muted p-2 rounded-md">
+                              {formatJsonContent(entry.content)}
+                            </pre>
+                          ) : (
+                            <p className="text-sm whitespace-pre-line">{entry.content}</p>
+                          )}
                         </CardContent>
                         <CardFooter className="flex justify-between pt-2">
                           <div className="text-xs text-muted-foreground">

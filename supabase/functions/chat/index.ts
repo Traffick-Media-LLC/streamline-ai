@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -65,25 +64,39 @@ serve(async (req) => {
       console.error('Error searching regulatory content:', regulatoryError);
       regulatoryEntries = [];
     }
+    
+    // Fourth search: Find relevant JSON entries
+    let { data: jsonEntries, error: jsonError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content, updated_at, tags')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"json"}');
+      
+    if (jsonError) {
+      console.error('Error searching json entries:', jsonError);
+      jsonEntries = [];
+    }
 
-    // Combine results, with brand/product matches first
+    // Combine results
     const allEntries = [
       ...(brandEntries || []), 
       ...(productEntries || []),
+      ...(jsonEntries || []),
       ...(regulatoryEntries || []).filter(entry => 
         !brandEntries?.some(b => b.id === entry.id) && 
-        !productEntries?.some(p => p.id === entry.id)
+        !productEntries?.some(p => p.id === entry.id) &&
+        !jsonEntries?.some(j => j.id === entry.id)
       )
     ];
 
-    console.log(`Found ${brandEntries?.length || 0} brand entries, ${productEntries?.length || 0} product entries, and ${regulatoryEntries?.length || 0} regulatory entries`);
+    console.log(`Found ${brandEntries?.length || 0} brand entries, ${productEntries?.length || 0} product entries, ${jsonEntries?.length || 0} JSON entries, and ${regulatoryEntries?.length || 0} regulatory entries`);
     
     // Generate knowledge context
     let knowledgeContext = "";
     if (allEntries.length > 0) {
-      knowledgeContext = "Brand and Product Knowledge:\n\n";
+      knowledgeContext = "Brand, Product, and Regulatory Knowledge:\n\n";
       
-      // Process brand entries first
+      // Process brand entries
       const brandInfo = brandEntries?.map(entry => 
         `Brand: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
       ).join('\n\n');
@@ -92,7 +105,7 @@ serve(async (req) => {
         knowledgeContext += `${brandInfo}\n\n`;
       }
 
-      // Process product entries next
+      // Process product entries
       const productInfo = productEntries?.map(entry => 
         `Product: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
       ).join('\n\n');
@@ -100,12 +113,68 @@ serve(async (req) => {
       if (productInfo) {
         knowledgeContext += `${productInfo}\n\n`;
       }
+      
+      // Process JSON entries - transform them to be more readable
+      if (jsonEntries?.length) {
+        knowledgeContext += "JSON Data:\n\n";
+        jsonEntries.forEach(entry => {
+          try {
+            // Try to parse the JSON content
+            const jsonData = JSON.parse(entry.content);
+            
+            if (typeof jsonData === 'object') {
+              knowledgeContext += `${entry.title}:\n`;
+              
+              // Handle both objects and arrays
+              if (Array.isArray(jsonData)) {
+                // For arrays, summarize with key data points
+                knowledgeContext += `Data contains ${jsonData.length} items/records.\n`;
+                
+                // Sample a few items to give context
+                if (jsonData.length > 0) {
+                  const sample = jsonData.slice(0, Math.min(3, jsonData.length));
+                  sample.forEach((item, index) => {
+                    knowledgeContext += `Sample ${index + 1}:\n`;
+                    if (typeof item === 'object') {
+                      Object.entries(item).forEach(([key, value]) => {
+                        knowledgeContext += `- ${key}: ${JSON.stringify(value)}\n`;
+                      });
+                    } else {
+                      knowledgeContext += `- Value: ${item}\n`;
+                    }
+                  });
+                }
+              } else {
+                // For objects, include all top-level key/values
+                Object.entries(jsonData).forEach(([key, value]) => {
+                  if (Array.isArray(value)) {
+                    knowledgeContext += `- ${key}: Array with ${value.length} items\n`;
+                  } else if (typeof value === 'object' && value !== null) {
+                    knowledgeContext += `- ${key}: Object with keys [${Object.keys(value).join(', ')}]\n`;
+                  } else {
+                    knowledgeContext += `- ${key}: ${value}\n`;
+                  }
+                });
+              }
+            } else {
+              // For primitive JSON values
+              knowledgeContext += `${entry.title}: ${entry.content}\n`;
+            }
+            knowledgeContext += `\nTags: ${entry.tags?.join(', ') || 'None'}\n\n`;
+          } catch (e) {
+            // Fallback if JSON parsing fails
+            knowledgeContext += `${entry.title} (Raw JSON data)\n`;
+            knowledgeContext += `Tags: ${entry.tags?.join(', ') || 'None'}\n\n`;
+          }
+        });
+      }
 
-      // Process other regulatory entries
+      // Process regulatory entries
       const regulatoryInfo = regulatoryEntries
         ?.filter(entry => 
           !brandEntries?.some(b => b.id === entry.id) && 
-          !productEntries?.some(p => p.id === entry.id)
+          !productEntries?.some(p => p.id === entry.id) &&
+          !jsonEntries?.some(j => j.id === entry.id)
         )
         .map(entry => 
           `Regulatory: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
@@ -130,6 +199,8 @@ Response Format:
 Important Notes:
 - The dispensary caveat ONLY applies to hemp and delta-related products
 - Focus on what is legally permissible for non-dispensary retail and online sales
+- When dealing with JSON data, extract and interpret relevant information
+- For tabular or structured data, organize your response in a clear, readable format
 
 Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
@@ -141,7 +212,8 @@ Brand and Product Guidance:
 - When a specific brand or product is mentioned, prioritize that information
 - Address regulatory requirements specific to that brand or product's ingredients
 - Be explicit about which states allow sales of specific brands/products
-- When regulatory status varies by ingredient within a product, clarify this distinction`
+- When regulatory status varies by ingredient within a product, clarify this distinction
+- For JSON data, extract relevant information and present it clearly`
       : `You are a specialized legal and regulatory assistant for non-dispensary retail channels.
 
 Response Format:
@@ -151,10 +223,12 @@ Response Format:
 - Explain the context behind regulations
 - Consider edge cases and specific requirements
 - Structure response in clear sections
+- For JSON or tabular data, clearly summarize the structured information
 
 Important Notes:
 - The dispensary caveat ONLY applies to hemp and delta-related products
 - Focus on what is legally permissible for non-dispensary retail and online sales
+- When working with JSON data, extract and explain the structured information
 
 Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
@@ -168,7 +242,8 @@ Brand and Product Guidance:
 - For products with multiple regulated ingredients, break down regulatory status by ingredient
 - Include state-by-state analysis for specific brands or products when relevant
 - Explicitly mention when certain products within a brand may have different regulatory status
-- Cite the most up-to-date regulatory frameworks that apply to specific brand products`;
+- Cite the most up-to-date regulatory frameworks that apply to specific brand products
+- For JSON data, analyze and interpret the structured information in context`;
 
     // Build the final system message with the knowledge context
     let systemContent = baseSystemPrompt;
