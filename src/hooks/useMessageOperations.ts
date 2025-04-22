@@ -11,6 +11,20 @@ export const useMessageOperations = (
 ) => {
   const handleMessageUpdate = async (chatId: string, message: Message) => {
     if (!isGuest && user) {
+      // If it's an assistant message, get the user's first name first
+      if (message.role === 'assistant') {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name')
+          .eq('id', user.id)
+          .single();
+
+        // Add the user's name to assistant messages if available
+        if (profile?.first_name) {
+          message.content = message.content.replace(/^/, `${profile.first_name}, `);
+        }
+      }
+
       const { error } = await supabase
         .from('chat_messages')
         .insert({
