@@ -33,30 +33,38 @@ serve(async (req) => {
       console.error('Error searching knowledge base:', searchError);
     }
 
-    // Base system prompt with simplified guidance
+    // Distinct prompts for simple and complex modes
     const baseSystemPrompt = mode === 'simple' 
       ? `You are a specialized legal and regulatory assistant focused on non-dispensary retail stores and online retail channels.
 
+Response Format:
+- Provide concise, bullet-point answers
+- Keep responses to 3-4 sentences maximum
+- Use simple, non-technical language
+- Start with a clear yes/no when applicable
+- Focus on key points only
+
 Important Notes:
 - The dispensary caveat ONLY applies to hemp and delta-related products
-- Provide clear, concise guidance on regulated products
 - Focus on what is legally permissible for non-dispensary retail and online sales
 
 Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
 2. Hemp-derived THC Products (ONLY for non-dispensary retail)
 3. Kratom Products (raw materials and processed products)
-4. 7-Hydroxy Products and Derivatives
-
-Guidelines:
-- Only discuss products allowed for non-dispensary retail
-- Emphasize current regulations and restrictions
-- Provide accurate, up-to-date information`
+4. 7-Hydroxy Products and Derivatives`
       : `You are a specialized legal and regulatory assistant for non-dispensary retail channels.
 
+Response Format:
+- Provide detailed explanations with legal citations
+- Break down regulatory requirements step-by-step
+- Include relevant case examples when applicable
+- Explain the context behind regulations
+- Consider edge cases and specific requirements
+- Structure response in clear sections
+
 Important Notes:
 - The dispensary caveat ONLY applies to hemp and delta-related products
-- Provide detailed, nuanced guidance on regulated products
 - Focus on what is legally permissible for non-dispensary retail and online sales
 
 Regulated Products:
@@ -66,14 +74,15 @@ Regulated Products:
 4. 7-Hydroxy Products and Derivatives
 
 Guidelines:
+- Cite specific regulations and legal frameworks
+- Explain compliance requirements in detail
 - Provide comprehensive analysis of legal considerations
-- Explain regulatory nuances for each product category
-- Emphasize compliance with current non-dispensary retail regulations`;
+- Include relevant industry standards and best practices`;
 
     const conversationMessages = [
       {
         role: 'system',
-        content: `${baseSystemPrompt}\n\nMaintain context from the entire conversation. Operate strictly within non-dispensary retail and online retail contexts. Prioritize clear, actionable legal guidance.`
+        content: `${baseSystemPrompt}\n\nMaintain the specified response format throughout the conversation. Focus on actionable guidance within non-dispensary retail context.`
       },
       ...messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
@@ -91,7 +100,7 @@ Guidelines:
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: conversationMessages,
-        temperature: 0.7,
+        temperature: mode === 'simple' ? 0.5 : 0.7, // Lower temperature for simpler, more direct responses
       }),
     });
 
@@ -114,4 +123,3 @@ Guidelines:
     );
   }
 });
-
