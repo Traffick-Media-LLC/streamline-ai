@@ -7,7 +7,7 @@ import { User } from "@supabase/supabase-js";
 export const useMessageOperations = (
   user: User | null,
   isGuest: boolean,
-  setChats: (chats: any) => void
+  setChats: (chats: any[] | ((prev: any[]) => any[])) => void
 ) => {
   const handleMessageUpdate = async (chatId: string, message: Message) => {
     if (!isGuest && user) {

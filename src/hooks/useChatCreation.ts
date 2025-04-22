@@ -8,7 +8,7 @@ import { generateChatTitle } from "../utils/chatUtils";
 export const useChatCreation = (
   user: User | null,
   isGuest: boolean,
-  setChats: (chats: Chat[]) => void,
+  setChats: (chats: Chat[] | ((prev: Chat[]) => Chat[])) => void,
   setCurrentChatId: (id: string | null) => void
 ) => {
   const createNewChat = async () => {
@@ -25,7 +25,7 @@ export const useChatCreation = (
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      setChats(prev => [newChat, ...prev]);
+      setChats((prev: Chat[]) => [newChat, ...prev]);
       setCurrentChatId(newChat.id);
       return newChat.id;
     }
@@ -53,7 +53,7 @@ export const useChatCreation = (
       updatedAt: new Date(chat.updated_at).getTime(),
     };
 
-    setChats(prev => [newChat, ...prev]);
+    setChats((prev: Chat[]) => [newChat, ...prev]);
     setCurrentChatId(newChat.id);
     return newChat.id;
   };
@@ -73,7 +73,7 @@ export const useChatCreation = (
       }
     }
 
-    setChats(prev =>
+    setChats((prev: Chat[]) =>
       prev.map(chat =>
         chat.id === chatId ? { ...chat, title } : chat
       )

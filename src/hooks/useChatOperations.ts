@@ -5,6 +5,8 @@ import { useChatFetch } from "./useChatFetch";
 import { useChatCreation } from "./useChatCreation";
 import { useMessageOperations } from "./useMessageOperations";
 import { Message } from "../types/chat";
+import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export const useChatOperations = () => {
   const { user, isGuest } = useAuth();
