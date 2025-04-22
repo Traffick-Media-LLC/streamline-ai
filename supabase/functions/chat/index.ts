@@ -33,75 +33,47 @@ serve(async (req) => {
       console.error('Error searching knowledge base:', searchError);
     }
 
-    // Format knowledge base entries with timestamps
-    const knowledgeBaseContext = relevantEntries?.length
-      ? "\n\nVerified information from our knowledge base:\n" + 
-        relevantEntries.map(entry => {
-          const lastUpdated = new Date(entry.updated_at);
-          const daysSinceUpdate = Math.floor((Date.now() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24));
-          const tags = entry.tags?.join(', ') || '';
-          
-          return `[KB Entry - Last verified: ${lastUpdated.toLocaleDateString()} (${daysSinceUpdate} days ago)]
-Title: ${entry.title}
-Tags: ${tags}
-Content: ${entry.content}`;
-        }).join('\n\n')
-      : '';
-
-    // Enhanced system prompt for credibility verification
+    // Base system prompt with simplified guidance
     const baseSystemPrompt = mode === 'simple' 
-      ? `You are a specialized legal and regulatory assistant focused on non-dispensary retail stores and online retail channels ONLY. You provide guidance on regulated products while adhering to these strict verification rules:
+      ? `You are a specialized legal and regulatory assistant focused on non-dispensary retail stores and online retail channels.
 
-1. Always cross-reference knowledge base entries with current regulations
-2. Explicitly state when information needs verification
-3. Include confidence levels in your responses:
-   - "Fully Verified" - When knowledge base matches current regulations
-   - "Partially Verified" - When some aspects need updating
-   - "Update Required" - When significant discrepancies exist
+Important Notes:
+- The dispensary caveat ONLY applies to hemp and delta-related products
+- Provide clear, concise guidance on regulated products
+- Focus on what is legally permissible for non-dispensary retail and online sales
 
-Focus on these regulated products:
+Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
-2. Hemp-derived THC Products (non-dispensary retail only)
+2. Hemp-derived THC Products (ONLY for non-dispensary retail)
 3. Kratom Products (raw materials and processed products)
 4. 7-Hydroxy Products and Derivatives
 
-For ALL responses:
-- Prioritize knowledge base information but flag any potential outdated content
-- Only discuss what is legal for non-dispensary retail and online sales
+Guidelines:
+- Only discuss products allowed for non-dispensary retail
 - Emphasize current regulations and restrictions
-- If unsure about current legality, explicitly state that and suggest official sources
-- Never provide advice about products requiring dispensary distribution`
-      : `You are a specialized legal and regulatory assistant for non-dispensary retail channels, providing detailed responses with:
+- Provide accurate, up-to-date information`
+      : `You are a specialized legal and regulatory assistant for non-dispensary retail channels.
 
-1. Confidence Level Assessment:
-   - "Fully Verified" - Knowledge base matches current regulations
-   - "Partially Verified" - Some aspects need updating
-   - "Update Required" - Significant discrepancies exist
+Important Notes:
+- The dispensary caveat ONLY applies to hemp and delta-related products
+- Provide detailed, nuanced guidance on regulated products
+- Focus on what is legally permissible for non-dispensary retail and online sales
 
-2. Source Attribution:
-   - [Knowledge Base] - For verified internal data
-   - [Current Regulation] - For latest regulatory updates
-   - [Industry Standard] - For established practices
-
-3. Response Structure:
-   - Start with confidence level
-   - List all sources used
-   - Provide detailed analysis
-   - Flag any discrepancies
-   - End with verification timestamp
-
-Focus on these regulated products ONLY:
+Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
-2. Hemp-derived THC Products (non-dispensary retail only)
+2. Hemp-derived THC Products (ONLY for non-dispensary retail)
 3. Kratom Products (raw materials and processed products)
 4. 7-Hydroxy Products and Derivatives
 
-Include inline citations using markdown links when available.`;
+Guidelines:
+- Provide comprehensive analysis of legal considerations
+- Explain regulatory nuances for each product category
+- Emphasize compliance with current non-dispensary retail regulations`;
 
     const conversationMessages = [
       {
         role: 'system',
-        content: `${baseSystemPrompt}${knowledgeBaseContext}\n\nMaintain context from the entire conversation. Remember we ONLY operate through non-dispensary retail stores and online retail, therefore any product that requires dispensary distribution is effectively NOT legal for our purposes. Always verify current regulations and emphasize the specific context of our sales channels. Flag any information that might be outdated and suggest official sources for updates.`
+        content: `${baseSystemPrompt}\n\nMaintain context from the entire conversation. Operate strictly within non-dispensary retail and online retail contexts. Prioritize clear, actionable legal guidance.`
       },
       ...messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
@@ -142,3 +114,4 @@ Include inline citations using markdown links when available.`;
     );
   }
 });
+
