@@ -26,5 +26,4 @@ export interface ChatContextType {
   sendMessage: (content: string) => Promise<void>;
   getCurrentChat: () => Chat | null;
   setMode: (mode: "simple" | "complex") => void;
-  systemPrompt: string;
 }
