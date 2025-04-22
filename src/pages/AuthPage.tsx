@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
@@ -8,13 +7,13 @@ import { UserIcon } from "lucide-react";
 import Logo from "../components/Logo";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
-
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
-  const { setIsGuest } = useAuth();
-
+  const {
+    setIsGuest
+  } = useAuth();
   useEffect(() => {
     const checkSession = async () => {
       const {
@@ -30,7 +29,6 @@ const AuthPage = () => {
       }
     };
     checkSession();
-
     const {
       data: {
         subscription
@@ -50,7 +48,6 @@ const AuthPage = () => {
       subscription.unsubscribe();
     };
   }, [navigate]);
-
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
@@ -86,21 +83,17 @@ const AuthPage = () => {
       setLoading(false);
     }
   };
-
   const handleGuestAccess = () => {
     setUser(null);
     setIsGuest(true);
     toast.success("Continuing as guest");
     navigate('/');
   };
-
   if (user) {
     console.log("Redirecting authenticated user to home");
     return <Navigate to="/" />;
   }
-
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+  return <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="flex flex-col items-center text-center">
           <Logo />
@@ -111,34 +104,21 @@ const AuthPage = () => {
         </div>
 
         <div className="mt-8 space-y-4">
-          <Button 
-            variant="outline" 
-            size="lg" 
-            className="w-full flex items-center justify-center gap-2 h-12" 
-            onClick={handleGoogleSignIn} 
-            disabled={loading}
-          >
+          <Button variant="outline" size="lg" className="w-full flex items-center justify-center gap-2 h-12" onClick={handleGoogleSignIn} disabled={loading}>
             <FcGoogle className="h-5 w-5" />
             {loading ? "Signing in..." : "Sign in with Google"}
           </Button>
 
-          <Button 
-            variant="secondary" 
-            size="lg" 
-            className="w-full flex items-center justify-center gap-2 h-12" 
-            onClick={handleGuestAccess}
-          >
+          <Button variant="secondary" size="lg" className="w-full flex items-center justify-center gap-2 h-12" onClick={handleGuestAccess}>
             <UserIcon className="h-5 w-5" />
             Continue as Guest
           </Button>
         </div>
         
         <div className="text-center text-sm text-muted-foreground mt-4">
-          <p>Secure sign in with your Google account</p>
+          <p>Secure sign in with your Streamline Google account.</p>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default AuthPage;
