@@ -79,9 +79,10 @@ export default function KnowledgeJsonUploader({ onComplete }: { onComplete: () =
       toast.success("JSON data added to knowledge base");
       setSelectedFile(null);
       
-      // Reset the file input
-      if (e.target) {
-        e.target.value = '';
+      // Reset the file input - fixing the error here by removing references to 'e'
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = '';
       }
       
       onComplete();
