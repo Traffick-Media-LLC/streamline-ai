@@ -1,6 +1,6 @@
 
-import { createContext, useContext, useEffect } from "react";
-import { ChatContextType } from "../types/chat";
+import { createContext, useContext } from "react";
+import { ChatContextType } from "../types/chatContext";
 import { useChatOperations } from "../hooks/useChatOperations";
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -24,7 +24,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     setMode,
   } = useChatOperations();
 
-  const value = {
+  const value: ChatContextType = {
     currentChatId,
     isLoadingResponse,
     mode,
