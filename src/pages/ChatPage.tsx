@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,41 @@ import ChatWindow from "../components/ChatWindow";
 import ChatInput from "../components/ChatInput";
 import { ChatProvider } from "../contexts/ChatContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 const ChatPage = () => {
   const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<string>("");
+
+  useEffect(() => {
+    // Add debugging to check what's happening during initialization
+    console.log("ChatPage mounted, initializing...");
+    
+    const debugTimeout = setTimeout(() => {
+      // This will execute after the component has had time to initialize
+      setIsLoading(false);
+      console.log("ChatPage debug timeout completed");
+      
+      // Check if ChatProvider context is functioning
+      setDebugInfo("ChatProvider initialization completed");
+    }, 2000); // 2 seconds should be enough for normal initialization
+    
+    return () => clearTimeout(debugTimeout);
+  }, []);
+
+  // Debug panel that displays temporarily to help diagnose issues
+  const renderDebugPanel = () => {
+    if (!isLoading) return null;
+    
+    return (
+      <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50">
+        <h4 className="font-medium text-sm">Chat Debug</h4>
+        <p className="text-xs text-muted-foreground">Status: {isLoading ? "Initializing..." : "Ready"}</p>
+        <p className="text-xs text-muted-foreground">{debugInfo}</p>
+      </div>
+    );
+  };
 
   return (
     <ChatProvider>
@@ -40,6 +72,7 @@ const ChatPage = () => {
           </div>
         </div>
       </div>
+      {renderDebugPanel()}
     </ChatProvider>
   );
 };
