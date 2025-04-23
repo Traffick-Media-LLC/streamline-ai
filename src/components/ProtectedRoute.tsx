@@ -12,6 +12,8 @@ type ProtectedRouteProps = {
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   const { isAuthenticated, loading, isAdmin } = useAuth();
 
+  console.log("ProtectedRoute check:", { isAuthenticated, loading, isAdmin, requiredRole });
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -21,10 +23,12 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   }
 
   if (!isAuthenticated) {
+    console.log("Not authenticated, redirecting to auth page");
     return <Navigate to="/auth" />;
   }
 
   if (requiredRole && requiredRole === 'admin' && !isAdmin) {
+    console.log("Admin role required but user is not admin");
     return (
       <div className="container mx-auto px-4 py-16 flex flex-col items-center">
         <Alert className="max-w-md" variant="destructive">
@@ -38,6 +42,7 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     );
   }
 
+  console.log("Access granted to protected route");
   return <>{children}</>;
 };
 

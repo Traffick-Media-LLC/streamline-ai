@@ -27,6 +27,7 @@ export const useProductsData = () => {
   const fetchProducts = async () => {
     try {
       setError(null);
+      console.log("Fetching products data...");
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -40,6 +41,7 @@ export const useProductsData = () => {
         .order('name');
       
       if (error) throw error;
+      console.log("Products data received:", data?.length || 0, "items");
       setProducts(data || []);
     } catch (error: any) {
       console.error('Error fetching products:', error);
@@ -50,12 +52,14 @@ export const useProductsData = () => {
 
   const fetchBrands = async () => {
     try {
+      console.log("Fetching brands data...");
       const { data, error } = await supabase
         .from('brands')
         .select('*')
         .order('name');
       
       if (error) throw error;
+      console.log("Brands data received:", data?.length || 0, "items");
       setBrands(data || []);
     } catch (error: any) {
       console.error('Error fetching brands:', error);
@@ -66,6 +70,7 @@ export const useProductsData = () => {
 
   const refreshData = async () => {
     if (!isAuthenticated || !isAdmin) {
+      console.log("Not authenticated or not admin, skipping products data fetch");
       setError("Authentication required. Please ensure you're logged in as an admin.");
       setLoading(false);
       return;
@@ -73,11 +78,14 @@ export const useProductsData = () => {
     
     setLoading(true);
     setError(null);
+    console.log("Starting products data refresh...");
     await Promise.all([fetchProducts(), fetchBrands()]);
     setLoading(false);
+    console.log("Products data refresh complete");
   };
 
   useEffect(() => {
+    console.log("useProductsData hook initialized, auth state:", { isAuthenticated, isAdmin });
     refreshData();
   }, [isAuthenticated, isAdmin]);
 

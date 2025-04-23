@@ -5,6 +5,8 @@ import BrandsManagement from '../components/product-management/BrandsManagement'
 import ProductsManagement from '../components/product-management/ProductsManagement';
 import StatePermissions from '../components/product-management/StatePermissions';
 import { useAuth } from "@/contexts/AuthContext";
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { Skeleton } from "@/components/ui/skeleton";
 
 const AdminPage: React.FC = () => {
   const { loading } = useAuth();
@@ -33,17 +35,45 @@ const AdminPage: React.FC = () => {
         </TabsList>
         
         <TabsContent value="brands" className="mt-6">
-          <BrandsManagement />
+          <ErrorBoundary>
+            <React.Suspense fallback={<TabLoadingSkeleton />}>
+              <BrandsManagement />
+            </React.Suspense>
+          </ErrorBoundary>
         </TabsContent>
         
         <TabsContent value="products" className="mt-6">
-          <ProductsManagement />
+          <ErrorBoundary>
+            <React.Suspense fallback={<TabLoadingSkeleton />}>
+              <ProductsManagement />
+            </React.Suspense>
+          </ErrorBoundary>
         </TabsContent>
         
         <TabsContent value="permissions" className="mt-6">
-          <StatePermissions />
+          <ErrorBoundary>
+            <React.Suspense fallback={<TabLoadingSkeleton />}>
+              <StatePermissions />
+            </React.Suspense>
+          </ErrorBoundary>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+};
+
+const TabLoadingSkeleton = () => {
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-10 w-32" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map(i => (
+          <Skeleton key={i} className="h-24 w-full" />
+        ))}
+      </div>
     </div>
   );
 };
