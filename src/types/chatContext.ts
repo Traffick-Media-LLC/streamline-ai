@@ -5,6 +5,6 @@ export interface ChatContextType {
   mode: "simple" | "complex";
   createNewChat: () => Promise<string | null>;
   sendMessage: (content: string) => Promise<void>;
-  getCurrentChat: () => Chat | null;
+  getCurrentChat: () => any;
   setMode: (mode: "simple" | "complex") => void;
 }
