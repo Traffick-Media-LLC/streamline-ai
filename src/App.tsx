@@ -11,7 +11,6 @@ import ProfilePage from "./pages/ProfilePage";
 import KnowledgeManager from "./components/KnowledgeManager";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
-import { HomePage } from "./pages/HomePage";
 import "./index.css";
 
 const queryClient = new QueryClient();
@@ -27,10 +26,6 @@ const App = () => {
             <Routes>
               <Route 
                 path="/" 
-                element={<HomePage />} 
-              />
-              <Route 
-                path="/chat" 
                 element={
                   <ProtectedRoute>
                     <Index />
