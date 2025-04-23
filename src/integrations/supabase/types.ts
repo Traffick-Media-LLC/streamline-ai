@@ -9,38 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      allowed_products: {
-        Row: {
-          brand_name: string
-          created_at: string | null
-          id: string
-          product_name: string
-          state_name: string | null
-        }
-        Insert: {
-          brand_name: string
-          created_at?: string | null
-          id?: string
-          product_name: string
-          state_name?: string | null
-        }
-        Update: {
-          brand_name?: string
-          created_at?: string | null
-          id?: string
-          product_name?: string
-          state_name?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "allowed_products_state_name_fkey"
-            columns: ["state_name"]
-            isOneToOne: false
-            referencedRelation: "state_regulations"
-            referencedColumns: ["state_name"]
-          },
-        ]
-      }
       chat_messages: {
         Row: {
           chat_id: string
@@ -145,21 +113,6 @@ export type Database = {
           id?: string
           last_name?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      state_regulations: {
-        Row: {
-          state_name: string
-          status: string
-        }
-        Insert: {
-          state_name: string
-          status: string
-        }
-        Update: {
-          state_name?: string
-          status?: string
         }
         Relationships: []
       }

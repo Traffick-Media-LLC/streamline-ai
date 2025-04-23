@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
-import { StateData, statusColors } from '../data/stateData';
+import { StateData } from '../data/stateData';
 import {
   Tooltip,
   TooltipContent,
@@ -25,15 +25,14 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
             {({ geographies }) =>
               geographies.map((geo) => {
                 const stateName = geo.properties.name;
-                const data = stateData[stateName] || { status: 'gray', allowedProducts: {} };
-                const fillColor = statusColors[data.status] || "#a0aec0";
+                const data = stateData[stateName] || { status: 'gray', allowedProducts: [] };
 
                 return (
                   <Tooltip key={geo.rsmKey}>
                     <TooltipTrigger asChild>
                       <Geography
                         geography={geo}
-                        fill={fillColor}
+                        fill="#ea384c"
                         stroke="#f1f1f1"
                         strokeWidth={0.5}
                         onClick={() => {
