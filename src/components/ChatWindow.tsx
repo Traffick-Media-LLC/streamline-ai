@@ -1,25 +1,13 @@
 
-import { useEffect, useRef } from "react";
 import { useChatContext } from "../contexts/ChatContext";
 import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
-import { getMessagesByDate } from "../utils/chatUtils";
-import { formatDate } from "../utils/chatUtils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const ChatWindow = () => {
   const { getCurrentChat, isLoadingResponse } = useChatContext();
-  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const currentChat = getCurrentChat();
   
-  // Scroll to bottom when messages change or when loading state changes
-  useEffect(() => {
-    if (scrollViewportRef.current) {
-      const scrollElement = scrollViewportRef.current;
-      scrollElement.scrollTop = scrollElement.scrollHeight;
-    }
-  }, [currentChat?.messages, isLoadingResponse]);
-
   if (!currentChat) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4 text-center space-y-6">
@@ -39,36 +27,22 @@ const ChatWindow = () => {
     );
   }
 
-  const messagesByDate = getMessagesByDate(currentChat.messages);
-  const dates = Object.keys(messagesByDate).sort(
-    (a, b) => new Date(a).getTime() - new Date(b).getTime()
-  );
-
   return (
     <div className="flex-1 h-full overflow-hidden flex flex-col">
       <ScrollArea className="flex-1">
-        <div className="p-4 min-h-full" ref={scrollViewportRef}>
-          {dates.length === 0 ? (
+        <div className="p-4 min-h-full">
+          {currentChat.messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <p className="text-lg text-muted-foreground font-medium">
                 Ask a question to start the conversation
               </p>
             </div>
           ) : (
-            dates.map((date) => (
-              <div key={date} className="mb-8">
-                <div className="flex justify-center mb-5">
-                  <span className="text-xs font-semibold bg-muted/50 text-muted-foreground px-3 py-1.5 rounded-full">
-                    {formatDate(new Date(date).getTime())}
-                  </span>
-                </div>
-                <div className="space-y-6">
-                  {messagesByDate[date].map((message) => (
-                    <ChatMessage key={message.id} message={message} />
-                  ))}
-                </div>
-              </div>
-            ))
+            <div className="space-y-6">
+              {currentChat.messages.map((message) => (
+                <ChatMessage key={message.id} message={message} />
+              ))}
+            </div>
           )}
           {isLoadingResponse && <TypingIndicator />}
         </div>

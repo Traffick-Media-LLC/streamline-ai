@@ -1,7 +1,6 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatsState } from "./useChatsState";
-import { useChatFetch } from "./useChatFetch";
 import { useChatCreation } from "./useChatCreation";
 import { useMessageOperations } from "./useMessageOperations";
 import { Message } from "../types/chat";
@@ -11,8 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 export const useChatOperations = () => {
   const { user, isGuest } = useAuth();
   const {
-    chats,
-    setChats,
     currentChatId,
     setCurrentChatId,
     isLoadingResponse,
@@ -22,13 +19,8 @@ export const useChatOperations = () => {
     getCurrentChat
   } = useChatsState();
 
-  const { fetchChats } = useChatFetch(user, setChats, setCurrentChatId, currentChatId);
-  const { createNewChat, updateChatTitle } = useChatCreation(user, isGuest, setChats, setCurrentChatId);
-  const { handleMessageUpdate } = useMessageOperations(user, isGuest, setChats);
-
-  const selectChat = (chatId: string) => {
-    setCurrentChatId(chatId);
-  };
+  const { createNewChat } = useChatCreation(user, isGuest, () => {}, setCurrentChatId);
+  const { handleMessageUpdate } = useMessageOperations(user, isGuest, () => {});
 
   const sendMessage = async (content: string) => {
     if (!user && !isGuest) {
@@ -52,14 +44,11 @@ export const useChatOperations = () => {
     };
 
     await handleMessageUpdate(chatId, userMessage);
-    const currentChat = chats.find(chat => chat.id === chatId);
-    if (currentChat?.messages.length === 0) {
-      updateChatTitle(chatId, content);
-    }
 
     setIsLoadingResponse(true);
 
     try {
+      const currentChat = getCurrentChat();
       const chatMessages = currentChat ? [...currentChat.messages, userMessage] : [userMessage];
 
       const { data, error } = await supabase.functions.invoke('chat', {
@@ -95,13 +84,10 @@ export const useChatOperations = () => {
   };
 
   return {
-    chats,
     currentChatId,
     isLoadingResponse,
     mode,
-    fetchChats,
     createNewChat,
-    selectChat,
     sendMessage,
     getCurrentChat,
     setMode,

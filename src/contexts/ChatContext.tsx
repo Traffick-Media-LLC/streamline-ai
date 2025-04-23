@@ -15,29 +15,20 @@ export const useChatContext = () => {
 
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const {
-    chats,
     currentChatId,
     isLoadingResponse,
     mode,
-    fetchChats,
     createNewChat,
-    selectChat,
     sendMessage,
     getCurrentChat,
     setMode,
   } = useChatOperations();
 
-  useEffect(() => {
-    fetchChats();
-  }, []);
-
   const value = {
-    chats,
     currentChatId,
     isLoadingResponse,
     mode,
     createNewChat,
-    selectChat,
     sendMessage,
     getCurrentChat,
     setMode,

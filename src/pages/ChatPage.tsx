@@ -1,65 +1,24 @@
 
 import { useState } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
-import { Menu, X, Database } from "lucide-react";
+import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import Logo from "../components/Logo";
 import ChatWindow from "../components/ChatWindow";
 import ChatInput from "../components/ChatInput";
-import ChatHistory from "../components/ChatHistory";
 import { ChatProvider } from "../contexts/ChatContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 const ChatPage = () => {
-  const isMobile = useIsMobile();
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const { user } = useAuth();
 
   return (
     <ChatProvider>
-      <div className="flex h-screen bg-background overflow-hidden">
-        {/* Sidebar for history */}
-        <div
-          className={`${
-            sidebarOpen
-              ? "fixed inset-y-0 left-0 z-50 w-64 transform translate-x-0"
-              : "fixed inset-y-0 left-0 z-50 w-64 transform -translate-x-full"
-          } transition-transform duration-300 ease-in-out md:relative md:translate-x-0 bg-secondary border-r h-full`}
-        >
-          <div className="flex flex-col h-full">
-            <div className="h-14 border-b flex items-center px-4">
-              <Logo />
-              {isMobile && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto"
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <X size={20} />
-                </Button>
-              )}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <ChatHistory onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
-            </div>
-          </div>
-        </div>
-
+      <div className="flex flex-col h-screen bg-background overflow-hidden">
         {/* Main content */}
         <div className="flex flex-col flex-1 h-full overflow-hidden">
           {/* Header */}
           <header className="h-14 border-b flex items-center px-4">
-            {isMobile && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-              </Button>
-            )}
             {user && (
               <div className="ml-auto">
                 <Link to="/knowledge">
