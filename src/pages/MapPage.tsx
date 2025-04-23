@@ -1,9 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import USAMap from '../components/USAMap';
 import { supabase } from "@/integrations/supabase/client";
 import { StateData } from '../data/stateData';
 import { useQuery } from '@tanstack/react-query';
+import { Button } from "@/components/ui/button";
+import { MessageSquare } from "lucide-react";
 
 async function fetchStateProducts(stateName: string) {
   const { data: products, error } = await supabase
@@ -27,7 +29,6 @@ async function fetchStateProducts(stateName: string) {
     return { allowedProducts: [] };
   }
 
-  // Transform the data into the expected format
   const brandProducts = products.reduce((acc: { brandName: string; products: string[]; logoUrl?: string }[], item) => {
     const brandName = item.products.brands.name;
     const productName = item.products.name;
@@ -66,7 +67,6 @@ const MapPage = () => {
     });
   };
 
-  // Update the selected state data when the query resolves
   useEffect(() => {
     if (stateData && selectedState) {
       setSelectedState(prev => prev ? {
@@ -78,7 +78,16 @@ const MapPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8 text-center">Streamline Product Legality by State</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-center">Streamline Product Legality by State</h1>
+        <Link to="/chat">
+          <Button variant="outline" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            AI Chat
+          </Button>
+        </Link>
+      </div>
+      
       <USAMap onStateClick={handleStateClick} />
       
       {selectedState && (

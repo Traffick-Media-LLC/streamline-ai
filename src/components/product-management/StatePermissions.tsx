@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -359,7 +358,6 @@ const StatePermissions: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1"
-                startIcon={<Search className="h-4 w-4 opacity-50" />}
               />
               <Select 
                 value={filterBrandId} 
