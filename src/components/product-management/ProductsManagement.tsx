@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { useProductsData } from "@/hooks/useProductsData";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,71 +39,15 @@ interface Product {
 }
 
 const ProductsManagement: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { products, brands, loading, refreshData } = useProductsData();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterBrandId, setFilterBrandId] = useState<string>('');
   const [newProduct, setNewProduct] = useState({ name: '', brand_id: '' });
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterBrandId, setFilterBrandId] = useState<string>('');
   
   const { toast } = useToast();
-
-  // Fetch all products with their brands
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          brands:brand_id (
-            id,
-            name,
-            logo_url
-          )
-        `)
-        .order('name');
-      
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load products. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch all brands for dropdowns
-  const fetchBrands = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('brands')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      setBrands(data || []);
-    } catch (error) {
-      console.error('Error fetching brands:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load brands. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  useEffect(() => {
-    Promise.all([fetchProducts(), fetchBrands()]);
-  }, []);
 
   // Add a new product
   const handleAddProduct = async () => {
@@ -125,7 +69,7 @@ const ProductsManagement: React.FC = () => {
 
       setNewProduct({ name: '', brand_id: '' });
       setIsAddDialogOpen(false);
-      fetchProducts();
+      refreshData();
     } catch (error) {
       console.error('Error adding product:', error);
       toast({
@@ -157,7 +101,7 @@ const ProductsManagement: React.FC = () => {
       });
       
       setIsEditDialogOpen(false);
-      fetchProducts();
+      refreshData();
     } catch (error) {
       console.error('Error updating product:', error);
       toast({
@@ -185,7 +129,7 @@ const ProductsManagement: React.FC = () => {
         description: "Product deleted successfully!",
       });
       
-      fetchProducts();
+      refreshData();
     } catch (error) {
       console.error('Error deleting product:', error);
       toast({
@@ -207,7 +151,7 @@ const ProductsManagement: React.FC = () => {
       const brandId = product.brand_id;
       if (!acc[brandId]) {
         acc[brandId] = {
-          brand: product.brands,
+          brand: brands.find(b => b.id === brandId),
           products: []
         };
       }

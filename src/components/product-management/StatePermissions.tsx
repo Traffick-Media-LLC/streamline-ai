@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useStatePermissionsData } from "@/hooks/useStatePermissionsData";
+import { useProductsData } from "@/hooks/useProductsData";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,12 +55,9 @@ interface StateProduct {
 }
 
 const StatePermissions: React.FC = () => {
-  const [states, setStates] = useState<State[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [stateProducts, setStateProducts] = useState<StateProduct[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { states, stateProducts, loading: statesLoading, refreshData: refreshStateData } = useStatePermissionsData();
+  const { products, loading: productsLoading } = useProductsData();
   const [selectedState, setSelectedState] = useState<State | null>(null);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBrandId, setFilterBrandId] = useState<string>('');
@@ -265,7 +264,7 @@ const StatePermissions: React.FC = () => {
         </div>
       </div>
 
-      {loading ? (
+      {statesLoading || productsLoading ? (
         <div className="flex justify-center my-12">
           <p>Loading state permissions...</p>
         </div>
