@@ -25,12 +25,6 @@ export const useProductsData = () => {
   const { isAuthenticated, isAdmin } = useAuth();
 
   const fetchProducts = async () => {
-    if (!isAuthenticated || !isAdmin) {
-      setError("Authentication required. Please ensure you're logged in as an admin.");
-      setLoading(false);
-      return;
-    }
-    
     try {
       setError(null);
       const { data, error } = await supabase
@@ -55,10 +49,6 @@ export const useProductsData = () => {
   };
 
   const fetchBrands = async () => {
-    if (!isAuthenticated || !isAdmin) {
-      return;
-    }
-    
     try {
       const { data, error } = await supabase
         .from('brands')
@@ -75,6 +65,12 @@ export const useProductsData = () => {
   };
 
   const refreshData = async () => {
+    if (!isAuthenticated || !isAdmin) {
+      setError("Authentication required. Please ensure you're logged in as an admin.");
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     await Promise.all([fetchProducts(), fetchBrands()]);

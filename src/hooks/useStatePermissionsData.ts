@@ -23,12 +23,6 @@ export const useStatePermissionsData = () => {
   const { isAuthenticated, isAdmin } = useAuth();
 
   const fetchStates = async () => {
-    if (!isAuthenticated || !isAdmin) {
-      setError("Authentication required. Please ensure you're logged in as an admin.");
-      setLoading(false);
-      return;
-    }
-    
     try {
       setError(null);
       const { data, error } = await supabase
@@ -46,10 +40,6 @@ export const useStatePermissionsData = () => {
   };
 
   const fetchStateProducts = async () => {
-    if (!isAuthenticated || !isAdmin) {
-      return;
-    }
-    
     try {
       const { data, error } = await supabase
         .from('state_allowed_products')
@@ -65,6 +55,12 @@ export const useStatePermissionsData = () => {
   };
 
   const refreshData = async () => {
+    if (!isAuthenticated || !isAdmin) {
+      setError("Authentication required. Please ensure you're logged in as an admin.");
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     await Promise.all([fetchStates(), fetchStateProducts()]);

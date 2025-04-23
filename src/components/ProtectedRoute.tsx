@@ -10,7 +10,7 @@ type ProtectedRouteProps = {
 };
 
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
-  const { isAuthenticated, loading, userRole, isAdmin } = useAuth();
+  const { isAuthenticated, loading, isAdmin } = useAuth();
 
   if (loading) {
     return (
