@@ -24,6 +24,8 @@ const Header = () => {
   const [lastName, setLastName] = useState("");
 
   useEffect(() => {
+    console.log("Header component - isAdmin:", isAdmin);
+    
     const fetchUserProfile = async () => {
       if (!user?.id) return;
 
@@ -46,7 +48,7 @@ const Header = () => {
     };
 
     fetchUserProfile();
-  }, [user?.id]);
+  }, [user?.id, isAdmin]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -112,6 +114,11 @@ const Header = () => {
                 <DropdownMenuItem asChild>
                   <Link to="/profile">Profile</Link>
                 </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin">Admin Dashboard</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   Sign Out

@@ -18,6 +18,8 @@ const AdminPage: React.FC = () => {
     
     setIsCheckingRole(true);
     try {
+      console.log("Checking admin role for user ID:", user.id);
+      
       // Check if user already has admin role
       const { data: existingRole, error: checkError } = await supabase
         .from('user_roles')
@@ -25,10 +27,16 @@ const AdminPage: React.FC = () => {
         .eq('user_id', user.id)
         .maybeSingle();
       
-      if (checkError) throw checkError;
+      if (checkError) {
+        console.error("Error checking role:", checkError);
+        throw checkError;
+      }
+      
+      console.log("Current role data:", existingRole);
       
       // If user doesn't have any role or doesn't have admin role, assign it
       if (!existingRole || existingRole.role !== 'admin') {
+        console.log("Assigning admin role...");
         const { error: insertError } = await supabase
           .from('user_roles')
           .upsert({
@@ -36,11 +44,19 @@ const AdminPage: React.FC = () => {
             role: 'admin'
           });
         
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error("Error assigning role:", insertError);
+          throw insertError;
+        }
+        
+        console.log("Admin role assigned successfully");
         toast.success("Admin privileges granted");
         
         // Force page reload to update Auth context
-        setTimeout(() => window.location.reload(), 1000);
+        window.location.reload();
+      } else {
+        console.log("User already has admin role");
+        toast.info("User already has admin privileges");
       }
     } catch (error) {
       console.error("Error checking/assigning admin role:", error);
@@ -49,6 +65,12 @@ const AdminPage: React.FC = () => {
       setIsCheckingRole(false);
     }
   };
+
+  useEffect(() => {
+    // Log current state for debugging
+    console.log("Admin page loaded. User:", user?.id);
+    console.log("Current role:", userRole);
+  }, [user, userRole]);
 
   // Debug information about current user and role
   const userDebugInfo = () => {

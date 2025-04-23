@@ -38,38 +38,55 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
   const [userRole, setUserRole] = useState<AppRole | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const fetchUserRole = async (userId: string) => {
     try {
+      console.log("Fetching role for user:", userId);
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (error) throw error;
-      setUserRole(data?.role || 'basic');
+      if (error) {
+        console.error('Error fetching user role:', error);
+        setUserRole('basic');
+        setIsAdmin(false);
+        return;
+      }
+      
+      console.log("User role data:", data);
+      const role = data?.role || 'basic';
+      setUserRole(role);
+      setIsAdmin(role === 'admin');
+      console.log("Is admin:", role === 'admin');
     } catch (error) {
-      console.error('Error fetching user role:', error);
+      console.error('Error in fetchUserRole:', error);
       setUserRole('basic');
+      setIsAdmin(false);
     }
   };
 
   useEffect(() => {
+    console.log("Auth provider initializing");
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log("Auth state changed:", event, !!session);
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
           await fetchUserRole(session.user.id);
         } else {
           setUserRole(null);
+          setIsAdmin(false);
         }
         setLoading(false);
       }
     );
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log("Got initial session:", !!session);
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -86,6 +103,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsGuest(false);
       await supabase.auth.signOut();
       setUserRole(null);
+      setIsAdmin(false);
       toast.success("Signed out successfully");
     } catch (error) {
       toast.error("Failed to sign out");
@@ -104,7 +122,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isGuest,
         setIsGuest,
         userRole,
-        isAdmin: userRole === 'admin',
+        isAdmin,
       }}
     >
       {children}

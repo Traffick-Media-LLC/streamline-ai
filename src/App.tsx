@@ -27,9 +27,9 @@ const App = () => {
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <div className="min-h-screen">
+            <div className="min-h-screen flex flex-col">
               <Header />
-              <main className="container mx-auto px-4 py-8">
+              <main className="flex-1">
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/map" element={<MapPage />} />
