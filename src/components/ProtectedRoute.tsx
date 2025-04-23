@@ -1,6 +1,8 @@
 
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ShieldAlert } from "lucide-react";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
@@ -8,7 +10,7 @@ type ProtectedRouteProps = {
 };
 
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
-  const { isAuthenticated, loading, userRole } = useAuth();
+  const { isAuthenticated, loading, userRole, isAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -22,8 +24,18 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     return <Navigate to="/auth" />;
   }
 
-  if (requiredRole && userRole !== requiredRole) {
-    return <Navigate to="/" />;
+  if (requiredRole && requiredRole === 'admin' && !isAdmin) {
+    return (
+      <div className="container mx-auto px-4 py-16 flex flex-col items-center">
+        <Alert className="max-w-md" variant="destructive">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertTitle>Access Denied</AlertTitle>
+          <AlertDescription>
+            You don't have permission to access this page. Admin privileges are required.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
   }
 
   return <>{children}</>;

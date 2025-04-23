@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useProductsData } from "@/hooks/useProductsData";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,8 +23,9 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Pencil, Trash2, Plus, Filter } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Pencil, Trash2, Plus, Filter, AlertTriangle, RefreshCw } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Brand {
   id: number;
@@ -39,15 +41,13 @@ interface Product {
 }
 
 const ProductsManagement: React.FC = () => {
-  const { products, brands, loading, refreshData } = useProductsData();
+  const { products, brands, loading, error, refreshData } = useProductsData();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBrandId, setFilterBrandId] = useState<string>('');
   const [newProduct, setNewProduct] = useState({ name: '', brand_id: '' });
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  
-  const { toast } = useToast();
 
   // Add a new product
   const handleAddProduct = async () => {
@@ -62,20 +62,14 @@ const ProductsManagement: React.FC = () => {
       
       if (error) throw error;
       
-      toast({
-        title: "Success",
-        description: "Product created successfully!",
-      });
-
+      toast.success("Product created successfully!");
       setNewProduct({ name: '', brand_id: '' });
       setIsAddDialogOpen(false);
       refreshData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding product:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create product. Please try again.",
-        variant: "destructive",
+      toast.error("Failed to create product", {
+        description: error.message
       });
     }
   };
@@ -95,19 +89,13 @@ const ProductsManagement: React.FC = () => {
       
       if (error) throw error;
       
-      toast({
-        title: "Success",
-        description: "Product updated successfully!",
-      });
-      
+      toast.success("Product updated successfully!");
       setIsEditDialogOpen(false);
       refreshData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating product:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update product. Please try again.",
-        variant: "destructive",
+      toast.error("Failed to update product", {
+        description: error.message
       });
     }
   };
@@ -124,18 +112,12 @@ const ProductsManagement: React.FC = () => {
       
       if (error) throw error;
       
-      toast({
-        title: "Success",
-        description: "Product deleted successfully!",
-      });
-      
+      toast.success("Product deleted successfully!");
       refreshData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting product:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete product. Please try again.",
-        variant: "destructive",
+      toast.error("Failed to delete product", {
+        description: error.message
       });
     }
   };
@@ -158,6 +140,22 @@ const ProductsManagement: React.FC = () => {
       acc[brandId].products.push(product);
       return acc;
     }, {} as Record<number, { brand: Brand | undefined, products: Product[] }>);
+
+  // Handle error state
+  if (error) {
+    return (
+      <div className="p-4">
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error loading products</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={refreshData} className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4" /> Try Again
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -254,7 +252,7 @@ const ProductsManagement: React.FC = () => {
 
       {loading ? (
         <div className="flex justify-center my-12">
-          <p>Loading products...</p>
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
         </div>
       ) : (
         Object.keys(filteredProducts).length > 0 ? (

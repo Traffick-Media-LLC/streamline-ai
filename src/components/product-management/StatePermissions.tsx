@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStatePermissionsData } from "@/hooks/useStatePermissionsData";
 import { useProductsData } from "@/hooks/useProductsData";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,11 +25,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { 
-  Check, Trash2, Plus, Filter, MapPin, List, Search 
+  Check, Trash2, Plus, Filter, MapPin, List, Search, AlertTriangle, RefreshCw
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import USAMap from "../USAMap";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface State {
   id: number;
@@ -54,8 +55,8 @@ interface StateProduct {
 }
 
 const StatePermissions: React.FC = () => {
-  const { states, stateProducts, loading: statesLoading, refreshData: refreshStateData } = useStatePermissionsData();
-  const { products, loading: productsLoading } = useProductsData();
+  const { states, stateProducts, loading: statesLoading, error: statesError, refreshData: refreshStateData } = useStatePermissionsData();
+  const { products, loading: productsLoading, error: productsError } = useProductsData();
   const [selectedState, setSelectedState] = useState<State | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +66,7 @@ const StatePermissions: React.FC = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
   // Populate brands from products when products are loaded
-  React.useEffect(() => {
+  useEffect(() => {
     if (products.length > 0) {
       // Extract unique brands for filtering
       const uniqueBrands = Array.from(
@@ -124,13 +125,15 @@ const StatePermissions: React.FC = () => {
         if (insertError) throw insertError;
       }
       
-      toast(`Updated allowed products for ${selectedState.name}.`);
+      toast.success(`Updated allowed products for ${selectedState.name}.`);
       
       setIsAddDialogOpen(false);
       refreshStateData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving permissions:', error);
-      toast(`Failed to update state permissions. Please try again.`);
+      toast.error(`Failed to update state permissions`, {
+        description: error.message
+      });
     }
   };
 
@@ -159,6 +162,25 @@ const StatePermissions: React.FC = () => {
     return nameMatch && brandMatch;
   });
 
+  // Display error if either data fetch failed
+  const error = statesError || productsError;
+  const loading = statesLoading || productsLoading;
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error loading data</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={refreshStateData} className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4" /> Try Again
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -181,9 +203,9 @@ const StatePermissions: React.FC = () => {
         </div>
       </div>
 
-      {statesLoading || productsLoading ? (
+      {loading ? (
         <div className="flex justify-center my-12">
-          <p>Loading state permissions...</p>
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
         </div>
       ) : viewMode === 'map' ? (
         <div className="mb-8">
