@@ -81,8 +81,8 @@ const Header = () => {
 
             {isAdmin && (
               <NavigationMenuItem>
-                <Link to="/products" className={cn(navigationMenuTriggerStyle())}>
-                  Products
+                <Link to="/admin" className={cn(navigationMenuTriggerStyle())}>
+                  Admin
                 </Link>
               </NavigationMenuItem>
             )}

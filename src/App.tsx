@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,7 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import MapPage from "./pages/MapPage";
 import ChatPage from "./pages/ChatPage";
-import ProductManagementPage from "./pages/ProductManagementPage";
+import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -42,10 +43,10 @@ const App = () => {
                     }
                   />
                   <Route 
-                    path="/products" 
+                    path="/admin" 
                     element={
                       <ProtectedRoute requiredRole="admin">
-                        <ProductManagementPage />
+                        <AdminPage />
                       </ProtectedRoute>
                     }
                   />

@@ -5,10 +5,10 @@ import BrandsManagement from '../components/product-management/BrandsManagement'
 import ProductsManagement from '../components/product-management/ProductsManagement';
 import StatePermissions from '../components/product-management/StatePermissions';
 
-const ProductManagementPage: React.FC = () => {
+const AdminPage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Product Management</h1>
+      <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
       
       <Tabs defaultValue="brands" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-8">
@@ -33,4 +33,4 @@ const ProductManagementPage: React.FC = () => {
   );
 };
 
-export default ProductManagementPage;
+export default AdminPage;
