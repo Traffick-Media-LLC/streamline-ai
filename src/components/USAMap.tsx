@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { StateData } from '../data/stateData';
 import {
@@ -44,7 +44,7 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
                       />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="font-medium">{stateName}</p>
+                      <p className="font-medium text-sm">{stateName}</p>
                     </TooltipContent>
                   </Tooltip>
                 );
