@@ -17,7 +17,8 @@ export const useChatOperations = () => {
     setIsLoadingResponse,
     mode,
     setMode,
-    getCurrentChat
+    // We'll override this function
+    getCurrentChat: originalGetCurrentChat
   } = useChatsState();
   
   // Add chats state
@@ -84,6 +85,12 @@ export const useChatOperations = () => {
     if (formattedChats.length > 0 && !currentChatId) {
       setCurrentChatId(formattedChats[0].id);
     }
+  };
+
+  // Create a proper getCurrentChat function that uses the chats state
+  const getCurrentChat = () => {
+    if (!currentChatId) return null;
+    return chats.find(chat => chat.id === currentChatId) || null;
   };
 
   // Function to select a chat

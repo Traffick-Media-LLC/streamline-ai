@@ -7,7 +7,12 @@ export const useChatsState = () => {
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
   const [mode, setMode] = useState<"simple" | "complex">("simple");
 
-  const getCurrentChat = () => null;
+  // This function needs to work with the chats from useChatOperations
+  const getCurrentChat = () => {
+    // We can't directly access chats here since they're managed in useChatOperations
+    // This will be replaced with a proper implementation in useChatOperations
+    return null;
+  };
 
   return {
     currentChatId,
