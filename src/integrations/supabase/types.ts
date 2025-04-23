@@ -9,6 +9,21 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      brands: {
+        Row: {
+          id: number
+          name: string
+        }
+        Insert: {
+          id?: number
+          name: string
+        }
+        Update: {
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           chat_id: string
@@ -95,6 +110,32 @@ export type Database = {
         }
         Relationships: []
       }
+      products: {
+        Row: {
+          brand_id: number | null
+          id: number
+          name: string
+        }
+        Insert: {
+          brand_id?: number | null
+          id?: number
+          name: string
+        }
+        Update: {
+          brand_id?: number | null
+          id?: number
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           first_name: string | null
@@ -113,6 +154,54 @@ export type Database = {
           id?: string
           last_name?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      state_allowed_products: {
+        Row: {
+          id: number
+          product_id: number | null
+          state_id: number | null
+        }
+        Insert: {
+          id?: number
+          product_id?: number | null
+          state_id?: number | null
+        }
+        Update: {
+          id?: number
+          product_id?: number | null
+          state_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "state_allowed_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "state_allowed_products_state_id_fkey"
+            columns: ["state_id"]
+            isOneToOne: false
+            referencedRelation: "states"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      states: {
+        Row: {
+          id: number
+          name: string
+        }
+        Insert: {
+          id?: number
+          name: string
+        }
+        Update: {
+          id?: number
+          name?: string
         }
         Relationships: []
       }

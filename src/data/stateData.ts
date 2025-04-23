@@ -1,31 +1,25 @@
 
 export interface StateData {
-  status: 'green' | 'yellow' | 'red' | 'gray';
-  allowedProducts: string[];
+  allowedProducts: {
+    brandName: string;
+    products: string[];
+  }[];
 }
 
 export interface StateDataMap {
   [key: string]: StateData;
 }
 
+// This is now just for backwards compatibility until we fetch from the database
 export const stateData: StateDataMap = {
   Kentucky: {
-    status: "yellow",
-    allowedProducts: ["Nicotine Pouches", "CBD Gummies"]
+    allowedProducts: []
   },
   California: {
-    status: "green",
-    allowedProducts: ["THC Vapes", "CBD Gummies", "Nicotine Pouches"]
+    allowedProducts: []
   },
   Alabama: {
-    status: "red",
     allowedProducts: []
   }
 };
 
-export const statusColors = {
-  green: "#38a169",
-  yellow: "#ecc94b",
-  red: "#e53e3e",
-  gray: "#a0aec0"
-};

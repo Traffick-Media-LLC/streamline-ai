@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
-import { StateData } from '../data/stateData';
 import {
   Tooltip,
   TooltipContent,
@@ -12,11 +11,10 @@ import {
 const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 
 interface USAMapProps {
-  stateData: Record<string, StateData>;
-  onStateClick: (stateName: string, data: StateData) => void;
+  onStateClick: (stateName: string) => void;
 }
 
-const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
+const USAMap: React.FC<USAMapProps> = ({ onStateClick }) => {
   return (
     <div className="w-full aspect-[1.5] max-w-5xl mx-auto">
       <TooltipProvider delayDuration={0}>
@@ -25,7 +23,6 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
             {({ geographies }) =>
               geographies.map((geo) => {
                 const stateName = geo.properties.name;
-                const data = stateData[stateName] || { status: 'gray', allowedProducts: [] };
 
                 return (
                   <Tooltip key={geo.rsmKey}>
@@ -37,7 +34,7 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
                         strokeWidth={0.5}
                         onClick={() => {
                           console.log("Clicked state:", stateName);
-                          onStateClick(stateName, data);
+                          onStateClick(stateName);
                         }}
                         style={{
                           default: { outline: "none", cursor: "pointer" },
