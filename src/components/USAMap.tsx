@@ -19,7 +19,7 @@ interface USAMapProps {
 const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
   return (
     <div className="w-full aspect-[1.5] max-w-5xl mx-auto border border-gray-300 rounded-lg">
-      <TooltipProvider>
+      <TooltipProvider delayDuration={0}>
         <ComposableMap projection="geoAlbersUsa">
           <Geographies geography={geoUrl}>
             {({ geographies }) =>
@@ -46,7 +46,7 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
                         }}
                       />
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent side="top" sideOffset={5} className="bg-black text-white px-3 py-1.5 rounded">
                       <p className="font-medium text-sm">{stateName}</p>
                     </TooltipContent>
                   </Tooltip>
