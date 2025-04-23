@@ -12,7 +12,8 @@ async function fetchStateProducts(stateName: string) {
       products (
         name,
         brands (
-          name
+          name,
+          logo_url
         )
       ),
       states!inner (
@@ -27,15 +28,16 @@ async function fetchStateProducts(stateName: string) {
   }
 
   // Transform the data into the expected format
-  const brandProducts = products.reduce((acc: { brandName: string; products: string[] }[], item) => {
+  const brandProducts = products.reduce((acc: { brandName: string; products: string[]; logoUrl?: string }[], item) => {
     const brandName = item.products.brands.name;
     const productName = item.products.name;
+    const logoUrl = item.products.brands.logo_url;
     
     const existingBrand = acc.find(b => b.brandName === brandName);
     if (existingBrand) {
       existingBrand.products.push(productName);
     } else {
-      acc.push({ brandName, products: [productName] });
+      acc.push({ brandName, products: [productName], logoUrl });
     }
     
     return acc;

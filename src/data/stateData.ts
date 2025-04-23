@@ -3,6 +3,7 @@ export interface StateData {
   allowedProducts: {
     brandName: string;
     products: string[];
+    logoUrl?: string;
   }[];
 }
 
@@ -22,4 +23,3 @@ export const stateData: StateDataMap = {
     allowedProducts: []
   }
 };
-

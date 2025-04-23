@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 interface StateDetailsProps {
   isOpen: boolean;
@@ -32,13 +33,21 @@ const StateDetails: React.FC<StateDetailsProps> = ({
           {stateData.allowedProducts.length > 0 ? (
             <div className="space-y-4">
               {stateData.allowedProducts.map((brandProduct, index) => (
-                <div key={`${brandProduct.brandName}-${index}`} className="border-l-4 border-primary pl-4">
-                  <h4 className="font-medium text-lg mb-2">{brandProduct.brandName}</h4>
-                  <ul className="list-disc pl-5">
-                    {brandProduct.products.map((product, productIndex) => (
-                      <li key={`${product}-${productIndex}`}>{product}</li>
-                    ))}
-                  </ul>
+                <div key={`${brandProduct.brandName}-${index}`} className="border-l-4 border-primary pl-4 flex items-center space-x-4">
+                  {brandProduct.logoUrl && (
+                    <Avatar>
+                      <AvatarImage src={brandProduct.logoUrl} alt={`${brandProduct.brandName} logo`} />
+                      <AvatarFallback>{brandProduct.brandName.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div>
+                    <h4 className="font-medium text-lg mb-2">{brandProduct.brandName}</h4>
+                    <ul className="list-disc pl-5">
+                      {brandProduct.products.map((product, productIndex) => (
+                        <li key={`${product}-${productIndex}`}>{product}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               ))}
             </div>

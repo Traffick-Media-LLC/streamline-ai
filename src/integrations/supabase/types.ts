@@ -12,14 +12,17 @@ export type Database = {
       brands: {
         Row: {
           id: number
+          logo_url: string | null
           name: string
         }
         Insert: {
           id?: number
+          logo_url?: string | null
           name: string
         }
         Update: {
           id?: number
+          logo_url?: string | null
           name?: string
         }
         Relationships: []
