@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import USAMap from '../components/USAMap';
-import StateDetails from '../components/StateDetails';
 import { stateData, StateData, statusColors } from '../data/stateData';
 
 const MapPage = () => {
@@ -38,13 +37,36 @@ const MapPage = () => {
         stateData={stateData} 
         onStateClick={handleStateClick} 
       />
+      
       {selectedState && (
-        <StateDetails
-          isOpen={!!selectedState}
-          onClose={() => setSelectedState(null)}
-          stateName={selectedState.name}
-          stateData={selectedState.data}
-        />
+        <div className="mt-8 p-6 border border-gray-200 rounded-lg shadow-sm">
+          <div className="flex items-center gap-4 mb-4">
+            <h2 className="text-2xl font-bold">{selectedState.name}</h2>
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: selectedState.data.status === 'green' ? '#38a169' : 
+                                      selectedState.data.status === 'yellow' ? '#ecc94b' : 
+                                      selectedState.data.status === 'red' ? '#e53e3e' : '#a0aec0' 
+                }}
+              />
+              <span className="capitalize">{selectedState.data.status}</span>
+            </div>
+          </div>
+          
+          <div>
+            <h3 className="text-lg font-medium mb-2">Allowed Products:</h3>
+            {selectedState.data.allowedProducts.length > 0 ? (
+              <ul className="list-disc pl-5 space-y-1">
+                {selectedState.data.allowedProducts.map((product) => (
+                  <li key={product}>{product}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">No products allowed</p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
