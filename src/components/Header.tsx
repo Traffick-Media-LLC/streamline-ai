@@ -24,8 +24,6 @@ const Header = () => {
   const [lastName, setLastName] = useState("");
 
   useEffect(() => {
-    console.log("Header component - isAdmin:", isAdmin);
-    
     const fetchUserProfile = async () => {
       if (!user?.id) return;
 
@@ -48,7 +46,7 @@ const Header = () => {
     };
 
     fetchUserProfile();
-  }, [user?.id, isAdmin]);
+  }, [user?.id]);
 
   const handleSignOut = async () => {
     await signOut();

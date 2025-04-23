@@ -42,7 +42,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchUserRole = async (userId: string) => {
     try {
-      console.log("Fetching role for user:", userId);
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
@@ -56,11 +55,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
       
-      console.log("User role data:", data);
       const role = data?.role || 'basic';
       setUserRole(role);
       setIsAdmin(role === 'admin');
-      console.log("Is admin:", role === 'admin');
     } catch (error) {
       console.error('Error in fetchUserRole:', error);
       setUserRole('basic');
@@ -70,13 +67,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     console.log("Auth provider initializing");
+    
+    // Set up the auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log("Auth state changed:", event, !!session);
+        console.log("Auth state changed:", event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
+        
         if (session?.user) {
-          await fetchUserRole(session.user.id);
+          // Use setTimeout to prevent potential auth deadlocks
+          setTimeout(() => {
+            fetchUserRole(session.user.id);
+          }, 0);
         } else {
           setUserRole(null);
           setIsAdmin(false);
@@ -85,27 +88,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     );
 
+    // Then check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log("Got initial session:", !!session);
+      console.log("Got initial session:", session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
+      
       if (session?.user) {
         await fetchUserRole(session.user.id);
       }
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log("Cleaning up auth subscriptions");
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
     try {
       setIsGuest(false);
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
       setUserRole(null);
       setIsAdmin(false);
       toast.success("Signed out successfully");
-    } catch (error) {
+    } catch (error: any) {
       toast.error("Failed to sign out");
       console.error("Sign out error:", error);
     }
