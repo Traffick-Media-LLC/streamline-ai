@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import USAMap from '../components/USAMap';
 import StateDetails from '../components/StateDetails';
-import { stateData, StateData } from '../data/stateData';
+import { stateData, StateData, statusColors } from '../data/stateData';
 
 const MapPage = () => {
   const [selectedState, setSelectedState] = useState<{ name: string; data: StateData } | null>(null);
@@ -18,7 +18,7 @@ const MapPage = () => {
       </h1>
       <div className="mb-8">
         <div className="flex justify-center gap-6 flex-wrap">
-          {Object.entries(stateData.statusColors).map(([status, color]) => (
+          {Object.entries(statusColors).map(([status, color]) => (
             <div key={status} className="flex items-center gap-2">
               <div 
                 className="w-3 h-3 rounded-full" 
