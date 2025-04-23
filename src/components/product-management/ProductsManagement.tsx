@@ -355,7 +355,7 @@ const ProductsManagement: React.FC = () => {
                   ))}
                 </div>
               </div>
-            ))
+            ))}
           </div>
         ) : (
           <div className="text-center py-8">
