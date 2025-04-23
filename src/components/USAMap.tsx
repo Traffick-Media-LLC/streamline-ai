@@ -32,8 +32,8 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
                     <TooltipTrigger asChild>
                       <Geography
                         geography={geo}
-                        fill="#d3d3d3"
-                        stroke="#ffffff"
+                        fill="#ea384c"
+                        stroke="#f1f1f1"
                         strokeWidth={0.5}
                         onClick={() => {
                           console.log("Clicked state:", stateName);
@@ -41,7 +41,7 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
                         }}
                         style={{
                           default: { outline: "none", cursor: "pointer" },
-                          hover: { outline: "none", fill: "#a0a0a0", cursor: "pointer" },
+                          hover: { outline: "none", opacity: 0.8, cursor: "pointer" },
                           pressed: { outline: "none", cursor: "pointer" }
                         }}
                       />
