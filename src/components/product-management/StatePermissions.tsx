@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { useStatePermissionsData } from "@/hooks/useStatePermissionsData";
 import { useProductsData } from "@/hooks/useProductsData";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,7 +27,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { 
   Check, Trash2, Plus, Filter, MapPin, List, Search 
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/sonner";
 import USAMap from "../USAMap";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -50,8 +51,6 @@ interface StateProduct {
   id: number;
   state_id: number;
   product_id: number;
-  state?: State;
-  product?: Product;
 }
 
 const StatePermissions: React.FC = () => {
@@ -63,101 +62,25 @@ const StatePermissions: React.FC = () => {
   const [filterBrandId, setFilterBrandId] = useState<string>('');
   const [brands, setBrands] = useState<{id: number; name: string}[]>([]);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
-  const { toast } = useToast();
-
-  // Fetch all states
-  const fetchStates = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('states')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      setStates(data || []);
-    } catch (error) {
-      console.error('Error fetching states:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load states. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Fetch all products with their brands
-  const fetchProducts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          brands:brand_id (
-            id,
-            name,
-            logo_url
-          )
-        `)
-        .order('name');
-      
-      if (error) throw error;
-      setProducts(data || []);
-      
+  // Populate brands from products when products are loaded
+  React.useEffect(() => {
+    if (products.length > 0) {
       // Extract unique brands for filtering
       const uniqueBrands = Array.from(
-        new Set(data?.map(product => product.brand_id))
+        new Set(products.map(product => product.brand_id))
       ).map(brandId => {
-        const product = data?.find(p => p.brand_id === brandId);
+        const product = products.find(p => p.brand_id === brandId);
         return {
           id: brandId,
-          name: product?.brands?.name || 'Unknown'
+          name: product?.brand?.name || 'Unknown'
         };
       });
       
       setBrands(uniqueBrands);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load products. Please try again.",
-        variant: "destructive",
-      });
     }
-  };
-
-  // Fetch state-product relationships
-  const fetchStateProducts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('state_allowed_products')
-        .select(`
-          *,
-          states:state_id (*),
-          products:product_id (
-            *,
-            brands:brand_id (*)
-          )
-        `);
-      
-      if (error) throw error;
-      setStateProducts(data || []);
-    } catch (error) {
-      console.error('Error fetching state products:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load state product relationships. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchStates(), fetchProducts(), fetchStateProducts()]);
-  }, []);
+  }, [products]);
 
   const handleStateClick = (stateName: string) => {
     const state = states.find(s => s.name === stateName);
@@ -201,20 +124,13 @@ const StatePermissions: React.FC = () => {
         if (insertError) throw insertError;
       }
       
-      toast({
-        title: "Success",
-        description: `Updated allowed products for ${selectedState.name}.`,
-      });
+      toast(`Updated allowed products for ${selectedState.name}.`);
       
       setIsAddDialogOpen(false);
-      fetchStateProducts();
+      refreshStateData();
     } catch (error) {
       console.error('Error saving permissions:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update state permissions. Please try again.",
-        variant: "destructive",
-      });
+      toast(`Failed to update state permissions. Please try again.`);
     }
   };
 
@@ -229,10 +145,11 @@ const StatePermissions: React.FC = () => {
 
   // Get products allowed in a state
   const getStateAllowedProducts = (stateId: number) => {
-    return stateProducts
+    const allowedProductIds = stateProducts
       .filter(sp => sp.state_id === stateId)
-      .map(sp => sp.product)
-      .filter(Boolean) as Product[];
+      .map(sp => sp.product_id);
+    
+    return products.filter(product => allowedProductIds.includes(product.id));
   };
 
   // Filter products based on search and brand filter
