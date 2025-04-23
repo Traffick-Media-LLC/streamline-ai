@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
+import HomePage from "./pages/HomePage";
 import KnowledgeManager from "./components/KnowledgeManager";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -28,7 +29,7 @@ const App = () => {
                 path="/" 
                 element={
                   <ProtectedRoute>
-                    <Index />
+                    <HomePage />
                   </ProtectedRoute>
                 } 
               />
