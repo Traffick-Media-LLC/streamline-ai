@@ -42,7 +42,7 @@ const App = () => {
               <Route 
                 path="/products" 
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <ProductManagementPage />
                   </ProtectedRoute>
                 }

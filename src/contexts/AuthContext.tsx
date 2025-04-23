@@ -1,7 +1,10 @@
+
 import { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
+
+type AppRole = 'basic' | 'admin';
 
 type AuthContextType = {
   session: Session | null;
@@ -11,6 +14,8 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isGuest: boolean;
   setIsGuest: (value: boolean) => void;
+  userRole: AppRole | null;
+  isAdmin: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +26,8 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   isGuest: false,
   setIsGuest: () => {},
+  userRole: null,
+  isAdmin: false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -30,19 +37,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
+  const [userRole, setUserRole] = useState<AppRole | null>(null);
+
+  const fetchUserRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      setUserRole(data?.role || 'basic');
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+      setUserRole('basic');
+    }
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchUserRole(session.user.id);
+        } else {
+          setUserRole(null);
+        }
         setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        await fetchUserRole(session.user.id);
+      }
       setLoading(false);
     });
 
@@ -53,6 +85,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       setIsGuest(false);
       await supabase.auth.signOut();
+      setUserRole(null);
       toast.success("Signed out successfully");
     } catch (error) {
       toast.error("Failed to sign out");
@@ -70,6 +103,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isAuthenticated: !!user || isGuest,
         isGuest,
         setIsGuest,
+        userRole,
+        isAdmin: userRole === 'admin',
       }}
     >
       {children}
