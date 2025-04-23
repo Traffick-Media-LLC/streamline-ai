@@ -28,23 +28,20 @@ const StateDetails: React.FC<StateDetailsProps> = ({
           <DialogTitle>{stateName}</DialogTitle>
         </DialogHeader>
         <div className="mt-4">
-          <div className="flex items-center gap-2 mb-4">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: stateData.status === 'green' ? '#38a169' : 
-                                    stateData.status === 'yellow' ? '#ecc94b' : 
-                                    stateData.status === 'red' ? '#e53e3e' : '#a0aec0' 
-              }}
-            />
-            <span className="capitalize">{stateData.status}</span>
-          </div>
           <h3 className="text-sm font-medium mb-2">Allowed Products:</h3>
           {stateData.allowedProducts.length > 0 ? (
-            <ul className="list-disc pl-5">
-              {stateData.allowedProducts.map((product) => (
-                <li key={product}>{product}</li>
+            <div className="space-y-4">
+              {stateData.allowedProducts.map((brandProduct, index) => (
+                <div key={`${brandProduct.brandName}-${index}`} className="border-l-4 border-primary pl-4">
+                  <h4 className="font-medium text-lg mb-2">{brandProduct.brandName}</h4>
+                  <ul className="list-disc pl-5">
+                    {brandProduct.products.map((product, productIndex) => (
+                      <li key={`${product}-${productIndex}`}>{product}</li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           ) : (
             <p className="text-muted-foreground">No products allowed</p>
           )}
