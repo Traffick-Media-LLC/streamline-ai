@@ -1,102 +1,17 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BrandsManagement from '../components/product-management/BrandsManagement';
 import ProductsManagement from '../components/product-management/ProductsManagement';
 import StatePermissions from '../components/product-management/StatePermissions';
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/sonner";
 
 const AdminPage: React.FC = () => {
   const { user, userRole } = useAuth();
-  const [isCheckingRole, setIsCheckingRole] = useState(false);
-  
-  // Function to check and assign admin role if needed
-  const checkAndAssignAdminRole = async () => {
-    if (!user) return;
-    
-    setIsCheckingRole(true);
-    try {
-      console.log("Checking admin role for user ID:", user.id);
-      
-      // Check if user already has admin role
-      const { data: existingRole, error: checkError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (checkError) {
-        console.error("Error checking role:", checkError);
-        throw checkError;
-      }
-      
-      console.log("Current role data:", existingRole);
-      
-      // If user doesn't have any role or doesn't have admin role, assign it
-      if (!existingRole || existingRole.role !== 'admin') {
-        console.log("Assigning admin role...");
-        const { error: insertError } = await supabase
-          .from('user_roles')
-          .upsert({
-            user_id: user.id,
-            role: 'admin'
-          });
-        
-        if (insertError) {
-          console.error("Error assigning role:", insertError);
-          throw insertError;
-        }
-        
-        console.log("Admin role assigned successfully");
-        toast.success("Admin privileges granted");
-        
-        // Force page reload to update Auth context
-        window.location.reload();
-      } else {
-        console.log("User already has admin role");
-        toast.info("User already has admin privileges");
-      }
-    } catch (error) {
-      console.error("Error checking/assigning admin role:", error);
-      toast.error("Failed to verify admin privileges");
-    } finally {
-      setIsCheckingRole(false);
-    }
-  };
-
-  useEffect(() => {
-    // Log current state for debugging
-    console.log("Admin page loaded. User:", user?.id);
-    console.log("Current role:", userRole);
-  }, [user, userRole]);
-
-  // Debug information about current user and role
-  const userDebugInfo = () => {
-    return (
-      <div className="mb-4 p-4 bg-muted rounded-md">
-        <h3 className="font-medium mb-2">User Debug Info</h3>
-        <p>User ID: {user?.id || 'Not logged in'}</p>
-        <p>Current Role: {userRole || 'No role assigned'}</p>
-        <div className="mt-2">
-          <button 
-            className="bg-primary text-primary-foreground px-3 py-1 rounded hover:bg-primary/90 text-sm"
-            onClick={checkAndAssignAdminRole}
-            disabled={isCheckingRole}
-          >
-            {isCheckingRole ? 'Checking...' : 'Verify/Assign Admin Privileges'}
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
-      
-      {userDebugInfo()}
       
       <Tabs defaultValue="brands" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-8">
