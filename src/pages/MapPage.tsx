@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import USAMap from '../components/USAMap';
 import StateDetails from '../components/StateDetails';
 import { stateData, StateData, statusColors } from '../data/stateData';
@@ -8,8 +8,13 @@ const MapPage = () => {
   const [selectedState, setSelectedState] = useState<{ name: string; data: StateData } | null>(null);
 
   const handleStateClick = (stateName: string, data: StateData) => {
+    console.log("State clicked:", stateName, data);
     setSelectedState({ name: stateName, data });
   };
+
+  useEffect(() => {
+    console.log("MapPage mounted, stateData:", stateData);
+  }, []);
 
   return (
     <div className="container mx-auto px-4 py-8">

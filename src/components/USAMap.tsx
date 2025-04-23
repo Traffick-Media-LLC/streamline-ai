@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ComposableMap, Geographies, Geography } from "react-simple-maps";
 import { statusColors, StateData } from '../data/stateData';
 import {
@@ -17,8 +17,12 @@ interface USAMapProps {
 }
 
 const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
+  useEffect(() => {
+    console.log("USAMap mounted, stateData:", stateData);
+  }, [stateData]);
+
   return (
-    <div className="w-full aspect-[1.5] max-w-5xl mx-auto">
+    <div className="w-full aspect-[1.5] max-w-5xl mx-auto border border-gray-300 rounded-lg">
       <TooltipProvider>
         <ComposableMap projection="geoAlbersUsa">
           <Geographies geography={geoUrl}>
@@ -30,7 +34,7 @@ const USAMap: React.FC<USAMapProps> = ({ stateData, onStateClick }) => {
 
                 return (
                   <Tooltip key={geo.rsmKey}>
-                    <TooltipTrigger>
+                    <TooltipTrigger asChild>
                       <Geography
                         geography={geo}
                         fill={color}
