@@ -35,7 +35,7 @@ interface Product {
   id: number;
   name: string;
   brand_id: number;
-  brand?: Brand;
+  brands?: Brand;
 }
 
 const ProductsManagement: React.FC = () => {
