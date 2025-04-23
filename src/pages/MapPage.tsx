@@ -27,10 +27,7 @@ const MapPage = () => {
       
       {selectedState && (
         <div className="mt-8 p-6 border border-gray-200 rounded-lg shadow-sm">
-          <div className="flex items-center gap-4 mb-4">
-            <h2 className="text-2xl font-bold">{selectedState.name}</h2>
-            <span className="text-gray-600 capitalize">{selectedState.data.status}</span>
-          </div>
+          <h2 className="text-2xl font-bold mb-4">{selectedState.name}</h2>
           
           <div>
             <h3 className="text-lg font-medium mb-2">Allowed Products:</h3>
