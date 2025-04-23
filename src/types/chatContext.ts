@@ -7,7 +7,6 @@ export interface ChatContextType {
   sendMessage: (content: string) => Promise<void>;
   getCurrentChat: () => any;
   setMode: (mode: "simple" | "complex") => void;
-  // Add the missing properties
   chats: Array<{
     id: string;
     title: string;
@@ -16,4 +15,5 @@ export interface ChatContextType {
     updatedAt: number;
   }>;
   selectChat: (chatId: string) => void;
+  isInitializing: boolean;
 }

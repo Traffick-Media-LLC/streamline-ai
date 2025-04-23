@@ -23,9 +23,11 @@ export const useChatOperations = () => {
   
   // Add chats state
   const [chats, setChats] = useState<Chat[]>([]);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   // Fetch chats when user changes
   useEffect(() => {
+    console.log("Chat operations - user or guest state changed:", !!user, isGuest);
     if (user || isGuest) {
       fetchChats();
     }
@@ -33,57 +35,77 @@ export const useChatOperations = () => {
 
   // Function to fetch chats
   const fetchChats = async () => {
-    if (!user && !isGuest) return;
+    console.log("Fetching chats - user authenticated:", !!user, "is guest:", isGuest);
+    if (!user && !isGuest) {
+      console.log("No user or guest, skipping chat fetch");
+      return;
+    }
     
-    if (isGuest) {
-      // For guest users, we use local storage
-      const storedChats = localStorage.getItem('guestChats');
-      if (storedChats) {
-        setChats(JSON.parse(storedChats));
+    setIsInitializing(true);
+    
+    try {
+      if (isGuest) {
+        // For guest users, we use local storage
+        console.log("Loading guest chats from local storage");
+        const storedChats = localStorage.getItem('guestChats');
+        if (storedChats) {
+          setChats(JSON.parse(storedChats));
+          console.log("Guest chats loaded successfully");
+        } else {
+          console.log("No stored guest chats found");
+          setChats([]);
+        }
+      } else {
+        // For authenticated users, fetch from Supabase
+        console.log("Fetching chats for authenticated user:", user.id);
+        const { data, error } = await supabase
+          .from('chats')
+          .select(`
+            id,
+            title,
+            created_at,
+            updated_at,
+            chat_messages (
+              id,
+              role,
+              content,
+              timestamp
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false });
+
+        if (error) {
+          console.error("Error fetching chats:", error);
+          toast.error("Failed to load chats");
+          return;
+        }
+
+        console.log(`Fetched ${data.length} chats from database`);
+        
+        const formattedChats = data.map(chat => ({
+          id: chat.id,
+          title: chat.title,
+          messages: chat.chat_messages.map(msg => ({
+            id: msg.id,
+            role: msg.role as "user" | "assistant" | "system",
+            content: msg.content,
+            timestamp: new Date(msg.timestamp).getTime()
+          })),
+          createdAt: new Date(chat.created_at).getTime(),
+          updatedAt: new Date(chat.updated_at).getTime()
+        }));
+
+        setChats(formattedChats);
+        if (formattedChats.length > 0 && !currentChatId) {
+          console.log("Setting current chat ID to first chat:", formattedChats[0].id);
+          setCurrentChatId(formattedChats[0].id);
+        }
       }
-      return;
-    }
-    
-    // For authenticated users, fetch from Supabase
-    const { data, error } = await supabase
-      .from('chats')
-      .select(`
-        id,
-        title,
-        created_at,
-        updated_at,
-        chat_messages (
-          id,
-          role,
-          content,
-          timestamp
-        )
-      `)
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false });
-
-    if (error) {
-      console.error("Error fetching chats:", error);
-      toast.error("Failed to load chats");
-      return;
-    }
-
-    const formattedChats = data.map(chat => ({
-      id: chat.id,
-      title: chat.title,
-      messages: chat.chat_messages.map(msg => ({
-        id: msg.id,
-        role: msg.role as "user" | "assistant" | "system",
-        content: msg.content,
-        timestamp: new Date(msg.timestamp).getTime()
-      })),
-      createdAt: new Date(chat.created_at).getTime(),
-      updatedAt: new Date(chat.updated_at).getTime()
-    }));
-
-    setChats(formattedChats);
-    if (formattedChats.length > 0 && !currentChatId) {
-      setCurrentChatId(formattedChats[0].id);
+    } catch (e) {
+      console.error("Error in fetchChats:", e);
+    } finally {
+      setIsInitializing(false);
     }
   };
 
@@ -95,6 +117,7 @@ export const useChatOperations = () => {
 
   // Function to select a chat
   const selectChat = (chatId: string) => {
+    console.log("Selecting chat:", chatId);
     setCurrentChatId(chatId);
   };
 
@@ -111,6 +134,7 @@ export const useChatOperations = () => {
 
     let chatId = currentChatId;
     if (!chatId) {
+      console.log("Creating new chat for message");
       chatId = await createNewChat();
       if (!chatId) return;
     }
@@ -130,6 +154,7 @@ export const useChatOperations = () => {
       const currentChat = getCurrentChat();
       const chatMessages = currentChat ? [...currentChat.messages, userMessage] : [userMessage];
 
+      console.log("Sending message to AI assistant");
       const { data, error } = await supabase.functions.invoke('chat', {
         body: { 
           content, 
@@ -139,6 +164,7 @@ export const useChatOperations = () => {
       });
 
       if (error) throw error;
+      console.log("Received response from AI assistant");
 
       const aiResponse: Message = {
         id: `assistant-${Date.now()}`,
@@ -171,6 +197,7 @@ export const useChatOperations = () => {
     getCurrentChat,
     setMode,
     chats,
-    selectChat
+    selectChat,
+    isInitializing
   };
 };

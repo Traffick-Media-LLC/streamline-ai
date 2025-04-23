@@ -5,8 +5,19 @@ import TypingIndicator from "./TypingIndicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const ChatWindow = () => {
-  const { getCurrentChat, isLoadingResponse } = useChatContext();
+  const { getCurrentChat, isLoadingResponse, isInitializing } = useChatContext();
   const currentChat = getCurrentChat();
+  
+  if (isInitializing) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="mt-4 text-muted-foreground">Loading chats...</p>
+        </div>
+      </div>
+    );
+  }
   
   if (!currentChat) {
     return (

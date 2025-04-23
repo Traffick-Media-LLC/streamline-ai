@@ -12,7 +12,7 @@ import { toast } from "@/components/ui/sonner";
 
 const ChatPage = () => {
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Changed to false by default
   const [debugInfo, setDebugInfo] = useState<string>("");
   const mountedRef = useRef(false);
 
@@ -21,34 +21,23 @@ const ChatPage = () => {
     if (mountedRef.current) return;
     mountedRef.current = true;
     
-    console.log("ChatPage mounted, initializing...");
-    
-    // Shorter timeout for initialization
-    const debugTimeout = setTimeout(() => {
-      console.log("ChatPage timeout completed, setting loading to false");
-      setIsLoading(false);
-      setDebugInfo("Chat initialization complete");
-    }, 1000); 
+    console.log("ChatPage mounted, ready to use");
+    setDebugInfo("Chat ready to use");
     
     return () => {
-      console.log("ChatPage unmounting, clearing timeout");
-      clearTimeout(debugTimeout);
+      console.log("ChatPage unmounting");
     };
   }, []);
 
-  // Debug panel that displays temporarily to help diagnose issues
+  // For development debugging only - can be removed in production
   const renderDebugPanel = () => {
+    if (process.env.NODE_ENV !== 'development') return null;
+    
     return (
       <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50">
         <h4 className="font-medium text-sm">Chat Debug</h4>
-        <p className="text-xs text-muted-foreground">Status: {isLoading ? "Initializing..." : "Ready"}</p>
+        <p className="text-xs text-muted-foreground">Status: Ready</p>
         <p className="text-xs text-muted-foreground">{debugInfo}</p>
-        <button 
-          onClick={() => setIsLoading(false)} 
-          className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded mt-1"
-        >
-          Force Ready
-        </button>
       </div>
     );
   };
@@ -75,19 +64,8 @@ const ChatPage = () => {
           {/* Chat content with max-width container */}
           <div className="flex-1 overflow-hidden flex flex-col items-center">
             <div className="w-full max-w-3xl flex-1 flex flex-col overflow-hidden">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="flex flex-col items-center">
-                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                    <p className="mt-4 text-muted-foreground">Loading chat...</p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <ChatWindow />
-                  <ChatInput />
-                </>
-              )}
+              <ChatWindow />
+              <ChatInput />
             </div>
           </div>
         </div>

@@ -23,7 +23,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     getCurrentChat,
     setMode,
     chats,
-    selectChat
+    selectChat,
+    isInitializing
   } = useChatOperations();
 
   const value: ChatContextType = {
@@ -35,7 +36,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     getCurrentChat,
     setMode,
     chats,
-    selectChat
+    selectChat,
+    isInitializing
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
