@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -68,7 +67,9 @@ export default {
 					black: '#000000',
 					gray: '#F6F7F9',
 					darkGray: '#3A3A3A',
-				}
+				},
+				'black-primary': '#000000e6',
+				'black-hover': '#0006',
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
@@ -96,6 +97,13 @@ export default {
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out'
+			},
+			textColor: {
+				'black': {
+					DEFAULT: '#000000e6',
+					'80': '#0006',
+					'90': '#222',
+				}
 			}
 		}
 	},

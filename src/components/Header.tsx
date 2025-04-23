@@ -60,20 +60,38 @@ const Header = () => {
         <NavigationMenu className="mx-6">
           <NavigationMenuList>
             <NavigationMenuItem>
-              <Link to="/" className={cn(navigationMenuTriggerStyle())}>
+              <Link 
+                to="/" 
+                className={cn(
+                  navigationMenuTriggerStyle(), 
+                  "text-black hover:text-black/80"
+                )}
+              >
                 Home
               </Link>
             </NavigationMenuItem>
             
             <NavigationMenuItem>
-              <Link to="/map" className={cn(navigationMenuTriggerStyle())}>
+              <Link 
+                to="/map" 
+                className={cn(
+                  navigationMenuTriggerStyle(), 
+                  "text-black hover:text-black/80"
+                )}
+              >
                 State Map
               </Link>
             </NavigationMenuItem>
             
             {isAuthenticated && (
               <NavigationMenuItem>
-                <Link to="/chat" className={cn(navigationMenuTriggerStyle())}>
+                <Link 
+                  to="/chat" 
+                  className={cn(
+                    navigationMenuTriggerStyle(), 
+                    "text-black hover:text-black/80"
+                  )}
+                >
                   AI Chat
                 </Link>
               </NavigationMenuItem>
@@ -81,7 +99,13 @@ const Header = () => {
 
             {isAdmin && (
               <NavigationMenuItem>
-                <Link to="/admin" className={cn(navigationMenuTriggerStyle())}>
+                <Link 
+                  to="/admin" 
+                  className={cn(
+                    navigationMenuTriggerStyle(), 
+                    "text-black hover:text-black/80"
+                  )}
+                >
                   Admin
                 </Link>
               </NavigationMenuItem>
@@ -93,7 +117,10 @@ const Header = () => {
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  className="flex items-center gap-2 text-black hover:text-black/80"
+                >
                   <Avatar className="h-8 w-8">
                     <AvatarFallback>
                       {firstName && lastName 
@@ -101,30 +128,36 @@ const Header = () => {
                         : user?.email?.[0].toUpperCase() || '?'}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden md:inline">
+                  <span className="hidden md:inline text-black">
                     {firstName && lastName 
                       ? `${firstName} ${lastName}`
                       : user?.email}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="text-black">
                 <DropdownMenuItem asChild>
-                  <Link to="/profile">Profile</Link>
+                  <Link to="/profile" className="text-black hover:text-black/80">Profile</Link>
                 </DropdownMenuItem>
                 {isAdmin && (
                   <DropdownMenuItem asChild>
-                    <Link to="/admin">Admin Dashboard</Link>
+                    <Link to="/admin" className="text-black hover:text-black/80">Admin Dashboard</Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
+                <DropdownMenuItem 
+                  onClick={handleSignOut} 
+                  className="text-black hover:text-black/80"
+                >
                   Sign Out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild>
+            <Button 
+              asChild 
+              className="text-white hover:text-white/90 bg-black hover:bg-black/90"
+            >
               <Link to="/auth">Sign In</Link>
             </Button>
           )}
