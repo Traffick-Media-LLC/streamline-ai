@@ -2,15 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import USAMap from '../components/USAMap';
 import { supabase } from '@/integrations/supabase/client';
+import { StateData } from '../data/stateData';
 
 interface AllowedProduct {
   brand_name: string;
   product_name: string;
-}
-
-interface StateData {
-  status: string;
-  allowedProducts: Record<string, string[]>; // brand_name -> product_names
 }
 
 interface StateInfo {
@@ -48,7 +44,7 @@ const MapPage = () => {
       // Initialize states with their status
       regulations?.forEach((reg) => {
         transformedData[reg.state_name] = {
-          status: reg.status,
+          status: reg.status as 'green' | 'yellow' | 'red' | 'gray',
           allowedProducts: {}
         };
       });
