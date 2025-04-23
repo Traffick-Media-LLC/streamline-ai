@@ -61,6 +61,12 @@ const Header = () => {
           <NavigationMenuList>
             <NavigationMenuItem>
               <Link to="/" className={cn(navigationMenuTriggerStyle())}>
+                Home
+              </Link>
+            </NavigationMenuItem>
+            
+            <NavigationMenuItem>
+              <Link to="/map" className={cn(navigationMenuTriggerStyle())}>
                 State Map
               </Link>
             </NavigationMenuItem>
