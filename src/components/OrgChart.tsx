@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -7,12 +7,12 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   addEdge,
-  Edge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Employee } from '@/hooks/useEmployeesData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { useState } from 'react';
+import { Briefcase, Mail, Phone, User } from 'lucide-react';
 
 interface OrgChartProps {
   employees: Employee[];
@@ -22,15 +22,18 @@ const OrgChart = ({ employees }: OrgChartProps) => {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   // Create a map of employees for efficient lookup
-  const employeeMap = new Map(employees.map(emp => [emp.id, emp]));
+  const employeeMap = useMemo(() => 
+    new Map(employees.map(emp => [emp.id, emp])), 
+    [employees]
+  );
 
   // Get all direct reports for an employee
-  const getDirectReports = (managerId: string) => {
+  const getDirectReports = useCallback((managerId: string) => {
     return employees.filter(emp => emp.manager_id === managerId);
-  };
+  }, [employees]);
 
   // Calculate depth for each employee (distance from CEO)
-  const getEmployeeDepth = (employee: Employee): number => {
+  const getEmployeeDepth = useCallback((employee: Employee): number => {
     let depth = 0;
     let current = employee;
     while (current.manager_id && employeeMap.get(current.manager_id)) {
@@ -38,16 +41,18 @@ const OrgChart = ({ employees }: OrgChartProps) => {
       current = employeeMap.get(current.manager_id)!;
     }
     return depth;
-  };
+  }, [employeeMap]);
 
   // Find the CEO (employee without manager)
-  const ceo = employees.find(emp => !emp.manager_id && emp.title === 'CEO');
+  const ceo = useMemo(() => 
+    employees.find(emp => !emp.manager_id && emp.title === 'CEO'),
+    [employees]
+  );
   
   // Create nodes with hierarchical positioning
-  const initialNodes = employees.map((emp) => {
+  const initialNodes = useMemo(() => employees.map((emp) => {
     const depth = getEmployeeDepth(emp);
-    const directReports = getDirectReports(emp.id);
-    const isLegal = emp.department === 'Legal';
+    const isLegal = emp.department === 'Legal' || emp.department === 'Legal/Regulatory';
     
     return {
       id: emp.id,
@@ -71,19 +76,22 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         opacity: isLegal ? 0.8 : 1,
       },
     };
-  });
+  }), [employees, getEmployeeDepth]);
 
   // Create edges with different styles based on relationship
-  const initialEdges = employees
+  const initialEdges = useMemo(() => employees
     .filter((emp) => emp.manager_id)
-    .map((emp) => ({
-      id: `${emp.manager_id}-${emp.id}`,
-      source: emp.manager_id!,
-      target: emp.id,
-      type: emp.department === 'Legal' ? 'step' : 'smoothstep',
-      style: emp.department === 'Legal' ? { strokeDasharray: '5,5' } : {},
-      animated: emp.department === 'Legal',
-    }));
+    .map((emp) => {
+      const isLegal = emp.department === 'Legal' || emp.department === 'Legal/Regulatory';
+      return {
+        id: `${emp.manager_id}-${emp.id}`,
+        source: emp.manager_id!,
+        target: emp.id,
+        type: isLegal ? 'step' : 'smoothstep',
+        style: isLegal ? { strokeDasharray: '5,5' } : {},
+        animated: isLegal,
+      };
+    }), [employees]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -97,7 +105,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     if (!ceo) return;
 
     const layoutNodes = [...nodes];
-    const levelWidth = 300;
+    const levelWidth = 250;
     const levelHeight = 150;
     
     // Position nodes based on their depth and number of siblings
@@ -122,7 +130,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     });
 
     setNodes(layoutNodes);
-  }, [employees, setNodes, nodes, ceo]);
+  }, [employees, setNodes, nodes, ceo, getEmployeeDepth]);
 
   return (
     <div className="h-[600px] border rounded-lg">
@@ -135,13 +143,14 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         fitView
         minZoom={0.1}
         maxZoom={1.5}
+        nodesDraggable={false}
       >
         <Background />
         <Controls />
         <MiniMap 
           nodeColor={node => {
             const emp = employeeMap.get(node.id as string);
-            return emp?.department === 'Legal' ? '#CBD5E1' : '#94A3B8';
+            return emp?.department === 'Legal' || emp?.department === 'Legal/Regulatory' ? '#CBD5E1' : '#94A3B8';
           }}
         />
       </ReactFlow>
@@ -154,27 +163,41 @@ const OrgChart = ({ employees }: OrgChartProps) => {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <div className="font-semibold">Title</div>
-              <div>{selectedEmployee?.title}</div>
+            <div className="flex items-center gap-2">
+              <Briefcase className="h-4 w-4 text-gray-500" />
+              <div>
+                <div className="font-semibold">Title</div>
+                <div>{selectedEmployee?.title}</div>
+              </div>
             </div>
-            <div>
-              <div className="font-semibold">Department</div>
-              <div>{selectedEmployee?.department}</div>
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-gray-500" />
+              <div>
+                <div className="font-semibold">Department</div>
+                <div>{selectedEmployee?.department}</div>
+              </div>
             </div>
             <div>
               <div className="font-semibold">Reports To</div>
               <div>
                 {selectedEmployee?.manager_id 
-                  ? `${employeeMap.get(selectedEmployee.manager_id)?.first_name} ${employeeMap.get(selectedEmployee.manager_id)?.last_name}`
+                  ? `${employeeMap.get(selectedEmployee.manager_id)?.first_name || ''} ${employeeMap.get(selectedEmployee.manager_id)?.last_name || ''}`
                   : 'No Manager'}
               </div>
             </div>
-            <div>
-              <div className="font-semibold">Contact</div>
-              <div>{selectedEmployee?.email}</div>
-              {selectedEmployee?.phone && <div>{selectedEmployee.phone}</div>}
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-gray-500" />
+              <div>
+                <div className="font-semibold">Contact</div>
+                <div>{selectedEmployee?.email}</div>
+              </div>
             </div>
+            {selectedEmployee?.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-gray-500" />
+                <div>{selectedEmployee.phone}</div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
