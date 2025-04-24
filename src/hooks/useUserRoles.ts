@@ -2,6 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface UserRole {
   id: string;
@@ -18,26 +19,47 @@ interface UserWithRole {
 
 export const useUserRoles = () => {
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ['users-with-roles'],
     queryFn: async () => {
-      const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
-      
-      if (authError) throw authError;
+      try {
+        if (!isAdmin) {
+          throw new Error("Only admins can list users");
+        }
+        
+        // First check if we're admin using the security definer function
+        const { data: adminCheck, error: adminError } = await supabase.rpc('is_admin');
+        
+        if (adminError || !adminCheck) {
+          console.error("Admin check failed:", adminError);
+          throw new Error("Admin privileges required");
+        }
+        
+        // Now fetch users
+        const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (authError) throw authError;
 
-      const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*');
+        const { data: roles, error: rolesError } = await supabase
+          .from('user_roles')
+          .select('*');
 
-      if (rolesError) throw rolesError;
+        if (rolesError) throw rolesError;
 
-      return users.map(user => ({
-        id: user.id,
-        email: user.email,
-        role: roles?.find(role => role.user_id === user.id) || { role: 'basic' }
-      }));
-    }
+        return users.map(user => ({
+          id: user.id,
+          email: user.email,
+          role: roles?.find(role => role.user_id === user.id) || { role: 'basic' }
+        }));
+      } catch (err: any) {
+        console.error("Error fetching user roles:", err);
+        toast.error("Failed to load users: " + (err.message || "Unknown error"));
+        return [];
+      }
+    },
+    enabled: isAdmin // Only run the query if the user is an admin
   });
 
   const updateUserRole = useMutation({
