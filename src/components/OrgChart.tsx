@@ -1,15 +1,14 @@
 
-import { useCallback } from 'react';
-import {
-  ReactFlow,
+import { useCallback, useEffect } from 'react';
+import ReactFlow, {
   Background,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
   addEdge,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+} from 'reactflow';
+import 'reactflow/dist/style.css';
 import { Employee } from '@/hooks/useEmployeesData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { useState } from 'react';
@@ -57,13 +56,13 @@ const OrgChart = ({ employees }: OrgChartProps) => {
   }, [setEdges]);
 
   // Arrange nodes in a tree layout
-  useCallback(() => {
+  useEffect(() => {
     const layoutNodes = nodes.map((node, index) => ({
       ...node,
       position: { x: (index % 3) * 250, y: Math.floor(index / 3) * 150 },
     }));
     setNodes(layoutNodes);
-  }, [nodes, setNodes]);
+  }, [setNodes]);
 
   return (
     <div className="h-[600px] border rounded-lg">
