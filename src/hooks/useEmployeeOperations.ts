@@ -23,7 +23,7 @@ export const useEmployeeOperations = () => {
 
       if (error) {
         console.error("Error creating employee:", error);
-        throw error;
+        throw new Error(error.message);
       }
       return data;
     },
@@ -31,9 +31,9 @@ export const useEmployeeOperations = () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success('Employee added successfully');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       console.error('Error creating employee:', error);
-      toast.error('Failed to add employee: ' + (error.message || 'Unknown error'));
+      toast.error(error.message || 'Failed to add employee');
     }
   });
 
@@ -52,7 +52,7 @@ export const useEmployeeOperations = () => {
 
       if (error) {
         console.error("Error updating employee:", error);
-        throw error;
+        throw new Error(error.message);
       }
       return data;
     },
@@ -60,9 +60,9 @@ export const useEmployeeOperations = () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success('Employee updated successfully');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       console.error('Error updating employee:', error);
-      toast.error('Failed to update employee: ' + (error.message || 'Unknown error'));
+      toast.error(error.message || 'Failed to update employee');
     }
   });
 
@@ -79,16 +79,16 @@ export const useEmployeeOperations = () => {
 
       if (error) {
         console.error("Error deleting employee:", error);
-        throw error;
+        throw new Error(error.message);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success('Employee deleted successfully');
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       console.error('Error deleting employee:', error);
-      toast.error('Failed to delete employee: ' + (error.message || 'Unknown error'));
+      toast.error(error.message || 'Failed to delete employee');
     }
   });
 

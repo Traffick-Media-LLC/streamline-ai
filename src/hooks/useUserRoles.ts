@@ -24,56 +24,49 @@ export const useUserRoles = () => {
   const { data: users, isLoading, error } = useQuery({
     queryKey: ['users-with-roles'],
     queryFn: async () => {
-      try {
-        if (!isAdmin) {
-          throw new Error("Only admins can list users");
-        }
-        
-        // First check if we're admin using the security definer function
-        const { data: adminCheck, error: adminError } = await supabase.rpc('is_admin');
-        
-        if (adminError || !adminCheck) {
-          console.error("Admin check failed:", adminError);
-          throw new Error("Admin privileges required");
-        }
-        
-        // Now fetch users
-        const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
-        
-        if (authError) {
-          console.error("Error fetching users:", authError);
-          throw authError;
-        }
-
-        const { data: roles, error: rolesError } = await supabase
-          .from('user_roles')
-          .select('*');
-
-        if (rolesError) {
-          console.error("Error fetching roles:", rolesError);
-          throw rolesError;
-        }
-
-        return users.map(user => ({
-          id: user.id,
-          email: user.email,
-          role: roles?.find(role => role.user_id === user.id) || { role: 'basic' }
-        }));
-      } catch (err: any) {
-        console.error("Error in useUserRoles:", err);
-        throw new Error(err.message || "Failed to load users");
+      if (!isAdmin) {
+        throw new Error("Only admins can list users");
       }
+
+      // Fetch users
+      const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
+      
+      if (authError) {
+        console.error("Error fetching users:", authError);
+        throw new Error(authError.message);
+      }
+
+      const { data: roles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('*');
+
+      if (rolesError) {
+        console.error("Error fetching roles:", rolesError);
+        throw new Error(rolesError.message);
+      }
+
+      return users.map(user => ({
+        id: user.id,
+        email: user.email,
+        role: roles?.find(role => role.user_id === user.id) || { role: 'basic' }
+      }));
     },
-    enabled: isAdmin
+    enabled: isAdmin,
+    retry: false
   });
 
   const updateUserRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: 'admin' | 'basic' }) => {
-      console.log("Updating user role:", { userId, role });
-      
+      if (!isAdmin) {
+        throw new Error("Only admins can update user roles");
+      }
+
       const { data, error } = await supabase
         .from('user_roles')
-        .upsert({ user_id: userId, role }, { onConflict: 'user_id' });
+        .upsert(
+          { user_id: userId, role },
+          { onConflict: 'user_id' }
+        );
 
       if (error) {
         console.error("Error updating role:", error);
@@ -87,7 +80,7 @@ export const useUserRoles = () => {
     },
     onError: (error: any) => {
       console.error('Error updating user role:', error);
-      toast.error('Failed to update user role: ' + (error.message || 'Unknown error'));
+      toast.error(error.message || 'Failed to update user role');
     }
   });
 
