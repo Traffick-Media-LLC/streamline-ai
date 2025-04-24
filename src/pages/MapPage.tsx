@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import USAMap from '../components/USAMap';
 import { supabase } from "@/integrations/supabase/client";
@@ -92,6 +93,7 @@ const MapPage = () => {
           <USAMap 
             onStateClick={handleStateClick} 
             isStateSelected={!!selectedState}
+            selectedState={selectedState?.name}
           />
         </div>
         

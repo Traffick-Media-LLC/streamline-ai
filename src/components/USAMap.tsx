@@ -13,9 +13,14 @@ const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 interface USAMapProps {
   onStateClick: (stateName: string) => void;
   isStateSelected?: boolean;
+  selectedState?: string | null;
 }
 
-const USAMap: React.FC<USAMapProps> = ({ onStateClick, isStateSelected }) => {
+const USAMap: React.FC<USAMapProps> = ({ 
+  onStateClick, 
+  isStateSelected, 
+  selectedState 
+}) => {
   return (
     <div className={`w-full aspect-[1.5] mx-auto transition-all duration-300 ease-in-out ${
       isStateSelected ? 'max-w-2xl' : 'max-w-5xl'
@@ -26,13 +31,14 @@ const USAMap: React.FC<USAMapProps> = ({ onStateClick, isStateSelected }) => {
             {({ geographies }) =>
               geographies.map((geo) => {
                 const stateName = geo.properties.name;
+                const isCurrentStateSelected = selectedState === stateName;
                 
                 return (
                   <Tooltip key={geo.rsmKey}>
                     <TooltipTrigger asChild>
                       <Geography
                         geography={geo}
-                        fill="#ea384c"
+                        fill={isCurrentStateSelected ? "#9b87f5" : "#ea384c"}
                         stroke="#f1f1f1"
                         strokeWidth={0.5}
                         onClick={() => {
