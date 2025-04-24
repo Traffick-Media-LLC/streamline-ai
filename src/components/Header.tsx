@@ -172,9 +172,6 @@ const Header = () => {
                     <DropdownMenuItem asChild>
                       <Link to="/admin" className="text-black hover:text-black/80">Admin Dashboard</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/knowledge" className="text-black hover:text-black/80">Knowledge Manager</Link>
-                    </DropdownMenuItem>
                   </>
                 )}
                 <DropdownMenuSeparator />
