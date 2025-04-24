@@ -91,7 +91,9 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
+          manager_id: string | null
           phone: string | null
+          title: string
           updated_at: string
         }
         Insert: {
@@ -101,7 +103,9 @@ export type Database = {
           first_name: string
           id?: string
           last_name: string
+          manager_id?: string | null
           phone?: string | null
+          title?: string
           updated_at?: string
         }
         Update: {
@@ -111,10 +115,20 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string
+          manager_id?: string | null
           phone?: string | null
+          title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "employees_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       knowledge_entries: {
         Row: {

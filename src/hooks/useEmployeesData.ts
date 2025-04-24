@@ -10,6 +10,8 @@ export interface Employee {
   email: string;
   phone: string | null;
   department: string;
+  title: string;
+  manager_id: string | null;
 }
 
 export const useEmployeesData = () => {
