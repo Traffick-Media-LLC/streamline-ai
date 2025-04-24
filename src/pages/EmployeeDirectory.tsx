@@ -20,20 +20,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { toast } from "@/components/ui/sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 const EmployeeDirectory = () => {
   const { data: employees, isLoading, error } = useEmployeesData();
   const [searchTerm, setSearchTerm] = useState("");
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    // Only redirect after auth state has been determined
+    if (!authLoading && !isAuthenticated) {
       console.log('User not authenticated, redirecting to auth page');
       navigate('/auth');
-      return;
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, authLoading]);
 
   const filteredEmployees = employees?.filter((employee) => {
     const searchTermLower = searchTerm.toLowerCase();
@@ -58,6 +60,20 @@ const EmployeeDirectory = () => {
       }
     }
   }, [employees]);
+
+  // If still loading auth, show a loading indicator
+  if (authLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4 flex items-center justify-center min-h-[60vh]">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // If not authenticated, redirect happens in the useEffect
+  if (!isAuthenticated) {
+    return null;
+  }
 
   if (error) {
     return (
@@ -89,6 +105,17 @@ const EmployeeDirectory = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Display alert if no manager relationships exist */}
+          {employees && employees.length > 0 && !employees.some(emp => emp.manager_id !== null) && (
+            <Alert className="mb-4">
+              <Info className="h-4 w-4" />
+              <AlertTitle>No Reporting Structure</AlertTitle>
+              <AlertDescription>
+                The organization chart is displaying in flat mode because no manager relationships are defined.
+              </AlertDescription>
+            </Alert>
+          )}
+        
           <Tabs defaultValue="table">
             <TabsList className="mb-4">
               <TabsTrigger value="table">Table View</TabsTrigger>
