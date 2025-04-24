@@ -1,8 +1,7 @@
-
 import { Link, useNavigate } from "react-router-dom";
 import Logo from "./Logo";
 import { useAuth } from "@/contexts/AuthContext";
-import { NavigationMenu, NavigationMenuItem, NavigationMenuLink, NavigationMenuList } from "@/components/ui/navigation-menu";
+import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "@/components/ui/navigation-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { navigationMenuTriggerStyle } from "@/components/ui/navigation-menu";
@@ -13,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -22,23 +21,38 @@ const Header = () => {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!user?.id) return;
 
       try {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('first_name, last_name')
-          .eq('id', user.id)
-          .single();
+        const avatarFromAuth = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+        if (avatarFromAuth) {
+          setAvatarUrl(avatarFromAuth);
+        }
 
-        if (error) throw error;
+        const nameFromAuth = user.user_metadata?.full_name || 
+                           `${user.user_metadata?.given_name || ''} ${user.user_metadata?.family_name || ''}`.trim();
+        
+        if (nameFromAuth) {
+          const [first, ...rest] = nameFromAuth.split(' ');
+          setFirstName(first || '');
+          setLastName(rest.join(' ') || '');
+        } else {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('first_name, last_name')
+            .eq('id', user.id)
+            .single();
 
-        if (profile) {
-          setFirstName(profile.first_name || '');
-          setLastName(profile.last_name || '');
+          if (error) throw error;
+
+          if (profile) {
+            setFirstName(profile.first_name || '');
+            setLastName(profile.last_name || '');
+          }
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
@@ -46,7 +60,7 @@ const Header = () => {
     };
 
     fetchUserProfile();
-  }, [user?.id]);
+  }, [user?.id, user?.user_metadata]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -122,6 +136,7 @@ const Header = () => {
                   className="flex items-center gap-2 text-black hover:text-black/80"
                 >
                   <Avatar className="h-8 w-8">
+                    {avatarUrl && <AvatarImage src={avatarUrl} alt="Profile" />}
                     <AvatarFallback>
                       {firstName && lastName 
                         ? `${firstName[0]}${lastName[0]}`
