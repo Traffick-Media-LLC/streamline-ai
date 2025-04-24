@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -136,14 +135,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
+  useEffect(() => {
+    // When isGuest changes, update admin status and role accordingly
+    if (isGuest) {
+      setIsAdmin(true);
+      setUserRole('admin');
+    }
+  }, [isGuest]);
+
   const signOut = async () => {
     try {
       setIsGuest(false);
+      setIsAdmin(false);
+      setUserRole(null);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      setUserRole(null);
-      setIsAdmin(false);
       toast.success("Signed out successfully");
     } catch (error: any) {
       toast.error("Failed to sign out");
