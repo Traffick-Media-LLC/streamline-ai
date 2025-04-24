@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import MapPage from "./pages/MapPage";
 import ChatPage from "./pages/ChatPage";
@@ -28,12 +28,28 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <div className="min-h-screen flex flex-col">
-              <Header />
+              <ProtectedRoute>
+                <Header />
+              </ProtectedRoute>
               <main className="flex-1">
                 <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/map" element={<MapPage />} />
                   <Route path="/auth" element={<AuthPage />} />
+                  <Route 
+                    path="/" 
+                    element={
+                      <ProtectedRoute>
+                        <HomePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="/map" 
+                    element={
+                      <ProtectedRoute>
+                        <MapPage />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route 
                     path="/chat" 
                     element={
@@ -66,7 +82,14 @@ const App = () => {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="*" element={<NotFound />} />
+                  <Route 
+                    path="*" 
+                    element={
+                      <ProtectedRoute>
+                        <NotFound />
+                      </ProtectedRoute>
+                    }
+                  />
                 </Routes>
               </main>
             </div>
