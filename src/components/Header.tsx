@@ -1,3 +1,4 @@
+
 import { Link, useNavigate } from "react-router-dom";
 import Logo from "./Logo";
 import { useAuth } from "@/contexts/AuthContext";
@@ -155,9 +156,14 @@ const Header = () => {
                   <Link to="/profile" className="text-black hover:text-black/80">Profile</Link>
                 </DropdownMenuItem>
                 {isAdmin && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/admin" className="text-black hover:text-black/80">Admin Dashboard</Link>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin" className="text-black hover:text-black/80">Admin Dashboard</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/knowledge" className="text-black hover:text-black/80">Knowledge Manager</Link>
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
