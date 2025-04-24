@@ -1,8 +1,7 @@
-
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { ExternalLink, Map, MessageSquare } from "lucide-react"
+import { ExternalLink, Map, MessageSquare, Flag } from "lucide-react"
 
 const HomePage = () => {
   return (
@@ -76,6 +75,7 @@ const HomePage = () => {
 
         {/* Employee Resources Section */}
         <div className="space-y-8">
+          {/* Marketing Requests card */}
           <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-black to-gray-800 text-white">
             <CardHeader>
               <CardTitle className="text-2xl">Marketing Requests</CardTitle>
@@ -97,6 +97,7 @@ const HomePage = () => {
             </CardContent>
           </Card>
 
+          {/* Quick Links card */}
           <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-gray-50 to-white">
             <CardHeader>
               <CardTitle className="text-2xl">Quick Links</CardTitle>
@@ -124,6 +125,54 @@ const HomePage = () => {
               ))}
             </CardContent>
           </Card>
+
+          {/* Racing Section */}
+          <Card className="overflow-hidden border-0 shadow-lg">
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Content Side */}
+              <div className="p-8 flex flex-col justify-center space-y-6">
+                <div>
+                  <CardTitle className="text-3xl mb-4">
+                    Streamline Group Racing: The Ultimate Sales Advantage
+                  </CardTitle>
+                  <p className="text-gray-600">
+                    Streamline Group Racing isn't just about speed—it's a powerful sales tool that sets us apart from every competitor. As part of the Streamline team, you now have access to a one-of-a-kind platform that helps you build relationships, impress clients, and close more deals. This isn't a sponsorship—it's a strategic edge.
+                  </p>
+                </div>
+                
+                <div>
+                  <h4 className="text-xl font-semibold mb-4">How you can use it:</h4>
+                  <ul className="space-y-3 text-gray-600">
+                    <li className="flex items-start gap-2">
+                      <Flag className="h-5 w-5 mt-1 text-red-500 flex-shrink-0" />
+                      <span>Bring clients to races for exclusive, high-impact experiences</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Flag className="h-5 w-5 mt-1 text-red-500 flex-shrink-0" />
+                      <span>Feature your clients as placements on the car</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Flag className="h-5 w-5 mt-1 text-red-500 flex-shrink-0" />
+                      <span>Leverage the excitement of racing to open new conversations</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Flag className="h-5 w-5 mt-1 text-red-500 flex-shrink-0" />
+                      <span>Align your pitch with our values of precision, speed, and excellence</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Image Side */}
+              <div className="relative h-full min-h-[300px] md:min-h-0">
+                <img 
+                  src="/lovable-uploads/84e0fd80-b14f-4f1d-9dd9-b248e7c6014e.png"
+                  alt="Streamline Group Racing Team"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
     </div>
@@ -131,4 +180,3 @@ const HomePage = () => {
 };
 
 export default HomePage;
-
