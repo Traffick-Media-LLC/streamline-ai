@@ -38,7 +38,7 @@ const USAMap: React.FC<USAMapProps> = ({
                     <TooltipTrigger asChild>
                       <Geography
                         geography={geo}
-                        fill={isCurrentStateSelected ? "#9b87f5" : "#ea384c"}
+                        fill={isCurrentStateSelected ? "#F1F1F1" : "#ea384c"}
                         stroke="#f1f1f1"
                         strokeWidth={0.5}
                         onClick={() => {
