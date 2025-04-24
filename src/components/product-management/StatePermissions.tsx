@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useStatePermissionsData } from "@/hooks/useStatePermissionsData";
 import { useProductsData } from "@/hooks/useProductsData";
@@ -65,10 +64,8 @@ const StatePermissions: React.FC = () => {
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
-  // Populate brands from products when products are loaded
   useEffect(() => {
     if (products.length > 0) {
-      // Extract unique brands for filtering
       const uniqueBrands = Array.from(
         new Set(products.map(product => product.brand_id))
       ).map(brandId => {
@@ -88,7 +85,6 @@ const StatePermissions: React.FC = () => {
     if (state) {
       setSelectedState(state);
       
-      // Pre-select products that are already allowed in this state
       const allowedProductIds = stateProducts
         .filter(sp => sp.state_id === state.id)
         .map(sp => sp.product_id);
@@ -98,12 +94,10 @@ const StatePermissions: React.FC = () => {
     }
   };
 
-  // Save state-product permissions
   const handleSavePermissions = async () => {
     if (!selectedState) return;
     
     try {
-      // First delete existing relationships for this state
       const { error: deleteError } = await supabase
         .from('state_allowed_products')
         .delete()
@@ -111,7 +105,6 @@ const StatePermissions: React.FC = () => {
       
       if (deleteError) throw deleteError;
       
-      // Then insert new relationships
       if (selectedProducts.length > 0) {
         const newRelations = selectedProducts.map(productId => ({
           state_id: selectedState.id,
@@ -137,7 +130,6 @@ const StatePermissions: React.FC = () => {
     }
   };
 
-  // Toggle product selection
   const toggleProductSelection = (productId: number) => {
     setSelectedProducts(prev => 
       prev.includes(productId)
@@ -146,7 +138,6 @@ const StatePermissions: React.FC = () => {
     );
   };
 
-  // Get products allowed in a state
   const getStateAllowedProducts = (stateId: number) => {
     const allowedProductIds = stateProducts
       .filter(sp => sp.state_id === stateId)
@@ -155,14 +146,12 @@ const StatePermissions: React.FC = () => {
     return products.filter(product => allowedProductIds.includes(product.id));
   };
 
-  // Filter products based on search and brand filter
   const filteredProducts = products.filter(product => {
     const nameMatch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
     const brandMatch = !filterBrandId || product.brand_id === parseInt(filterBrandId);
     return nameMatch && brandMatch;
   });
 
-  // Display error if either data fetch failed
   const error = statesError || productsError;
   const loading = statesLoading || productsLoading;
 
@@ -281,7 +270,6 @@ const StatePermissions: React.FC = () => {
         </div>
       )}
 
-      {/* State Permissions Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -305,7 +293,7 @@ const StatePermissions: React.FC = () => {
                   <SelectValue placeholder="Filter by brand" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Brands</SelectItem>
+                  <SelectItem value="all">All Brands</SelectItem>
                   {brands.map((brand) => (
                     <SelectItem key={brand.id} value={brand.id.toString()}>
                       {brand.name}
@@ -380,7 +368,6 @@ const StatePermissions: React.FC = () => {
             <Button 
               variant="outline" 
               onClick={() => {
-                // Select all visible products
                 const visibleProductIds = filteredProducts.map(p => p.id);
                 setSelectedProducts(prev => {
                   const existingNotVisible = prev.filter(id => !visibleProductIds.includes(id));
