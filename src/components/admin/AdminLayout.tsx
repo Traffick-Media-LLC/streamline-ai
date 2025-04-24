@@ -25,8 +25,7 @@ import {
   Map,
   FileBarChart,
   ChevronRight,
-  ArrowLeft,
-  Menu
+  ArrowLeft
 } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { useAuth } from "@/contexts/AuthContext";
@@ -223,9 +222,6 @@ const AdminLayout = () => {
                   ))}
                 </BreadcrumbList>
               </Breadcrumb>
-              <SidebarTrigger className="md:hidden">
-                <Menu className="h-5 w-5" />
-              </SidebarTrigger>
             </div>
             <div className="flex-grow">
               <Outlet />
