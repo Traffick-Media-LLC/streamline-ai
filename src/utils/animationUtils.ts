@@ -11,10 +11,10 @@ interface UseInViewOptions {
 // Hook to detect when an element is in viewport
 export const useInView = (
   options: UseInViewOptions = {}
-): [MutableRefObject<HTMLElement | null>, boolean] => {
+): [MutableRefObject<HTMLDivElement | null>, boolean] => {
   const { threshold = 0.1, rootMargin = '0px', once = true } = options;
   const [inView, setInView] = useState(false);
-  const ref = useRef<HTMLElement | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   
   useEffect(() => {

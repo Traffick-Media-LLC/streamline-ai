@@ -46,7 +46,9 @@ export const AnimatedList = ({
     <Component ref={ref} className={className}>
       {Children.map(children, (child, index) => {
         if (isValidElement(child)) {
+          // Using proper typing for cloneElement with props
           return cloneElement(child, {
+            ...child.props,
             className: cn(
               child.props.className,
               getAnimationClass(inView, 'fade', index * staggerDelay)
