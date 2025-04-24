@@ -22,9 +22,10 @@ import { Button } from '@/components/ui/button';
 
 interface OrgChartProps {
   employees: Employee[];
+  isAdmin?: boolean;
 }
 
-const OrgChart = ({ employees }: OrgChartProps) => {
+const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<'hierarchical' | 'flat'>('hierarchical');
@@ -305,7 +306,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         fitView
         minZoom={0.1}
         maxZoom={1.5}
-        nodesDraggable={false}
+        nodesDraggable={isAdmin}
       >
         <Background />
         <Controls />

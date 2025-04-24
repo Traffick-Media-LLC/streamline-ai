@@ -8,9 +8,11 @@ import { Download, RefreshCw } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { toast } from '@/components/ui/sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 const AdminOrgChart = () => {
   const { data: employees, isLoading, error, refetch } = useEmployeesData();
+  const { isAdmin } = useAuth();
 
   const handleExport = () => {
     toast.info("Export functionality coming soon");
@@ -64,7 +66,7 @@ const AdminOrgChart = () => {
               </div>
             ) : (
               employees && employees.length > 0 ? (
-                <OrgChart employees={employees} />
+                <OrgChart employees={employees} isAdmin={isAdmin} />
               ) : (
                 <div className="text-center py-4 text-gray-500">
                   No employee data available for organization chart
