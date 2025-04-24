@@ -46,21 +46,9 @@ const USAMap: React.FC<USAMapProps> = ({
                           onStateClick(stateName);
                         }}
                         style={{
-                          default: { 
-                            outline: "none", 
-                            cursor: "pointer",
-                            fill: "#F1F1F1" 
-                          },
-                          hover: { 
-                            outline: "none", 
-                            opacity: 0.8, 
-                            cursor: "pointer",
-                            fill: "#F1F1F1"
-                          },
-                          pressed: { 
-                            outline: "none", 
-                            cursor: "pointer" 
-                          }
+                          default: { outline: "none", cursor: "pointer" },
+                          hover: { outline: "none", opacity: 0.8, cursor: "pointer" },
+                          pressed: { outline: "none", cursor: "pointer" }
                         }}
                       />
                     </TooltipTrigger>
@@ -79,4 +67,3 @@ const USAMap: React.FC<USAMapProps> = ({
 };
 
 export default USAMap;
-
