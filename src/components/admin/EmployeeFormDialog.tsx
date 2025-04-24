@@ -1,174 +1,228 @@
-import React, { useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+
+import React from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Employee } from '@/hooks/useEmployeesData';
 import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
-import { toast } from "@/components/ui/sonner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
+const employeeSchema = z.object({
+  first_name: z.string().min(2, "First name is required"),
+  last_name: z.string().min(2, "Last name is required"),
+  email: z.string().email("Valid email is required"),
+  phone: z.string().optional(),
+  title: z.string().min(2, "Title is required"),
+  department: z.string().min(2, "Department is required"),
+  manager_id: z.string().nullable()
+});
+
+type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 interface EmployeeFormDialogProps {
-  employee?: Employee;
-  employees?: Employee[];
-  onSuccess?: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  employees: Employee[];
+  onSuccess: () => void;
+  employeeToEdit?: Employee;
 }
 
-const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDialogProps) => {
-  const [open, setOpen] = React.useState(false);
+const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
+  open,
+  onOpenChange,
+  employees,
+  onSuccess,
+  employeeToEdit
+}) => {
   const { createEmployee, updateEmployee } = useEmployeeOperations();
+  const isEditing = !!employeeToEdit;
   
-  const defaultValues = {
-    first_name: employee?.first_name || '',
-    last_name: employee?.last_name || '',
-    email: employee?.email || '',
-    phone: employee?.phone || '',
-    department: employee?.department || '',
-    title: employee?.title || '',
-    manager_id: employee?.manager_id || ''
-  };
-  
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
-    defaultValues
+  const form = useForm<EmployeeFormValues>({
+    resolver: zodResolver(employeeSchema),
+    defaultValues: employeeToEdit ? {
+      first_name: employeeToEdit.first_name,
+      last_name: employeeToEdit.last_name,
+      email: employeeToEdit.email,
+      phone: employeeToEdit.phone || "",
+      title: employeeToEdit.title,
+      department: employeeToEdit.department,
+      manager_id: employeeToEdit.manager_id
+    } : {
+      first_name: "",
+      last_name: "",
+      email: "",
+      phone: "",
+      title: "",
+      department: "",
+      manager_id: null
+    }
   });
-
-  const selectedManagerId = watch('manager_id');
-
-  useEffect(() => {
-    if (open) {
-      reset({
-        first_name: employee?.first_name || '',
-        last_name: employee?.last_name || '',
-        email: employee?.email || '',
-        phone: employee?.phone || '',
-        department: employee?.department || '',
-        title: employee?.title || '',
-        manager_id: employee?.manager_id || ''
-      });
-    }
-  }, [employee, open, reset]);
-
-  const onSubmit = async (data: any) => {
+  
+  const onSubmit = async (data: EmployeeFormValues) => {
     try {
-      const formattedData = {
-        ...data,
-        manager_id: data.manager_id === '' || data.manager_id === 'no_manager' 
-          ? null 
-          : data.manager_id
-      };
-      
-      if (employee) {
-        await updateEmployee.mutateAsync({ 
-          id: employee.id, 
-          ...formattedData
+      if (isEditing && employeeToEdit) {
+        await updateEmployee.mutateAsync({
+          id: employeeToEdit.id,
+          ...data
         });
-        toast.success("Employee updated successfully");
       } else {
-        await createEmployee.mutateAsync(formattedData);
-        toast.success("Employee created successfully");
+        await createEmployee.mutateAsync(data);
       }
-      
-      setOpen(false);
-      reset(defaultValues);
-      onSuccess?.();
-    } catch (error: any) {
-      console.error('Error submitting form:', error);
-      toast.error(`Error: ${error.message || 'Failed to save employee'}`);
+      onSuccess();
+    } catch (error) {
+      console.error("Failed to save employee:", error);
     }
   };
-
-  const handleManagerChange = (value: string) => {
-    setValue('manager_id', value);
-  };
-
-  const getSelectValue = () => {
-    if (!selectedManagerId || selectedManagerId === '') return 'no_manager';
-    return selectedManagerId;
-  };
-
+  
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant={employee ? "outline" : "default"}>
-          {employee ? "Edit" : "Add Employee"}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{employee ? "Edit Employee" : "Add New Employee"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Employee" : "Add New Employee"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="first_name">First Name</Label>
-              <Input id="first_name" {...register('first_name', { required: true })} />
-              {errors.first_name && <span className="text-red-500 text-sm">Required</span>}
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="first_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="last_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Smith" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="last_name">Last Name</Label>
-              <Input id="last_name" {...register('last_name', { required: true })} />
-              {errors.last_name && <span className="text-red-500 text-sm">Required</span>}
+            
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input placeholder="john.smith@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone (optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="(555) 123-4567" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Manager" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Sales" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" {...register('email', { required: true })} />
-            {errors.email && <span className="text-red-500 text-sm">Required</span>}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone</Label>
-            <Input id="phone" {...register('phone')} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="department">Department</Label>
-            <Input id="department" {...register('department', { required: true })} />
-            {errors.department && <span className="text-red-500 text-sm">Required</span>}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" {...register('title', { required: true })} />
-            {errors.title && <span className="text-red-500 text-sm">Required</span>}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="manager">Manager</Label>
-            <Select
-              value={getSelectValue()}
-              onValueChange={handleManagerChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a manager">
-                  {getSelectValue() === 'no_manager' ? 'No Manager' : 
-                    employees?.find(e => e.id === selectedManagerId)
-                      ? `${employees.find(e => e.id === selectedManagerId)?.first_name} ${employees.find(e => e.id === selectedManagerId)?.last_name}`
-                      : 'Select a manager'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="no_manager">No Manager</SelectItem>
-                {employees?.filter(e => e.id !== employee?.id).map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.first_name} {emp.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">
-              {employee ? "Update" : "Add"}
-            </Button>
-          </div>
-        </form>
+            
+            <FormField
+              control={form.control}
+              name="manager_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Manager</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value || undefined}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a manager" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No Manager</SelectItem>
+                      {employees
+                        .filter(e => !isEditing || e.id !== employeeToEdit?.id)
+                        .map((employee) => (
+                          <SelectItem key={employee.id} value={employee.id}>
+                            {employee.first_name} {employee.last_name} ({employee.title})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit"
+                disabled={createEmployee.isPending || updateEmployee.isPending}
+              >
+                {isEditing ? "Update" : "Add"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

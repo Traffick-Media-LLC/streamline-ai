@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -10,7 +10,11 @@ import {
   addEdge,
   Node,
   Edge,
-  Connection
+  Connection,
+  NodeDragHandler,
+  OnNodesChange,
+  XYPosition,
+  useReactFlow
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Employee } from '@/hooks/useEmployeesData';
@@ -20,16 +24,30 @@ import { toast } from '@/components/ui/sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import EmployeeContextMenu from './admin/EmployeeContextMenu';
+import EmployeeFormDialog from './admin/EmployeeFormDialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
+import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
 
 interface OrgChartProps {
   employees: Employee[];
   isAdmin?: boolean;
+  editable?: boolean;
 }
 
-const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
+const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProps) => {
+  const { updateEmployee } = useEmployeeOperations();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<'hierarchical' | 'flat'>('hierarchical');
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [addingDirectReportTo, setAddingDirectReportTo] = useState<string | null>(null);
+  const reactFlowInstance = useReactFlow();
+  const isInitialMount = useRef(true);
+  const draggedNodeRef = useRef<Node | null>(null);
+  const targetNodeRef = useRef<Node | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const employeeMap = useMemo(() => {
     return new Map(employees.map(emp => [emp.id, emp]));
@@ -49,8 +67,21 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
     });
   }, [employees]);
 
-  // Map of employees and their designated level in the org chart (not based on manager relationships)
+  // Map of employees and their designated level in the org chart
   const getEmployeeLevel = useCallback((employee: Employee): number => {
+    // Special cases for top leadership - manually position at the same level
+    if (employee.first_name === 'Patrick' && employee.last_name === 'Mulcahy') {
+      return 0; // Top level for CEO
+    }
+    
+    if (employee.first_name === 'Matthew' && employee.last_name === 'Halvorson') {
+      return 0; // Same level for COO
+    }
+    
+    if (employee.first_name === 'Chuck' && employee.last_name === 'Melander') {
+      return 0; // Same level for CSO
+    }
+    
     // Define titles for each level
     const titleLevels: { [key: string]: number } = {
       // Top leadership - Level 0
@@ -84,19 +115,6 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
     // Get title in lowercase for matching
     const titleLower = employee.title.toLowerCase();
     
-    // Special cases for top leadership
-    if (employee.first_name === 'Patrick' && employee.last_name === 'Mulcahy' && titleLower.includes('ceo')) {
-      return 0;
-    }
-    
-    if (employee.first_name === 'Matthew' && employee.last_name === 'Halvorson' && titleLower.includes('coo')) {
-      return 0;
-    }
-    
-    if (employee.first_name === 'Chuck' && employee.last_name === 'Melander' && titleLower.includes('cso')) {
-      return 0;
-    }
-    
     // Check specific title keywords
     for (const [titleKey, level] of Object.entries(titleLevels)) {
       if (titleLower.includes(titleKey)) {
@@ -116,7 +134,7 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
     return managerLevel + 1;
   }, [employeeMap]);
 
-  // Find the top leadership nodes (CEO, COO, CSO)
+  // Find the top leadership nodes
   const topNodes = useMemo(() => {
     // Look for specific people in the top leadership positions
     const patrick = employees.find(emp => 
@@ -295,6 +313,7 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
           border: '1px solid #e2e8f0',
           borderRadius: '8px',
           padding: '16px',
+          cursor: editable && isAdmin ? 'grab' : 'pointer'
         };
 
         let textColorClass = 'text-gray-800';
@@ -338,16 +357,23 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
           data: {
             label: (
               <div 
-                className={`cursor-pointer w-full ${textColorClass}`}
+                className={`${textColorClass} ${editable && isAdmin ? 'with-actions' : ''}`}
                 onClick={() => setSelectedEmployee(emp)}
               >
                 <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
                 <div className="text-sm">{emp.title}</div>
                 <div className="text-xs opacity-75">{emp.department}</div>
+                {editable && isAdmin && (
+                  <div className="absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity">
+                    {/* Edit indicator for admins */}
+                  </div>
+                )}
               </div>
             ),
+            employee: emp,
           },
           style: nodeStyle,
+          draggable: editable && isAdmin,
         };
       });
     } catch (err) {
@@ -355,7 +381,7 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
       setError('Error creating organization chart');
       return [];
     }
-  }, [employees, getEmployeeLevel, topNodes]);
+  }, [employees, getEmployeeLevel, topNodes, editable, isAdmin]);
 
   const initialEdges = useMemo(() => {
     if (layoutMode === 'flat') return [];
@@ -393,6 +419,206 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
   const onConnect = useCallback((params: Connection) => {
     setEdges((eds) => addEdge(params, eds));
   }, [setEdges]);
+
+  // Reset nodes and edges when employees data changes
+  useEffect(() => {
+    if (!isInitialMount.current) {
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+    } else {
+      isInitialMount.current = false;
+    }
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  const onNodeDragStart: NodeDragHandler = useCallback((event, node) => {
+    if (!editable || !isAdmin) return;
+    setIsDragging(true);
+    draggedNodeRef.current = node;
+    // Change cursor to grabbing
+    if (event.target instanceof HTMLElement) {
+      event.target.style.cursor = 'grabbing';
+    }
+  }, [editable, isAdmin]);
+
+  const onNodeDrag: NodeDragHandler = useCallback((event, node) => {
+    if (!editable || !isAdmin || !draggedNodeRef.current) return;
+
+    // Find any node that the dragged node is hovering over
+    const { nodeInternals } = reactFlowInstance.getState();
+    
+    let targetNode = null;
+    for (const [, potentialTarget] of nodeInternals) {
+      if (potentialTarget.id === draggedNodeRef.current.id) continue;
+      
+      // Check if dragged node is over target node
+      const draggedNodeBounds = {
+        left: node.position.x,
+        right: node.position.x + (node.width || 0),
+        top: node.position.y,
+        bottom: node.position.y + (node.height || 0)
+      };
+      
+      const targetBounds = {
+        left: potentialTarget.position.x,
+        right: potentialTarget.position.x + (potentialTarget.width || 0),
+        top: potentialTarget.position.y,
+        bottom: potentialTarget.position.y + (potentialTarget.height || 0)
+      };
+      
+      const isOverlapping = !(
+        draggedNodeBounds.right < targetBounds.left || 
+        draggedNodeBounds.left > targetBounds.right || 
+        draggedNodeBounds.bottom < targetBounds.top || 
+        draggedNodeBounds.top > targetBounds.bottom
+      );
+      
+      if (isOverlapping) {
+        // Highlight the target node
+        targetNode = potentialTarget;
+        break;
+      }
+    }
+    
+    // Update the target node reference
+    targetNodeRef.current = targetNode;
+    
+    // Update visual feedback for drag target
+    setNodes((nds) => 
+      nds.map((n) => {
+        if (n.id === targetNode?.id) {
+          return {
+            ...n,
+            style: { ...n.style, boxShadow: '0 0 0 2px #6E59A5' }
+          };
+        } else if (n.id !== draggedNodeRef.current?.id && n.style?.boxShadow) {
+          // Clear any highlight on other nodes
+          const { boxShadow, ...restStyle } = n.style;
+          return { ...n, style: restStyle };
+        }
+        return n;
+      })
+    );
+  }, [editable, isAdmin, reactFlowInstance, setNodes]);
+
+  const onNodeDragStop: NodeDragHandler = useCallback(async (event, node) => {
+    if (!editable || !isAdmin || !draggedNodeRef.current) return;
+    
+    setIsDragging(false);
+    
+    // Reset cursor
+    if (event.target instanceof HTMLElement) {
+      event.target.style.cursor = 'grab';
+    }
+    
+    try {
+      // If we have a target node, update the dragged node's manager
+      if (targetNodeRef.current && draggedNodeRef.current.id !== targetNodeRef.current.id) {
+        const draggedEmployeeId = draggedNodeRef.current.id;
+        const newManagerId = targetNodeRef.current.id;
+        
+        // Check for circular references
+        let currentManagerId = newManagerId;
+        const managerChain = [draggedEmployeeId];
+        
+        while (currentManagerId) {
+          if (managerChain.includes(currentManagerId)) {
+            toast.error("Cannot create circular reporting relationship");
+            return;
+          }
+          
+          managerChain.push(currentManagerId);
+          
+          const manager = employeeMap.get(currentManagerId);
+          currentManagerId = manager?.manager_id || null;
+        }
+        
+        // Update the employee's manager
+        await updateEmployee.mutateAsync({
+          id: draggedEmployeeId,
+          manager_id: newManagerId
+        });
+        
+        toast.success("Reporting relationship updated", {
+          description: `${employeeMap.get(draggedEmployeeId)?.first_name} now reports to ${employeeMap.get(newManagerId)?.first_name}`
+        });
+      }
+    } catch (error) {
+      console.error("Failed to update reporting relationship:", error);
+      toast.error("Failed to update reporting relationship");
+    } finally {
+      // Clear the references and any highlights
+      draggedNodeRef.current = null;
+      targetNodeRef.current = null;
+      
+      // Clear any highlight styles
+      setNodes((nds) => 
+        nds.map((n) => {
+          if (n.style?.boxShadow) {
+            const { boxShadow, ...restStyle } = n.style;
+            return { ...n, style: restStyle };
+          }
+          return n;
+        })
+      );
+    }
+    
+    // Return the node to its original position in the org chart
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [editable, isAdmin, employeeMap, updateEmployee, setNodes, initialNodes, initialEdges, setEdges]);
+
+  const handleRemoveManager = async (employeeId: string) => {
+    try {
+      await updateEmployee.mutateAsync({
+        id: employeeId,
+        manager_id: null
+      });
+      
+      const employee = employeeMap.get(employeeId);
+      toast.success(`${employee?.first_name} ${employee?.last_name} no longer has a manager`);
+      
+      // Reset nodes and edges
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+    } catch (error) {
+      console.error("Failed to remove manager:", error);
+      toast.error("Failed to remove manager");
+    }
+  };
+
+  const wrapWithContextMenu = useCallback(
+    (node: Node) => {
+      if (!editable || !isAdmin) return node;
+      
+      const employee = node.data.employee as Employee;
+      
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          label: (
+            <EmployeeContextMenu
+              employee={employee}
+              onEdit={setEditingEmployee}
+              onAddDirectReport={(managerId) => setAddingDirectReportTo(managerId)}
+              onRemoveManager={handleRemoveManager}
+              onDeleteSuccess={() => {
+                // Nodes will be refreshed via refetch in parent component
+              }}
+            >
+              {node.data.label}
+            </EmployeeContextMenu>
+          )
+        }
+      };
+    },
+    [editable, isAdmin, handleRemoveManager]
+  );
+  
+  // Apply context menu to nodes
+  const nodesWithContextMenu = useMemo(() => {
+    return nodes.map(wrapWithContextMenu);
+  }, [nodes, wrapWithContextMenu]);
 
   if (error) {
     return (
@@ -436,7 +662,17 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
   }
 
   return (
-    <div className="h-[600px] border rounded-lg">
+    <div className="h-[600px] border rounded-lg relative">
+      {editable && isAdmin && (
+        <div className="absolute top-2 left-2 z-10 bg-white/80 border rounded-md shadow-sm p-2 text-xs">
+          {isDragging ? (
+            <span className="text-purple-600 font-medium">Drag employee over another to update reporting line</span>
+          ) : (
+            <span>Drag employees to reassign managers • Right-click for more options</span>
+          )}
+        </div>
+      )}
+      
       <div className="absolute top-2 right-2 z-10 bg-white border rounded-md shadow-sm p-1">
         <Button
           variant="ghost"
@@ -448,15 +684,18 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
       </div>
       
       <ReactFlow
-        nodes={nodes}
+        nodes={nodesWithContextMenu}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
         fitView
         minZoom={0.1}
         maxZoom={1.5}
-        nodesDraggable={isAdmin}
+        nodesDraggable={editable && isAdmin}
       >
         <Background />
         <Controls />
@@ -475,7 +714,8 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
         />
       </ReactFlow>
 
-      <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
+      {/* View Employee Dialog */}
+      <Dialog open={!!selectedEmployee && !editingEmployee} onOpenChange={() => setSelectedEmployee(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -518,9 +758,59 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
                 <div>{selectedEmployee.phone}</div>
               </div>
             )}
+            
+            {editable && isAdmin && (
+              <div className="flex justify-end pt-2">
+                <Button 
+                  onClick={() => {
+                    setSelectedEmployee(null);
+                    setEditingEmployee(selectedEmployee);
+                  }}
+                >
+                  Edit Employee
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Employee Dialog */}
+      {editingEmployee && (
+        <EmployeeFormDialog
+          open={!!editingEmployee}
+          onOpenChange={() => setEditingEmployee(null)}
+          employees={employees}
+          employeeToEdit={editingEmployee}
+          onSuccess={() => {
+            setEditingEmployee(null);
+            toast.success("Employee updated successfully");
+          }}
+        />
+      )}
+
+      {/* Add Direct Report Dialog */}
+      {addingDirectReportTo && (
+        <EmployeeFormDialog
+          open={!!addingDirectReportTo}
+          onOpenChange={() => setAddingDirectReportTo(null)}
+          employees={employees}
+          onSuccess={() => {
+            setAddingDirectReportTo(null);
+            toast.success("Direct report added successfully");
+          }}
+          employeeToEdit={{
+            id: '',
+            first_name: '',
+            last_name: '',
+            email: '',
+            phone: '',
+            title: '',
+            department: '',
+            manager_id: addingDirectReportTo
+          } as Employee}
+        />
+      )}
     </div>
   );
 };
