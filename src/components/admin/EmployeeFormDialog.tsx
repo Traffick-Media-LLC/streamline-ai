@@ -60,10 +60,10 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
     try {
       console.log("Form submission data:", data);
       
-      // Convert empty string manager_id to null
+      // Convert empty string or "no_manager" to null for manager_id
       const formattedData = {
         ...data,
-        manager_id: data.manager_id === '' ? null : data.manager_id
+        manager_id: data.manager_id === '' || data.manager_id === 'no_manager' ? null : data.manager_id
       };
       
       if (employee) {
@@ -82,9 +82,10 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
     }
   };
 
-  // Handle manager selection change separately since we can't directly register select
+  // Handle manager selection change
   const handleManagerChange = (value: string) => {
-    setValue('manager_id', value);
+    // Convert "no_manager" to empty string which will be converted to null in onSubmit
+    setValue('manager_id', value === 'no_manager' ? '' : value);
   };
 
   return (
@@ -133,7 +134,7 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
           <div className="space-y-2">
             <Label htmlFor="manager">Manager</Label>
             <Select
-              value={employee?.manager_id || ''}
+              value={employee?.manager_id || 'no_manager'}
               onValueChange={handleManagerChange}
             >
               <SelectTrigger>
