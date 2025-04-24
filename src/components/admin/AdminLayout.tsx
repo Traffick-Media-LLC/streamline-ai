@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { 
@@ -22,12 +21,11 @@ import {
   Package, 
   Users, 
   BookText, 
-  Briefcase, 
+  Briefcase,
   Map,
   FileBarChart,
   ChevronRight
 } from 'lucide-react';
-import { cn } from "@/lib/utils";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -40,12 +38,6 @@ const AdminLayout = () => {
       title: "Dashboard",
       path: "/admin",
       icon: LayoutDashboard,
-      exact: true
-    },
-    {
-      title: "User Management",
-      path: "/admin/users",
-      icon: Users,
       exact: true
     },
     {

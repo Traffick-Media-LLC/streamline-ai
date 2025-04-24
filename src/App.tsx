@@ -29,7 +29,6 @@ const PermissionsPage = lazy(() => import("./pages/admin/PermissionsPage"));
 const EmployeesPage = lazy(() => import("./pages/admin/EmployeesPage"));
 const OrganizationPage = lazy(() => import("./pages/admin/OrganizationPage"));
 const KnowledgePage = lazy(() => import("./pages/admin/KnowledgePage"));
-const UserManagementPage = lazy(() => import("./pages/admin/UserManagementPage"));
 
 // Create reusable loading component
 const PageLoader = () => (
@@ -72,7 +71,6 @@ const App = () => {
                     }
                   >
                     <Route index element={<AdminPage />} />
-                    <Route path="users" element={<UserManagementPage />} />
                     <Route path="brands" element={<BrandsPage />} />
                     <Route path="products" element={<ProductsPage />} />
                     <Route path="permissions" element={<PermissionsPage />} />
