@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { 
@@ -35,12 +34,17 @@ const AdminLayout = () => {
   const location = useLocation();
   const { user } = useAuth();
   
-  // Define admin navigation structure
   const adminNav = [
     {
       title: "Dashboard",
       path: "/admin",
       icon: LayoutDashboard,
+      exact: true
+    },
+    {
+      title: "User Management",
+      path: "/admin/users",
+      icon: Users,
       exact: true
     },
     {
@@ -88,18 +92,14 @@ const AdminLayout = () => {
     }
   ];
 
-  // Generate breadcrumbs based on current path
   const getBreadcrumbs = () => {
     const pathParts = location.pathname.split('/').filter(Boolean);
     
-    // Always start with Admin
     let breadcrumbs = [{ title: 'Admin', path: '/admin' }];
     
-    // Build the rest based on current path
     if (pathParts.length > 1 && pathParts[0] === 'admin') {
       const currentPath = pathParts[1];
       
-      // Find matching nav item
       for (const item of adminNav) {
         if (item.children) {
           const childMatch = item.children.find(child => 
@@ -109,7 +109,7 @@ const AdminLayout = () => {
           if (childMatch) {
             breadcrumbs.push({ 
               title: item.title, 
-              path: '' // Parent item doesn't have its own page
+              path: '' 
             });
             breadcrumbs.push({ 
               title: childMatch.title, 

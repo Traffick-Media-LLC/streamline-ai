@@ -1,11 +1,12 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { useEmployeesData, Employee } from "@/hooks/useEmployeesData";
+import { useEmployeesData } from '@/hooks/useEmployeesData';
+import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
-import { Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -13,10 +14,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OrgChart from "@/components/OrgChart";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { toast } from "@/components/ui/sonner";
+import EmployeeFormDialog from './EmployeeFormDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const AdminEmployeeDirectory = () => {
   const { data: employees, isLoading, error } = useEmployeesData();
+  const { deleteEmployee } = useEmployeeOperations();
   const [searchTerm, setSearchTerm] = useState("");
+  const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
 
   const filteredEmployees = employees?.filter((employee) => {
     const searchTermLower = searchTerm.toLowerCase();
@@ -27,6 +41,17 @@ const AdminEmployeeDirectory = () => {
       employee.email.toLowerCase().includes(searchTermLower)
     );
   });
+
+  const handleDeleteEmployee = async () => {
+    if (!employeeToDelete) return;
+
+    try {
+      await deleteEmployee.mutateAsync(employeeToDelete);
+      setEmployeeToDelete(null);
+    } catch (error) {
+      console.error('Error deleting employee:', error);
+    }
+  };
 
   if (error) {
     return (
@@ -47,7 +72,7 @@ const AdminEmployeeDirectory = () => {
         <CardHeader className="pb-2">
           <div className="flex justify-between items-center">
             <CardTitle>Manage Employees</CardTitle>
-            <Button variant="outline">Add Employee</Button>
+            <EmployeeFormDialog employees={employees} />
           </div>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -107,25 +132,16 @@ const AdminEmployeeDirectory = () => {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button 
-                                variant="outline" 
+                              <EmployeeFormDialog 
+                                employee={employee}
+                                employees={employees}
+                              />
+                              <Button
+                                variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  // Edit functionality would go here
-                                  toast.info("Edit functionality coming soon");
-                                }}
+                                onClick={() => setEmployeeToDelete(employee.id)}
                               >
-                                Edit
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(employee.email);
-                                  toast.success("Email copied to clipboard");
-                                }}
-                              >
-                                Copy Email
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
@@ -150,7 +166,7 @@ const AdminEmployeeDirectory = () => {
                   </div>
                 ) : (
                   employees && employees.length > 0 ? (
-                    <OrgChart employees={employees} />
+                    <OrgChart employees={employees} isAdmin={true} />
                   ) : (
                     <div className="text-center py-4 text-gray-500">
                       No employee data available
@@ -162,6 +178,26 @@ const AdminEmployeeDirectory = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!employeeToDelete} onOpenChange={() => setEmployeeToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the employee
+              and remove them from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setEmployeeToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEmployee}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
