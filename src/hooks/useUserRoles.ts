@@ -40,13 +40,19 @@ export const useUserRoles = () => {
         // Now fetch users
         const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
         
-        if (authError) throw authError;
+        if (authError) {
+          console.error("Error fetching users:", authError);
+          throw authError;
+        }
 
         const { data: roles, error: rolesError } = await supabase
           .from('user_roles')
           .select('*');
 
-        if (rolesError) throw rolesError;
+        if (rolesError) {
+          console.error("Error fetching roles:", rolesError);
+          throw rolesError;
+        }
 
         return users.map(user => ({
           id: user.id,
@@ -54,30 +60,34 @@ export const useUserRoles = () => {
           role: roles?.find(role => role.user_id === user.id) || { role: 'basic' }
         }));
       } catch (err: any) {
-        console.error("Error fetching user roles:", err);
-        toast.error("Failed to load users: " + (err.message || "Unknown error"));
-        return [];
+        console.error("Error in useUserRoles:", err);
+        throw new Error(err.message || "Failed to load users");
       }
     },
-    enabled: isAdmin // Only run the query if the user is an admin
+    enabled: isAdmin
   });
 
   const updateUserRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: 'admin' | 'basic' }) => {
+      console.log("Updating user role:", { userId, role });
+      
       const { data, error } = await supabase
         .from('user_roles')
         .upsert({ user_id: userId, role }, { onConflict: 'user_id' });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error updating role:", error);
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
       toast.success('User role updated successfully');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Error updating user role:', error);
-      toast.error('Failed to update user role');
+      toast.error('Failed to update user role: ' + (error.message || 'Unknown error'));
     }
   });
 
