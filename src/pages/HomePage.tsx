@@ -138,34 +138,36 @@ const HomePage = () => {
             </Card>
           </Animated>
 
-          {/* Quick Links card */}
+          {/* Quick Links card - Fixed styling */}
           <Animated type="slide-up" threshold={0.1} delay={0.2}>
             <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-gray-50 to-white">
               <CardHeader>
                 <CardTitle className="text-2xl">Quick Links</CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-3">
-                {[
-                  { title: "Sales Sheets", description: "Access all sales materials" },
-                  { title: "POS Materials", description: "Point of sale resources" },
-                  { title: "One Sheets", description: "Product information sheets" }
-                ].map((link, index) => (
-                  <Animated key={link.title} type="scale" delay={0.1 * index}>
-                    <a 
-                      href="#" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="group p-4 rounded-xl border bg-white/50 hover:bg-white 
-                        transition-all duration-300 hover:shadow-md"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold">{link.title}</span>
-                        <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-black transition-colors" />
-                      </div>
-                      <p className="text-sm text-muted-foreground">{link.description}</p>
-                    </a>
-                  </Animated>
-                ))}
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {[
+                    { title: "Sales Sheets", description: "Access all sales materials" },
+                    { title: "POS Materials", description: "Point of sale resources" },
+                    { title: "One Sheets", description: "Product information sheets" }
+                  ].map((link, index) => (
+                    <Animated key={link.title} type="scale" delay={0.1 * index}>
+                      <a 
+                        href="#" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="group p-4 rounded-xl border bg-white shadow-sm hover:bg-white 
+                          transition-all duration-300 hover:shadow-md flex flex-col h-full"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-black">{link.title}</span>
+                          <ExternalLink className="h-4 w-4 text-gray-400 group-hover:text-black transition-colors" />
+                        </div>
+                        <p className="text-sm text-muted-foreground">{link.description}</p>
+                      </a>
+                    </Animated>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </Animated>
