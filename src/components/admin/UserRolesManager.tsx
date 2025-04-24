@@ -2,7 +2,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { useUserRoles } from '@/hooks/useUserRoles';
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -12,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const UserRolesManager = () => {
   const { users, isLoading, error, updateUserRole } = useUserRoles();
@@ -20,9 +21,11 @@ const UserRolesManager = () => {
     return (
       <Card>
         <CardContent className="pt-6">
-          <div className="text-center text-red-500">
-            Error loading user data
-          </div>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>Failed to load user data. Please try again later.</AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -45,7 +48,7 @@ const UserRolesManager = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
+                <TableHead>Current Role</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -53,6 +56,7 @@ const UserRolesManager = () => {
               {users?.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>{user.email}</TableCell>
+                  <TableCell>{user.role?.role || 'basic'}</TableCell>
                   <TableCell>
                     <Select
                       value={user.role?.role || 'basic'}
@@ -68,22 +72,6 @@ const UserRolesManager = () => {
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
                     </Select>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          updateUserRole.mutate({ 
-                            userId: user.id, 
-                            role: user.role?.role === 'admin' ? 'basic' : 'admin' 
-                          });
-                        }}
-                      >
-                        Toggle Role
-                      </Button>
-                    </div>
                   </TableCell>
                 </TableRow>
               ))}
