@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { 
   SidebarProvider, 
@@ -14,7 +14,8 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarInset
+  SidebarInset,
+  useSidebar
 } from "@/components/ui/sidebar";
 import { 
   LayoutDashboard, 
@@ -25,14 +26,17 @@ import {
   Map,
   FileBarChart,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  Menu
 } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 const AdminLayout = () => {
   const location = useLocation();
   const { user } = useAuth();
+  const { state } = useSidebar();
   
   const adminNav = [
     {
@@ -200,28 +204,43 @@ const AdminLayout = () => {
         <SidebarInset className="p-6">
           <div className="flex flex-col w-full">
             <div className="flex items-center justify-between mb-6">
-              <Breadcrumb>
-                <BreadcrumbList>
-                  {breadcrumbs.map((crumb, index) => (
-                    <React.Fragment key={index}>
-                      <BreadcrumbItem>
-                        {crumb.path ? (
-                          <BreadcrumbLink asChild>
-                            <NavLink to={crumb.path}>{crumb.title}</NavLink>
-                          </BreadcrumbLink>
-                        ) : (
-                          <span>{crumb.title}</span>
+              <div className="flex items-center gap-4">
+                {state === "collapsed" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden"
+                    asChild
+                  >
+                    <SidebarTrigger>
+                      <Menu className="h-5 w-5" />
+                      <span className="sr-only">Toggle Menu</span>
+                    </SidebarTrigger>
+                  </Button>
+                )}
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    {breadcrumbs.map((crumb, index) => (
+                      <React.Fragment key={index}>
+                        <BreadcrumbItem>
+                          {crumb.path ? (
+                            <BreadcrumbLink asChild>
+                              <NavLink to={crumb.path}>{crumb.title}</NavLink>
+                            </BreadcrumbLink>
+                          ) : (
+                            <span>{crumb.title}</span>
+                          )}
+                        </BreadcrumbItem>
+                        {index < breadcrumbs.length - 1 && (
+                          <BreadcrumbSeparator>
+                            <ChevronRight className="h-4 w-4" />
+                          </BreadcrumbSeparator>
                         )}
-                      </BreadcrumbItem>
-                      {index < breadcrumbs.length - 1 && (
-                        <BreadcrumbSeparator>
-                          <ChevronRight className="h-4 w-4" />
-                        </BreadcrumbSeparator>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </BreadcrumbList>
-              </Breadcrumb>
+                      </React.Fragment>
+                    ))}
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </div>
             </div>
             <div className="flex-grow">
               <Outlet />
