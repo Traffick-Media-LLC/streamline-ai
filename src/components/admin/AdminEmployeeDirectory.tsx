@@ -14,6 +14,7 @@ import OrgChart from "@/components/OrgChart";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { toast } from "@/components/ui/sonner";
 import EmployeeFormDialog from './EmployeeFormDialog';
+import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +31,7 @@ const AdminEmployeeDirectory = () => {
   const { deleteEmployee } = useEmployeeOperations();
   const [searchTerm, setSearchTerm] = useState("");
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+  const { isAdmin } = useAuth();
 
   const filteredEmployees = employees?.filter((employee) => {
     const searchTermLower = searchTerm.toLowerCase();
@@ -71,7 +73,7 @@ const AdminEmployeeDirectory = () => {
         <CardHeader className="pb-2">
           <div className="flex justify-between items-center">
             <CardTitle>Manage Employees</CardTitle>
-            <EmployeeFormDialog employees={employees} />
+            {isAdmin && <EmployeeFormDialog employees={employees} />}
           </div>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -130,19 +132,21 @@ const AdminEmployeeDirectory = () => {
                               "-"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <EmployeeFormDialog 
-                                employee={employee}
-                                employees={employees}
-                              />
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setEmployeeToDelete(employee.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            {isAdmin && (
+                              <div className="flex justify-end gap-2">
+                                <EmployeeFormDialog 
+                                  employee={employee}
+                                  employees={employees}
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEmployeeToDelete(employee.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -165,7 +169,7 @@ const AdminEmployeeDirectory = () => {
                   </div>
                 ) : (
                   employees && employees.length > 0 ? (
-                    <OrgChart employees={employees} isAdmin={true} />
+                    <OrgChart employees={employees} isAdmin={isAdmin} />
                   ) : (
                     <div className="text-center py-4 text-gray-500">
                       No employee data available
