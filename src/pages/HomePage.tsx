@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -75,6 +76,27 @@ const HomePage = () => {
 
         {/* Employee Resources Section */}
         <div className="space-y-8">
+          <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-black to-gray-800 text-white">
+            <CardHeader>
+              <CardTitle className="text-2xl">Marketing Requests</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <p className="text-gray-300">
+                Need marketing materials or have a marketing request? Submit your request using our online form.
+              </p>
+              <a 
+                href="https://slgmarketing.paperform.co/"
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="inline-flex items-center gap-2 bg-white text-black px-6 py-3 rounded-lg 
+                  hover:bg-gray-100 transition-colors font-medium"
+              >
+                Submit Marketing Request
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </CardContent>
+          </Card>
+
           <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-gray-50 to-white">
             <CardHeader>
               <CardTitle className="text-2xl">Quick Links</CardTitle>
@@ -102,27 +124,6 @@ const HomePage = () => {
               ))}
             </CardContent>
           </Card>
-
-          <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-black to-gray-800 text-white">
-            <CardHeader>
-              <CardTitle className="text-2xl">Marketing Requests</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <p className="text-gray-300">
-                Need marketing materials or have a marketing request? Submit your request using our online form.
-              </p>
-              <a 
-                href="https://slgmarketing.paperform.co/"
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="inline-flex items-center gap-2 bg-white text-black px-6 py-3 rounded-lg 
-                  hover:bg-gray-100 transition-colors font-medium"
-              >
-                Submit Marketing Request
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
@@ -130,3 +131,4 @@ const HomePage = () => {
 };
 
 export default HomePage;
+
