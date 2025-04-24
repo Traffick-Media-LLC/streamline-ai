@@ -8,8 +8,11 @@ import {
   useNodesState,
   useEdgesState,
   addEdge,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+  Node,
+  Edge,
+  Connection
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { Employee } from '@/hooks/useEmployeesData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Briefcase, Mail, Phone, User } from 'lucide-react';
@@ -182,7 +185,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  const onConnect = useCallback((params: any) => {
+  const onConnect = useCallback((params: Connection) => {
     setEdges((eds) => addEdge(params, eds));
   }, [setEdges]);
 
@@ -209,9 +212,9 @@ const OrgChart = ({ employees }: OrgChartProps) => {
       return;
     }
 
-    const layoutNodes = [...nodes];
-    
     try {
+      const layoutNodes = [...nodes];
+      
       if (layoutMode === 'hierarchical') {
         // Hierarchical layout
         const levelWidth = 250;
