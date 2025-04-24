@@ -31,13 +31,23 @@ const OrgChart = ({ employees }: OrgChartProps) => {
 
   // Create a map of employees for efficient lookup
   const employeeMap = useMemo(() => {
-    console.log('Creating employee map...');
     return new Map(employees.map(emp => [emp.id, emp]));
   }, [employees]);
 
-  // Find the CEO or organization leader (employee without manager or with CEO title)
+  // Get employee level (distance from CEO)
+  const getEmployeeLevel = (employee: Employee, visited = new Set<string>()): number => {
+    if (!employee.manager_id) return 0;
+    if (visited.has(employee.id)) return 0; // Prevent circular references
+    
+    visited.add(employee.id);
+    const manager = employeeMap.get(employee.manager_id);
+    if (!manager) return 0;
+    
+    return 1 + getEmployeeLevel(manager, visited);
+  };
+
+  // Find the CEO or organization leader
   const ceo = useMemo(() => {
-    console.log('Finding CEO or org leader...');
     try {
       // First try to find an employee with CEO title and no manager
       let foundCeo = employees.find(emp => 
@@ -109,40 +119,103 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     }
   }, [hasHierarchy, employees]);
 
-  // Create nodes with positioning based on layout mode
+  // Create nodes with positioning based on layout mode and hierarchy
   const initialNodes = useMemo(() => {
-    console.log('Creating nodes with layout mode:', layoutMode);
     if (!employees.length) {
-      console.log('No employees data available');
       setError('No employee data available');
       return [];
     }
 
     try {
+      const levelHeight = 200; // Increased vertical spacing
+      const levelWidth = 250;
+      
       return employees.map((emp) => {
+        const level = getEmployeeLevel(emp);
         const isLegal = emp.department.toLowerCase().includes('legal');
+        const isCsuite = !emp.manager_id || 
+                        emp.title.toLowerCase().includes('ceo') || 
+                        emp.title.toLowerCase().includes('coo') || 
+                        emp.title.toLowerCase().includes('cfo') || 
+                        emp.title.toLowerCase().includes('cto');
+        const isChuck = emp.first_name === 'Chuck' && emp.last_name === 'Melander';
+        const isDirector = emp.title.toLowerCase().includes('director') || 
+                          emp.title.toLowerCase().includes('vp');
+
+        // Calculate siblings at the same level with the same manager
+        const siblings = employees.filter(e => 
+          e.manager_id === emp.manager_id && 
+          getEmployeeLevel(e) === level
+        );
+        const siblingIndex = siblings.findIndex(s => s.id === emp.id);
+        const siblingCount = siblings.length;
         
+        // Calculate x position based on siblings
+        const xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+        
+        // Style based on role
+        let nodeStyle = {
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          padding: '16px',
+        };
+
+        if (isCsuite) {
+          nodeStyle = {
+            ...nodeStyle,
+            background: '#9b87f5',
+            border: '2px solid #1A1F2C',
+            color: '#ffffff',
+            minWidth: '280px',
+            minHeight: '100px',
+          };
+        } else if (isChuck) {
+          nodeStyle = {
+            ...nodeStyle,
+            background: '#7E69AB',
+            border: '2px solid #1A1F2C',
+            color: '#ffffff',
+            minWidth: '260px',
+            minHeight: '90px',
+          };
+        } else if (isDirector) {
+          nodeStyle = {
+            ...nodeStyle,
+            background: '#6E59A5',
+            color: '#ffffff',
+            minWidth: '240px',
+            minHeight: '80px',
+          };
+        } else if (isLegal) {
+          nodeStyle = {
+            ...nodeStyle,
+            background: '#F1F0FB',
+            border: '2px dashed #8E9196',
+            color: '#1A1F2C',
+          };
+        }
+
         return {
           id: emp.id,
           type: 'default',
-          position: { x: 0, y: 0 }, // Position will be set by layout function
+          position: { 
+            x: xOffset,
+            y: level * levelHeight
+          },
           data: {
             label: (
               <div 
-                className={`p-3 rounded-lg shadow-sm border ${
-                  isLegal ? 'border-dashed border-gray-400' : 'border-gray-200'
-                } cursor-pointer w-60 bg-white`}
+                className="cursor-pointer w-full"
                 onClick={() => setSelectedEmployee(emp)}
               >
                 <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
-                <div className="text-sm text-gray-600">{emp.title}</div>
-                <div className="text-xs text-gray-500">{emp.department}</div>
+                <div className="text-sm">{emp.title}</div>
+                <div className="text-xs opacity-75">{emp.department}</div>
               </div>
             ),
           },
-          style: {
-            opacity: isLegal ? 0.8 : 1,
-          },
+          style: nodeStyle,
         };
       });
     } catch (err) {
@@ -150,27 +223,30 @@ const OrgChart = ({ employees }: OrgChartProps) => {
       setError('Error creating organization chart');
       return [];
     }
-  }, [employees, layoutMode]);
+  }, [employees, employeeMap]);
 
-  // Create edges - only if we're in hierarchical mode
+  // Create edges with styling based on hierarchy
   const initialEdges = useMemo(() => {
-    console.log('Creating edges for layout mode:', layoutMode);
-    if (layoutMode === 'flat') {
-      return []; // No edges in flat layout
-    }
+    if (layoutMode === 'flat') return [];
     
     try {
       return employees
         .filter((emp) => emp.manager_id)
         .map((emp) => {
           const isLegal = emp.department.toLowerCase().includes('legal');
+          const isCsuiteReport = employeeMap.get(emp.manager_id!)?.manager_id === null;
+          
           return {
             id: `${emp.manager_id}-${emp.id}`,
             source: emp.manager_id!,
             target: emp.id,
             type: isLegal ? 'step' : 'smoothstep',
-            style: isLegal ? { strokeDasharray: '5,5' } : {},
             animated: isLegal,
+            style: {
+              strokeWidth: isCsuiteReport ? 2 : 1,
+              stroke: isLegal ? '#8E9196' : '#6E59A5',
+              strokeDasharray: isLegal ? '5,5' : null,
+            },
           };
         });
     } catch (err) {
@@ -178,7 +254,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
       setError('Error creating organizational relationships');
       return [];
     }
-  }, [employees, layoutMode]);
+  }, [employees, layoutMode, employeeMap]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -186,84 +262,6 @@ const OrgChart = ({ employees }: OrgChartProps) => {
   const onConnect = useCallback((params: Connection) => {
     setEdges((eds) => addEdge(params, eds));
   }, [setEdges]);
-
-  // Get employee depth (distance from CEO)
-  const getEmployeeDepth = (employee: Employee, empMap: Map<string, Employee>): number => {
-    let depth = 0;
-    let current = employee;
-    
-    // Maximum depth check to prevent infinite loops if there's circular references
-    const maxDepth = 10;
-    
-    while (current.manager_id && empMap.get(current.manager_id) && depth < maxDepth) {
-      depth++;
-      current = empMap.get(current.manager_id)!;
-    }
-    return depth;
-  };
-
-  // Arrange nodes in layout based on mode
-  useEffect(() => {
-    console.log('Arranging nodes in layout mode:', layoutMode);
-    if (nodes.length === 0) {
-      console.log('No nodes to arrange');
-      return;
-    }
-
-    try {
-      const layoutNodes = [...nodes];
-      
-      if (layoutMode === 'hierarchical') {
-        // Hierarchical layout
-        const levelWidth = 250;
-        const levelHeight = 150;
-        
-        employees.forEach((emp) => {
-          const node = layoutNodes.find(n => n.id === emp.id);
-          if (!node) {
-            console.warn(`Node not found for employee: ${emp.id}`);
-            return;
-          }
-
-          const depth = getEmployeeDepth(emp, employeeMap);
-          const siblings = employees.filter(e => e.manager_id === emp.manager_id);
-          const siblingIndex = siblings.findIndex(s => s.id === emp.id);
-          const totalSiblings = siblings.length;
-          
-          const xOffset = (siblingIndex - (totalSiblings - 1) / 2) * levelWidth;
-          
-          node.position = {
-            x: xOffset,
-            y: depth * levelHeight
-          };
-        });
-      } else {
-        // Flat layout - grid arrangement
-        const itemsPerRow = Math.ceil(Math.sqrt(employees.length));
-        const cellWidth = 300;
-        const cellHeight = 150;
-        
-        employees.forEach((emp, index) => {
-          const node = layoutNodes.find(n => n.id === emp.id);
-          if (!node) return;
-          
-          const row = Math.floor(index / itemsPerRow);
-          const col = index % itemsPerRow;
-          
-          node.position = {
-            x: col * cellWidth - (itemsPerRow * cellWidth / 2) + cellWidth / 2,
-            y: row * cellHeight
-          };
-        });
-      }
-
-      console.log('Node layout complete');
-      setNodes(layoutNodes);
-    } catch (error) {
-      console.error("Error arranging nodes:", error);
-      setError('Error arranging organization chart');
-    }
-  }, [employees, employeeMap, layoutMode, nodes, setNodes]);
 
   if (error) {
     return (
@@ -334,7 +332,14 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         <MiniMap 
           nodeColor={node => {
             const emp = employeeMap.get(node.id as string);
-            return emp?.department.toLowerCase().includes('legal') ? '#CBD5E1' : '#94A3B8';
+            if (!emp) return '#94A3B8';
+            if (!emp.manager_id) return '#9b87f5';
+            if (emp.department.toLowerCase().includes('legal')) return '#8E9196';
+            if (emp.title.toLowerCase().includes('director') || 
+                emp.title.toLowerCase().includes('vp')) {
+              return '#6E59A5';
+            }
+            return '#D3E4FD';
           }}
         />
       </ReactFlow>
