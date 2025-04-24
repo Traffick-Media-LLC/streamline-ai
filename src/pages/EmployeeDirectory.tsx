@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { useEmployeesData, Employee } from "@/hooks/useEmployeesData";
 import {
@@ -17,8 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OrgChart from "@/components/OrgChart";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { toast } from "@/components/ui/sonner";
 
 const EmployeeDirectory = () => {
   const { data: employees, isLoading, error } = useEmployeesData();
@@ -29,9 +30,10 @@ const EmployeeDirectory = () => {
   useEffect(() => {
     if (!isAuthenticated) {
       console.log('User not authenticated, redirecting to auth page');
-      return null;
+      navigate('/auth');
+      return;
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigate]);
 
   const filteredEmployees = employees?.filter((employee) => {
     const searchTermLower = searchTerm.toLowerCase();
@@ -42,6 +44,20 @@ const EmployeeDirectory = () => {
       employee.email.toLowerCase().includes(searchTermLower)
     );
   });
+
+  // Show guidance toast when component mounts
+  useEffect(() => {
+    if (employees && employees.length > 0) {
+      // Check if there's a proper hierarchy
+      const hasHierarchy = employees.some(emp => emp.manager_id !== null);
+      
+      if (!hasHierarchy) {
+        toast.info("Organization chart may be incomplete", {
+          description: "Your employee data doesn't have a clear reporting structure. Try adding manager relationships."
+        });
+      }
+    }
+  }, [employees]);
 
   if (error) {
     return (
@@ -131,7 +147,10 @@ const EmployeeDirectory = () => {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => navigator.clipboard.writeText(employee.email)}
+                              onClick={() => {
+                                navigator.clipboard.writeText(employee.email);
+                                toast.success("Email copied to clipboard");
+                              }}
                             >
                               Copy Email
                             </Button>
