@@ -1,6 +1,6 @@
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import ReactFlow, {
+import {
+  ReactFlow,
   MiniMap,
   Controls,
   Background,
@@ -32,22 +32,6 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     return new Map(employees.map(emp => [emp.id, emp]));
   }, [employees]);
 
-  // Get all direct reports for an employee
-  const getDirectReports = useCallback((managerId: string) => {
-    return employees.filter(emp => emp.manager_id === managerId);
-  }, [employees]);
-
-  // Calculate depth for each employee (distance from CEO)
-  const getEmployeeDepth = useCallback((employee: Employee): number => {
-    let depth = 0;
-    let current = employee;
-    while (current.manager_id && employeeMap.get(current.manager_id)) {
-      depth++;
-      current = employeeMap.get(current.manager_id)!;
-    }
-    return depth;
-  }, [employeeMap]);
-
   // Find the CEO (employee without manager)
   const ceo = useMemo(() => {
     console.log('Finding CEO...');
@@ -78,7 +62,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
 
     try {
       return employees.map((emp) => {
-        const depth = getEmployeeDepth(emp);
+        const depth = getEmployeeDepth(emp, employeeMap);
         const isLegal = emp.department.toLowerCase().includes('legal');
         
         return {
@@ -109,9 +93,9 @@ const OrgChart = ({ employees }: OrgChartProps) => {
       setError('Error creating organization chart');
       return [];
     }
-  }, [employees, getEmployeeDepth]);
+  }, [employees, employeeMap]);
 
-  // Create edges with different styles based on relationship
+  // Create edges
   const initialEdges = useMemo(() => {
     console.log('Creating edges...');
     try {
@@ -142,6 +126,17 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     setEdges((eds) => addEdge(params, eds));
   }, [setEdges]);
 
+  // Get employee depth (distance from CEO)
+  const getEmployeeDepth = (employee: Employee, empMap: Map<string, Employee>): number => {
+    let depth = 0;
+    let current = employee;
+    while (current.manager_id && empMap.get(current.manager_id)) {
+      depth++;
+      current = empMap.get(current.manager_id)!;
+    }
+    return depth;
+  };
+
   // Arrange nodes in a hierarchical layout
   useEffect(() => {
     console.log('Arranging nodes...');
@@ -162,7 +157,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
           return;
         }
 
-        const depth = getEmployeeDepth(emp);
+        const depth = getEmployeeDepth(emp, employeeMap);
         const siblings = employees.filter(e => e.manager_id === emp.manager_id);
         const siblingIndex = siblings.findIndex(s => s.id === emp.id);
         const totalSiblings = siblings.length;
@@ -181,7 +176,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
       console.error("Error arranging nodes:", error);
       setError('Error arranging organization chart');
     }
-  }, [ceo, employees, getEmployeeDepth, setNodes, nodes]);
+  }, [ceo, employees, employeeMap, nodes, setNodes]);
 
   if (error) {
     return (
@@ -287,4 +282,3 @@ const OrgChart = ({ employees }: OrgChartProps) => {
 };
 
 export default OrgChart;
-

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useEmployeesData, Employee } from "@/hooks/useEmployeesData";
@@ -29,9 +28,10 @@ const EmployeeDirectory = () => {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate('/auth');
+      console.log('User not authenticated, redirecting to auth page');
+      return null;
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated]);
 
   const filteredEmployees = employees?.filter((employee) => {
     const searchTermLower = searchTerm.toLowerCase();
@@ -174,4 +174,3 @@ const EmployeeDirectory = () => {
 };
 
 export default EmployeeDirectory;
-
