@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
@@ -34,23 +35,145 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
     return new Map(employees.map(emp => [emp.id, emp]));
   }, [employees]);
 
-  const getEmployeeLevel = (employee: Employee, visited = new Set<string>()): number => {
-    if (!employee.manager_id) return 0;
-    if (visited.has(employee.id)) return 0;
+  // Employees with specific titles for top leadership
+  const topLeadership = useMemo(() => {
+    return employees.filter(emp => {
+      const title = emp.title.toLowerCase();
+      return title.includes('ceo') || 
+             title.includes('coo') || 
+             title.includes('cso') ||
+             title === 'president' ||
+             title === 'chief executive officer' ||
+             title === 'chief operating officer' ||
+             title === 'chief strategy officer';
+    });
+  }, [employees]);
+
+  // Map of employees and their designated level in the org chart (not based on manager relationships)
+  const getEmployeeLevel = useCallback((employee: Employee): number => {
+    // Define titles for each level
+    const titleLevels: { [key: string]: number } = {
+      // Top leadership - Level 0
+      'ceo': 0,
+      'chief executive officer': 0,
+      'coo': 0,
+      'chief operating officer': 0,
+      'cso': 0, 
+      'chief strategy officer': 0,
+      
+      // VP and Directors - Level 1
+      'vp': 1,
+      'vice president': 1,
+      'director': 1,
+      
+      // Managers - Level 2
+      'manager': 2,
+      'lead': 2,
+      'counsel': 2,
+      
+      // Staff - Level 3
+      'staff': 3,
+      'accountant': 3,
+      'analyst': 3,
+      'coordinator': 3,
+      'specialist': 3,
+      'broker': 3,
+      'executive': 3,
+    };
     
-    visited.add(employee.id);
+    // Get title in lowercase for matching
+    const titleLower = employee.title.toLowerCase();
+    
+    // Special cases for top leadership
+    if (employee.first_name === 'Patrick' && employee.last_name === 'Mulcahy' && titleLower.includes('ceo')) {
+      return 0;
+    }
+    
+    if (employee.first_name === 'Matthew' && employee.last_name === 'Halvorson' && titleLower.includes('coo')) {
+      return 0;
+    }
+    
+    if (employee.first_name === 'Chuck' && employee.last_name === 'Melander' && titleLower.includes('cso')) {
+      return 0;
+    }
+    
+    // Check specific title keywords
+    for (const [titleKey, level] of Object.entries(titleLevels)) {
+      if (titleLower.includes(titleKey)) {
+        return level;
+      }
+    }
+    
+    // Default level based on position in org
+    if (employee.manager_id === null) {
+      return 0; // No manager means top level
+    }
+    
     const manager = employeeMap.get(employee.manager_id);
-    if (!manager) return 0;
+    if (!manager) return 3; // Default to staff level
     
-    return 1 + getEmployeeLevel(manager, visited);
-  };
+    const managerLevel = getEmployeeLevel(manager);
+    return managerLevel + 1;
+  }, [employeeMap]);
+
+  // Find the top leadership nodes (CEO, COO, CSO)
+  const topNodes = useMemo(() => {
+    // Look for specific people in the top leadership positions
+    const patrick = employees.find(emp => 
+      emp.first_name === 'Patrick' && 
+      emp.last_name === 'Mulcahy' && 
+      emp.title.toLowerCase().includes('ceo')
+    );
+    
+    const matthew = employees.find(emp => 
+      emp.first_name === 'Matthew' && 
+      emp.last_name === 'Halvorson' && 
+      emp.title.toLowerCase().includes('coo')
+    );
+    
+    const chuck = employees.find(emp => 
+      emp.first_name === 'Chuck' && 
+      emp.last_name === 'Melander' && 
+      emp.title.toLowerCase().includes('cso')
+    );
+    
+    const topList = [];
+    if (patrick) topList.push(patrick);
+    if (matthew) topList.push(matthew);
+    if (chuck) topList.push(chuck);
+    
+    // If we couldn't find the specific people, fall back to title-based search
+    if (topList.length === 0) {
+      return employees.filter(emp => {
+        const title = emp.title.toLowerCase();
+        return title.includes('ceo') || 
+               title.includes('coo') || 
+               title.includes('cso') || 
+               title === 'president' ||
+               title === 'chief executive officer' ||
+               title === 'chief operating officer' ||
+               title === 'chief strategy officer';
+      });
+    }
+    
+    return topList;
+  }, [employees]);
 
   const ceo = useMemo(() => {
     try {
+      // First try to find Patrick Mulcahy as CEO
       let foundCeo = employees.find(emp => 
-        !emp.manager_id && 
+        emp.first_name === 'Patrick' && 
+        emp.last_name === 'Mulcahy' && 
         emp.title.toLowerCase().includes('ceo')
       );
+      
+      if (!foundCeo) {
+        foundCeo = employees.find(emp => 
+          !emp.manager_id && 
+          emp.title.toLowerCase().includes('ceo')
+        );
+      }
       
       if (!foundCeo) {
         foundCeo = employees.find(emp => 
@@ -64,7 +187,8 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
           emp.title.toLowerCase().includes('chief') ||
           emp.title.toLowerCase().includes('coo') ||
           emp.title.toLowerCase().includes('cfo') ||
-          emp.title.toLowerCase().includes('cto')
+          emp.title.toLowerCase().includes('cto') ||
+          emp.title.toLowerCase().includes('cso')
         );
       }
       
@@ -119,26 +243,52 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
       const levelHeight = 200;
       const levelWidth = 250;
       
+      // Calculate horizontal positions based on peers at the same level
+      const employeesByLevel: { [level: number]: Employee[] } = {};
+      employees.forEach(emp => {
+        const level = getEmployeeLevel(emp);
+        if (!employeesByLevel[level]) employeesByLevel[level] = [];
+        employeesByLevel[level].push(emp);
+      });
+      
       return employees.map((emp) => {
         const level = getEmployeeLevel(emp);
         const isLegal = emp.department.toLowerCase().includes('legal');
-        const isCsuite = !emp.manager_id || 
-                        emp.title.toLowerCase().includes('ceo') || 
-                        emp.title.toLowerCase().includes('coo') || 
-                        emp.title.toLowerCase().includes('cfo') || 
-                        emp.title.toLowerCase().includes('cto');
+        const isCsuite = level === 0; // Top level executives
+        
         const isChuck = emp.first_name === 'Chuck' && emp.last_name === 'Melander';
         const isDirector = emp.title.toLowerCase().includes('director') || 
                           emp.title.toLowerCase().includes('vp');
 
-        const siblings = employees.filter(e => 
-          e.manager_id === emp.manager_id && 
-          getEmployeeLevel(e) === level
-        );
-        const siblingIndex = siblings.findIndex(s => s.id === emp.id);
-        const siblingCount = siblings.length;
+        // Calculate horizontal position based on siblings at the same level
+        const peersAtSameLevel = employeesByLevel[level] || [];
+        const siblingIndex = peersAtSameLevel.indexOf(emp);
+        const siblingCount = peersAtSameLevel.length;
         
-        const xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+        // Special positioning for top leadership (CEO, COO, CSO)
+        let xOffset;
+        if (level === 0) {
+          // Special positioning for C-suite
+          if (topNodes.length <= 3) {
+            // If we have Patrick Mulcahy (CEO), Matthew Halvorson (COO), Chuck Melander (CSO)
+            if (emp.first_name === 'Patrick' && emp.last_name === 'Mulcahy') {
+              xOffset = 0; // Center
+            } else if (emp.first_name === 'Matthew' && emp.last_name === 'Halvorson') {
+              xOffset = levelWidth; // Right
+            } else if (emp.first_name === 'Chuck' && emp.last_name === 'Melander') {
+              xOffset = -levelWidth; // Left
+            } else {
+              // Fallback for other C-level positions
+              xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+            }
+          } else {
+            // Generic calculation for many top-level positions
+            xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+          }
+        } else {
+          // Standard calculation for all other levels
+          xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+        }
         
         let nodeStyle = {
           background: '#ffffff',
@@ -205,7 +355,7 @@ const OrgChart = ({ employees, isAdmin = false }: OrgChartProps) => {
       setError('Error creating organization chart');
       return [];
     }
-  }, [employees, employeeMap]);
+  }, [employees, getEmployeeLevel, topNodes]);
 
   const initialEdges = useMemo(() => {
     if (layoutMode === 'flat') return [];
