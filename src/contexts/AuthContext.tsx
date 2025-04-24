@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       console.log("Fetching role for user:", userId);
       
-      // First try to check if user is admin using the database function
+      // Use our security definer function to check admin status
       const { data: isAdminResult, error: adminCheckError } = await supabase.rpc('is_admin');
       
       if (adminCheckError) {
@@ -74,11 +74,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const role = data.role as AppRole;
         console.log("Setting user role to:", role);
         setUserRole(role);
-        setIsAdmin(role === 'admin');
       } else {
         console.log("No role found, setting to basic");
         setUserRole('basic');
-        setIsAdmin(false);
       }
     } catch (error) {
       console.error('Error in fetchUserRole:', error);
