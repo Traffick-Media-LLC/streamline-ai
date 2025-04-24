@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { 
   SidebarProvider, 
   Sidebar, 
@@ -24,7 +24,8 @@ import {
   Briefcase,
   Map,
   FileBarChart,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft
 } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { useAuth } from "@/contexts/AuthContext";
@@ -131,6 +132,16 @@ const AdminLayout = () => {
             <div className="text-sm text-muted-foreground">
               {user?.email}
             </div>
+            <div className="flex items-center gap-2 mt-2">
+              <SidebarTrigger className="w-8 h-8" />
+              <Link 
+                to="/"
+                className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Return to Site
+              </Link>
+            </div>
           </SidebarHeader>
           <SidebarContent>
             <SidebarMenu>
@@ -211,7 +222,6 @@ const AdminLayout = () => {
                   ))}
                 </BreadcrumbList>
               </Breadcrumb>
-              <SidebarTrigger />
             </div>
             <div className="flex-grow">
               <Outlet />
