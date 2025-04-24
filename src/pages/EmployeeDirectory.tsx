@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useEmployeesData, Employee } from "@/hooks/useEmployeesData";
@@ -18,6 +19,7 @@ import OrgChart from "@/components/OrgChart";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const EmployeeDirectory = () => {
   const { data: employees, isLoading, error } = useEmployeesData();
@@ -148,13 +150,21 @@ const EmployeeDirectory = () => {
             </TabsContent>
             
             <TabsContent value="org">
-              {isLoading ? (
-                <div className="h-[600px] flex items-center justify-center">
-                  <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                </div>
-              ) : (
-                employees && <OrgChart employees={employees} />
-              )}
+              <ErrorBoundary>
+                {isLoading ? (
+                  <div className="h-[600px] flex items-center justify-center">
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                  </div>
+                ) : (
+                  employees && employees.length > 0 ? (
+                    <OrgChart employees={employees} />
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">
+                      No employee data available
+                    </div>
+                  )
+                )}
+              </ErrorBoundary>
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -164,3 +174,4 @@ const EmployeeDirectory = () => {
 };
 
 export default EmployeeDirectory;
+

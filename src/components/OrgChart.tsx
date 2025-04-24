@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   MiniMap,
@@ -12,19 +13,24 @@ import { Employee } from '@/hooks/useEmployeesData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Briefcase, Mail, Phone, User } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface OrgChartProps {
   employees: Employee[];
 }
 
 const OrgChart = ({ employees }: OrgChartProps) => {
+  console.log('OrgChart rendering with employees:', employees);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Create a map of employees for efficient lookup
-  const employeeMap = useMemo(() => 
-    new Map(employees.map(emp => [emp.id, emp])), 
-    [employees]
-  );
+  const employeeMap = useMemo(() => {
+    console.log('Creating employee map...');
+    return new Map(employees.map(emp => [emp.id, emp]));
+  }, [employees]);
 
   // Get all direct reports for an employee
   const getDirectReports = useCallback((managerId: string) => {
@@ -44,58 +50,90 @@ const OrgChart = ({ employees }: OrgChartProps) => {
 
   // Find the CEO (employee without manager)
   const ceo = useMemo(() => {
-    const foundCeo = employees.find(emp => !emp.manager_id && emp.title === 'CEO');
-    if (!foundCeo) {
-      toast.error("Organization structure error", {
-        description: "Could not find CEO in the organization"
-      });
+    console.log('Finding CEO...');
+    try {
+      const foundCeo = employees.find(emp => !emp.manager_id && emp.title.toLowerCase().includes('ceo'));
+      if (!foundCeo) {
+        console.error('No CEO found in employee data');
+        setError('Organization structure error: Could not find CEO');
+        return null;
+      }
+      console.log('CEO found:', foundCeo);
+      return foundCeo;
+    } catch (err) {
+      console.error('Error finding CEO:', err);
+      setError('Error processing organization structure');
+      return null;
     }
-    return foundCeo;
   }, [employees]);
-  
+
   // Create nodes with hierarchical positioning
-  const initialNodes = useMemo(() => employees.map((emp) => {
-    const depth = getEmployeeDepth(emp);
-    const isLegal = emp.department === 'Legal' || emp.department === 'Legal/Regulatory';
-    
-    return {
-      id: emp.id,
-      type: 'default',
-      position: { x: 0, y: 0 }, // Initial position, will be arranged by layout
-      data: {
-        label: (
-          <div 
-            className={`p-3 rounded-lg shadow-sm border ${
-              isLegal ? 'border-dashed border-gray-400' : 'border-gray-200'
-            } cursor-pointer w-60 bg-white`}
-            onClick={() => setSelectedEmployee(emp)}
-          >
-            <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
-            <div className="text-sm text-gray-600">{emp.title}</div>
-            <div className="text-xs text-gray-500">{emp.department}</div>
-          </div>
-        ),
-      },
-      style: {
-        opacity: isLegal ? 0.8 : 1,
-      },
-    };
-  }), [employees, getEmployeeDepth]);
+  const initialNodes = useMemo(() => {
+    console.log('Creating nodes...');
+    if (!employees.length) {
+      console.log('No employees data available');
+      setError('No employee data available');
+      return [];
+    }
+
+    try {
+      return employees.map((emp) => {
+        const depth = getEmployeeDepth(emp);
+        const isLegal = emp.department.toLowerCase().includes('legal');
+        
+        return {
+          id: emp.id,
+          type: 'default',
+          position: { x: 0, y: 0 },
+          data: {
+            label: (
+              <div 
+                className={`p-3 rounded-lg shadow-sm border ${
+                  isLegal ? 'border-dashed border-gray-400' : 'border-gray-200'
+                } cursor-pointer w-60 bg-white`}
+                onClick={() => setSelectedEmployee(emp)}
+              >
+                <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
+                <div className="text-sm text-gray-600">{emp.title}</div>
+                <div className="text-xs text-gray-500">{emp.department}</div>
+              </div>
+            ),
+          },
+          style: {
+            opacity: isLegal ? 0.8 : 1,
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Error creating nodes:', err);
+      setError('Error creating organization chart');
+      return [];
+    }
+  }, [employees, getEmployeeDepth]);
 
   // Create edges with different styles based on relationship
-  const initialEdges = useMemo(() => employees
-    .filter((emp) => emp.manager_id)
-    .map((emp) => {
-      const isLegal = emp.department === 'Legal' || emp.department === 'Legal/Regulatory';
-      return {
-        id: `${emp.manager_id}-${emp.id}`,
-        source: emp.manager_id!,
-        target: emp.id,
-        type: isLegal ? 'step' : 'smoothstep',
-        style: isLegal ? { strokeDasharray: '5,5' } : {},
-        animated: isLegal,
-      };
-    }), [employees]);
+  const initialEdges = useMemo(() => {
+    console.log('Creating edges...');
+    try {
+      return employees
+        .filter((emp) => emp.manager_id)
+        .map((emp) => {
+          const isLegal = emp.department.toLowerCase().includes('legal');
+          return {
+            id: `${emp.manager_id}-${emp.id}`,
+            source: emp.manager_id!,
+            target: emp.id,
+            type: isLegal ? 'step' : 'smoothstep',
+            style: isLegal ? { strokeDasharray: '5,5' } : {},
+            animated: isLegal,
+          };
+        });
+    } catch (err) {
+      console.error('Error creating edges:', err);
+      setError('Error creating organization relationships');
+      return [];
+    }
+  }, [employees]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -106,26 +144,29 @@ const OrgChart = ({ employees }: OrgChartProps) => {
 
   // Arrange nodes in a hierarchical layout
   useEffect(() => {
-    if (!ceo || nodes.length === 0) return;
+    console.log('Arranging nodes...');
+    if (!ceo || nodes.length === 0) {
+      console.log('Missing CEO or nodes, skipping layout');
+      return;
+    }
 
     const layoutNodes = [...nodes];
     const levelWidth = 250;
     const levelHeight = 150;
     
     try {
-      // Position nodes based on their depth and number of siblings
       employees.forEach((emp) => {
         const node = layoutNodes.find(n => n.id === emp.id);
-        if (!node) return;
+        if (!node) {
+          console.warn(`Node not found for employee: ${emp.id}`);
+          return;
+        }
 
         const depth = getEmployeeDepth(emp);
-        const siblings = employees.filter(e => 
-          e.manager_id === emp.manager_id
-        );
+        const siblings = employees.filter(e => e.manager_id === emp.manager_id);
         const siblingIndex = siblings.findIndex(s => s.id === emp.id);
         const totalSiblings = siblings.length;
         
-        // Calculate x position based on siblings
         const xOffset = (siblingIndex - (totalSiblings - 1) / 2) * levelWidth;
         
         node.position = {
@@ -134,12 +175,43 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         };
       });
 
+      console.log('Node layout complete');
       setNodes(layoutNodes);
     } catch (error) {
       console.error("Error arranging nodes:", error);
-      toast.error("Error arranging organization chart");
+      setError('Error arranging organization chart');
     }
-  }, [ceo, employees, getEmployeeDepth, setNodes]);
+  }, [ceo, employees, getEmployeeDepth, setNodes, nodes]);
+
+  if (error) {
+    return (
+      <div className="p-4 border rounded-lg">
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button 
+          onClick={() => setError(null)} 
+          variant="outline" 
+          className="mt-4"
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (!employees.length) {
+    return (
+      <div className="p-4 border rounded-lg">
+        <Alert>
+          <AlertTitle>No Data</AlertTitle>
+          <AlertDescription>No employee data available to display.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[600px] border rounded-lg">
@@ -159,7 +231,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         <MiniMap 
           nodeColor={node => {
             const emp = employeeMap.get(node.id as string);
-            return emp?.department === 'Legal' || emp?.department === 'Legal/Regulatory' ? '#CBD5E1' : '#94A3B8';
+            return emp?.department.toLowerCase().includes('legal') ? '#CBD5E1' : '#94A3B8';
           }}
         />
       </ReactFlow>
@@ -215,3 +287,4 @@ const OrgChart = ({ employees }: OrgChartProps) => {
 };
 
 export default OrgChart;
+
