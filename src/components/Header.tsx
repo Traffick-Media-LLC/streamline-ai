@@ -1,4 +1,3 @@
-
 import { Link, useNavigate } from "react-router-dom";
 import Logo from "./Logo";
 import { useAuth } from "@/contexts/AuthContext";
@@ -109,20 +108,6 @@ const Header = () => {
                   )}
                 >
                   AI Chat
-                </Link>
-              </NavigationMenuItem>
-            )}
-
-            {isAdmin && (
-              <NavigationMenuItem>
-                <Link 
-                  to="/admin" 
-                  className={cn(
-                    navigationMenuTriggerStyle(), 
-                    "text-black hover:text-black/80"
-                  )}
-                >
-                  Admin
                 </Link>
               </NavigationMenuItem>
             )}
