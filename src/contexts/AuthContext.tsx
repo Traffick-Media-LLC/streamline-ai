@@ -40,11 +40,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Improved function to fetch user role with better error handling
   const fetchUserRole = async (userId: string) => {
     try {
       console.log("Fetching role for user:", userId);
       
+      // First try to check if user is admin using the database function
+      const { data: isAdminResult, error: adminCheckError } = await supabase.rpc('is_admin');
+      
+      if (adminCheckError) {
+        console.error('Error checking admin status:', adminCheckError);
+      } else {
+        console.log("Is admin check result:", isAdminResult);
+        setIsAdmin(isAdminResult);
+      }
+      
+      // Then fetch the actual role
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
@@ -53,16 +63,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) {
         console.error('Error fetching user role:', error);
+        toast.error("Failed to fetch user role");
         setUserRole('basic');
-        setIsAdmin(false);
         return;
       }
       
       console.log("User role data:", data);
       
-      if (data && data.role) {
+      if (data?.role) {
         const role = data.role as AppRole;
-        console.log("User has role:", role);
+        console.log("Setting user role to:", role);
         setUserRole(role);
         setIsAdmin(role === 'admin');
       } else {
@@ -72,6 +82,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     } catch (error) {
       console.error('Error in fetchUserRole:', error);
+      toast.error("Failed to fetch user role");
       setUserRole('basic');
       setIsAdmin(false);
     }
@@ -81,10 +92,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     console.log("Auth provider initializing");
     let mounted = true;
     
-    // Set up the auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log("Auth state changed:", event, session?.user?.id);
+        console.log("Auth state changed:", event, "Session:", session?.user?.id);
         
         if (mounted) {
           setSession(session);
@@ -106,7 +116,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     );
 
-    // Then check for existing session
+    // Check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("Got initial session:", session?.user?.id);
       

@@ -10,13 +10,14 @@ type ProtectedRouteProps = {
 };
 
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
-  const { isAuthenticated, loading, user, isAdmin } = useAuth();
+  const { isAuthenticated, loading, user, isAdmin, userRole } = useAuth();
 
   console.log("ProtectedRoute check:", { 
     isAuthenticated, 
     loading, 
     isAdmin, 
     requiredRole,
+    userRole,
     userId: user?.id
   });
 
@@ -33,8 +34,8 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     return <Navigate to="/auth" />;
   }
 
-  if (requiredRole && requiredRole === 'admin' && !isAdmin) {
-    console.log("Admin role required but user is not admin");
+  if (requiredRole === 'admin' && !isAdmin) {
+    console.log("Admin role required but user is not admin. User role:", userRole);
     return (
       <div className="container mx-auto px-4 py-16 flex flex-col items-center">
         <Alert className="max-w-md" variant="destructive">
