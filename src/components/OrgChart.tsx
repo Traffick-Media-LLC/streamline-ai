@@ -29,15 +29,13 @@ const OrgChart = ({ employees }: OrgChartProps) => {
   const [error, setError] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<'hierarchical' | 'flat'>('hierarchical');
 
-  // Create a map of employees for efficient lookup
   const employeeMap = useMemo(() => {
     return new Map(employees.map(emp => [emp.id, emp]));
   }, [employees]);
 
-  // Get employee level (distance from CEO)
   const getEmployeeLevel = (employee: Employee, visited = new Set<string>()): number => {
     if (!employee.manager_id) return 0;
-    if (visited.has(employee.id)) return 0; // Prevent circular references
+    if (visited.has(employee.id)) return 0;
     
     visited.add(employee.id);
     const manager = employeeMap.get(employee.manager_id);
@@ -46,16 +44,13 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     return 1 + getEmployeeLevel(manager, visited);
   };
 
-  // Find the CEO or organization leader
   const ceo = useMemo(() => {
     try {
-      // First try to find an employee with CEO title and no manager
       let foundCeo = employees.find(emp => 
         !emp.manager_id && 
         emp.title.toLowerCase().includes('ceo')
       );
       
-      // If not found, try just CEO title
       if (!foundCeo) {
         foundCeo = employees.find(emp => 
           emp.title.toLowerCase().includes('ceo') || 
@@ -63,7 +58,6 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         );
       }
       
-      // If still not found, try any C-level executive
       if (!foundCeo) {
         foundCeo = employees.find(emp => 
           emp.title.toLowerCase().includes('chief') ||
@@ -73,12 +67,10 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         );
       }
       
-      // If still not found, take the first employee without a manager
       if (!foundCeo) {
         foundCeo = employees.find(emp => !emp.manager_id);
       }
       
-      // Last resort: just take the first employee
       if (!foundCeo && employees.length > 0) {
         console.log('No clear leader found, using first employee as root');
         foundCeo = employees[0];
@@ -99,14 +91,11 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     }
   }, [employees]);
 
-  // Detect if we have a proper hierarchy
   const hasHierarchy = useMemo(() => {
     if (employees.length < 2) return false;
-    // Check if at least some employees have manager_id set
     return employees.some(emp => emp.manager_id !== null);
   }, [employees]);
 
-  // Switch to flat layout if no hierarchy detected
   useEffect(() => {
     if (!hasHierarchy && employees.length > 1) {
       setLayoutMode('flat');
@@ -119,7 +108,6 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     }
   }, [hasHierarchy, employees]);
 
-  // Create nodes with positioning based on layout mode and hierarchy
   const initialNodes = useMemo(() => {
     if (!employees.length) {
       setError('No employee data available');
@@ -127,7 +115,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     }
 
     try {
-      const levelHeight = 200; // Increased vertical spacing
+      const levelHeight = 200;
       const levelWidth = 250;
       
       return employees.map((emp) => {
@@ -142,7 +130,6 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         const isDirector = emp.title.toLowerCase().includes('director') || 
                           emp.title.toLowerCase().includes('vp');
 
-        // Calculate siblings at the same level with the same manager
         const siblings = employees.filter(e => 
           e.manager_id === emp.manager_id && 
           getEmployeeLevel(e) === level
@@ -150,10 +137,8 @@ const OrgChart = ({ employees }: OrgChartProps) => {
         const siblingIndex = siblings.findIndex(s => s.id === emp.id);
         const siblingCount = siblings.length;
         
-        // Calculate x position based on siblings
         const xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
         
-        // Style based on role
         let nodeStyle = {
           background: '#ffffff',
           border: '1px solid #e2e8f0',
@@ -161,39 +146,35 @@ const OrgChart = ({ employees }: OrgChartProps) => {
           padding: '16px',
         };
 
+        let textColorClass = 'text-gray-800';
+
         if (isCsuite) {
           nodeStyle = {
             ...nodeStyle,
             background: '#9b87f5',
             border: '2px solid #1A1F2C',
-            color: '#ffffff',
-            minWidth: '280px',
-            minHeight: '100px',
           };
+          textColorClass = 'text-white';
         } else if (isChuck) {
           nodeStyle = {
             ...nodeStyle,
             background: '#7E69AB',
             border: '2px solid #1A1F2C',
-            color: '#ffffff',
-            minWidth: '260px',
-            minHeight: '90px',
           };
+          textColorClass = 'text-white';
         } else if (isDirector) {
           nodeStyle = {
             ...nodeStyle,
             background: '#6E59A5',
-            color: '#ffffff',
-            minWidth: '240px',
-            minHeight: '80px',
           };
+          textColorClass = 'text-white';
         } else if (isLegal) {
           nodeStyle = {
             ...nodeStyle,
             background: '#F1F0FB',
             border: '2px dashed #8E9196',
-            color: '#1A1F2C',
           };
+          textColorClass = 'text-gray-700';
         }
 
         return {
@@ -206,7 +187,7 @@ const OrgChart = ({ employees }: OrgChartProps) => {
           data: {
             label: (
               <div 
-                className="cursor-pointer w-full"
+                className={`cursor-pointer w-full ${textColorClass}`}
                 onClick={() => setSelectedEmployee(emp)}
               >
                 <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
@@ -225,7 +206,6 @@ const OrgChart = ({ employees }: OrgChartProps) => {
     }
   }, [employees, employeeMap]);
 
-  // Create edges with styling based on hierarchy
   const initialEdges = useMemo(() => {
     if (layoutMode === 'flat') return [];
     
