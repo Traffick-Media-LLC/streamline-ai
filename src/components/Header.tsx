@@ -16,6 +16,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { MoreHorizontal } from "lucide-react";
 
 const Header = () => {
   const { isAuthenticated, isAdmin, user, signOut } = useAuth();
@@ -123,6 +124,32 @@ const Header = () => {
                 >
                   Admin
                 </Link>
+              </NavigationMenuItem>
+            )}
+
+            {isAuthenticated && (
+              <NavigationMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      className={cn(
+                        navigationMenuTriggerStyle(),
+                        "text-black hover:text-black/80"
+                      )}
+                    >
+                      <MoreHorizontal className="h-4 w-4 mr-1" />
+                      More
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[200px] bg-white">
+                    <DropdownMenuItem asChild>
+                      <Link to="/employees" className="w-full">
+                        Employee Directory
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </NavigationMenuItem>
             )}
           </NavigationMenuList>
