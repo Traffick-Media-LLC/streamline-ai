@@ -40,8 +40,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Improved function to fetch user role with better error handling
   const fetchUserRole = async (userId: string) => {
     try {
+      console.log("Fetching role for user:", userId);
+      
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
@@ -55,9 +58,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
       
-      const role = data?.role || 'basic';
-      setUserRole(role);
-      setIsAdmin(role === 'admin');
+      console.log("User role data:", data);
+      
+      if (data && data.role) {
+        const role = data.role as AppRole;
+        console.log("User has role:", role);
+        setUserRole(role);
+        setIsAdmin(role === 'admin');
+      } else {
+        console.log("No role found, setting to basic");
+        setUserRole('basic');
+        setIsAdmin(false);
+      }
     } catch (error) {
       console.error('Error in fetchUserRole:', error);
       setUserRole('basic');
@@ -67,41 +79,51 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     console.log("Auth provider initializing");
+    let mounted = true;
     
     // Set up the auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log("Auth state changed:", event, session?.user?.id);
-        setSession(session);
-        setUser(session?.user ?? null);
         
-        if (session?.user) {
-          // Use setTimeout to prevent potential auth deadlocks
-          setTimeout(() => {
-            fetchUserRole(session.user.id);
-          }, 0);
-        } else {
-          setUserRole(null);
-          setIsAdmin(false);
+        if (mounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            // Use setTimeout to prevent potential auth deadlocks
+            setTimeout(() => {
+              if (mounted) {
+                fetchUserRole(session.user.id);
+              }
+            }, 0);
+          } else {
+            setUserRole(null);
+            setIsAdmin(false);
+          }
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
     // Then check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("Got initial session:", session?.user?.id);
-      setSession(session);
-      setUser(session?.user ?? null);
       
-      if (session?.user) {
-        await fetchUserRole(session.user.id);
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          await fetchUserRole(session.user.id);
+        }
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
       console.log("Cleaning up auth subscriptions");
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
