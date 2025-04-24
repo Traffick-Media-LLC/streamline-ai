@@ -12,18 +12,21 @@ const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 
 interface USAMapProps {
   onStateClick: (stateName: string) => void;
+  isStateSelected?: boolean;
 }
 
-const USAMap: React.FC<USAMapProps> = ({ onStateClick }) => {
+const USAMap: React.FC<USAMapProps> = ({ onStateClick, isStateSelected }) => {
   return (
-    <div className="w-full aspect-[1.5] max-w-5xl mx-auto">
+    <div className={`w-full aspect-[1.5] mx-auto transition-all duration-300 ease-in-out ${
+      isStateSelected ? 'max-w-2xl' : 'max-w-5xl'
+    }`}>
       <TooltipProvider delayDuration={0}>
         <ComposableMap projection="geoAlbersUsa">
           <Geographies geography={geoUrl}>
             {({ geographies }) =>
               geographies.map((geo) => {
                 const stateName = geo.properties.name;
-
+                
                 return (
                   <Tooltip key={geo.rsmKey}>
                     <TooltipTrigger asChild>

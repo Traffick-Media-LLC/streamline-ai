@@ -3,6 +3,7 @@ import USAMap from '../components/USAMap';
 import { supabase } from "@/integrations/supabase/client";
 import { StateData } from '../data/stateData';
 import { useQuery } from '@tanstack/react-query';
+
 async function fetchStateProducts(stateName: string) {
   const {
     data: products,
@@ -25,7 +26,6 @@ async function fetchStateProducts(stateName: string) {
     };
   }
 
-  // Transform the data into the expected format
   const brandProducts = products.reduce((acc: {
     brandName: string;
     products: string[];
@@ -47,11 +47,13 @@ async function fetchStateProducts(stateName: string) {
     allowedProducts: brandProducts
   };
 }
+
 const MapPage = () => {
   const [selectedState, setSelectedState] = useState<{
     name: string;
     data: StateData;
   } | null>(null);
+
   const {
     data: stateData
   } = useQuery({
@@ -59,6 +61,7 @@ const MapPage = () => {
     queryFn: () => selectedState ? fetchStateProducts(selectedState.name) : null,
     enabled: !!selectedState
   });
+
   const handleStateClick = (stateName: string) => {
     console.log("State clicked:", stateName);
     setSelectedState({
@@ -69,7 +72,6 @@ const MapPage = () => {
     });
   };
 
-  // Update the selected state data when the query resolves
   useEffect(() => {
     if (stateData && selectedState) {
       setSelectedState(prev => prev ? {
@@ -78,28 +80,50 @@ const MapPage = () => {
       } : null);
     }
   }, [stateData]);
-  return <div className="container mx-auto px-4 py-8">
+
+  return (
+    <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8 text-center">Streamline Product Legality by State</h1>
-      <USAMap onStateClick={handleStateClick} />
       
-      {selectedState && <div className="mt-8 p-6 border border-gray-200 rounded-lg shadow-sm">
-          
-          
-          <div>
-            <h3 className="text-lg font-medium mb-2">Allowed Products by Brand:</h3>
-            {selectedState.data.allowedProducts.length > 0 ? <div className="space-y-4">
-                {selectedState.data.allowedProducts.map(({
-            brandName,
-            products
-          }) => <div key={brandName} className="border-l-4 border-primary pl-4">
-                    <h4 className="font-medium text-lg mb-2">{brandName}</h4>
-                    <ul className="list-disc pl-5 space-y-1">
-                      {products.map(product => <li key={product}>{product}</li>)}
-                    </ul>
-                  </div>)}
-              </div> : <p className="text-gray-500">No products allowed in this state</p>}
+      <div className="flex items-start gap-8 transition-all duration-300 ease-in-out">
+        <div className={`transition-all duration-300 ease-in-out ${
+          selectedState ? 'w-1/2' : 'w-full'
+        }`}>
+          <USAMap 
+            onStateClick={handleStateClick} 
+            isStateSelected={!!selectedState}
+          />
+        </div>
+        
+        {selectedState && (
+          <div className="w-1/2 animate-fade-in">
+            <div className="sticky top-24 p-6 border border-gray-200 rounded-lg shadow-sm">
+              <h2 className="text-2xl font-semibold mb-4">{selectedState.name}</h2>
+              <div>
+                <h3 className="text-lg font-medium mb-2">Allowed Products by Brand:</h3>
+                {selectedState.data.allowedProducts.length > 0 ? (
+                  <div className="space-y-4">
+                    {selectedState.data.allowedProducts.map(({ brandName, products }) => (
+                      <div key={brandName} className="border-l-4 border-primary pl-4">
+                        <h4 className="font-medium text-lg mb-2">{brandName}</h4>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {products.map(product => (
+                            <li key={product}>{product}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No products allowed in this state</p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>}
-    </div>;
+        )}
+      </div>
+    </div>
+  );
 };
+
 export default MapPage;
