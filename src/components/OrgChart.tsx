@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
@@ -26,7 +25,6 @@ interface OrgChartProps {
 }
 
 const OrgChart = ({ employees }: OrgChartProps) => {
-  console.log('OrgChart rendering with employees:', employees);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<'hierarchical' | 'flat'>('hierarchical');
