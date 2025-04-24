@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,31 +24,67 @@ interface EmployeeFormDialogProps {
 const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDialogProps) => {
   const [open, setOpen] = React.useState(false);
   const { createEmployee, updateEmployee } = useEmployeeOperations();
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
-    defaultValues: employee || {
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone: '',
-      department: '',
-      title: '',
-      manager_id: null
-    }
+  
+  // Define defaultValues outside of useForm for resetting purposes
+  const defaultValues = {
+    first_name: employee?.first_name || '',
+    last_name: employee?.last_name || '',
+    email: employee?.email || '',
+    phone: employee?.phone || '',
+    department: employee?.department || '',
+    title: employee?.title || '',
+    manager_id: employee?.manager_id || ''
+  };
+  
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
+    defaultValues
   });
+
+  // Reset form when employee prop changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      // Set form values when the dialog opens
+      reset({
+        first_name: employee?.first_name || '',
+        last_name: employee?.last_name || '',
+        email: employee?.email || '',
+        phone: employee?.phone || '',
+        department: employee?.department || '',
+        title: employee?.title || '',
+        manager_id: employee?.manager_id || ''
+      });
+    }
+  }, [employee, open, reset]);
 
   const onSubmit = async (data: any) => {
     try {
+      console.log("Form submission data:", data);
+      
+      // Convert empty string manager_id to null
+      const formattedData = {
+        ...data,
+        manager_id: data.manager_id === '' ? null : data.manager_id
+      };
+      
       if (employee) {
-        await updateEmployee.mutateAsync({ id: employee.id, ...data });
+        console.log("Updating employee:", employee.id, formattedData);
+        await updateEmployee.mutateAsync({ id: employee.id, ...formattedData });
       } else {
-        await createEmployee.mutateAsync(data);
+        console.log("Creating new employee:", formattedData);
+        await createEmployee.mutateAsync(formattedData);
       }
+      
       setOpen(false);
-      reset();
+      reset(defaultValues);
       onSuccess?.();
     } catch (error) {
       console.error('Error submitting form:', error);
     }
+  };
+
+  // Handle manager selection change separately since we can't directly register select
+  const handleManagerChange = (value: string) => {
+    setValue('manager_id', value);
   };
 
   return (
@@ -97,10 +133,8 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
           <div className="space-y-2">
             <Label htmlFor="manager">Manager</Label>
             <Select
-              onValueChange={(value) => {
-                register('manager_id').onChange({ target: { value } });
-              }}
-              defaultValue={employee?.manager_id || undefined}
+              value={employee?.manager_id || ''}
+              onValueChange={handleManagerChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a manager" />
