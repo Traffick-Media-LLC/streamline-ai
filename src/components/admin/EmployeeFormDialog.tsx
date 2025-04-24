@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -26,7 +25,6 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
   const [open, setOpen] = React.useState(false);
   const { createEmployee, updateEmployee } = useEmployeeOperations();
   
-  // Define defaultValues outside of useForm for resetting purposes
   const defaultValues = {
     first_name: employee?.first_name || '',
     last_name: employee?.last_name || '',
@@ -41,13 +39,10 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
     defaultValues
   });
 
-  // Watch the manager_id field to update the select component
   const selectedManagerId = watch('manager_id');
 
-  // Reset form when employee prop changes or dialog opens
   useEffect(() => {
     if (open) {
-      // Set form values when the dialog opens
       reset({
         first_name: employee?.first_name || '',
         last_name: employee?.last_name || '',
@@ -62,22 +57,20 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
 
   const onSubmit = async (data: any) => {
     try {
-      console.log("Form submission data:", data);
-      
-      // Convert empty string or "no_manager" to null for manager_id
       const formattedData = {
         ...data,
-        manager_id: data.manager_id === '' || data.manager_id === 'no_manager' ? null : data.manager_id
+        manager_id: data.manager_id === '' || data.manager_id === 'no_manager' 
+          ? null 
+          : data.manager_id
       };
       
-      console.log("Formatted data:", formattedData);
-      
       if (employee) {
-        console.log("Updating employee:", employee.id, formattedData);
-        await updateEmployee.mutateAsync({ id: employee.id, ...formattedData });
+        await updateEmployee.mutateAsync({ 
+          id: employee.id, 
+          ...formattedData
+        });
         toast.success("Employee updated successfully");
       } else {
-        console.log("Creating new employee:", formattedData);
         await createEmployee.mutateAsync(formattedData);
         toast.success("Employee created successfully");
       }
@@ -91,16 +84,12 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
     }
   };
 
-  // Handle manager selection change
   const handleManagerChange = (value: string) => {
-    console.log("Manager selection changed to:", value);
-    // Convert "no_manager" to empty string which will be converted to null in onSubmit
-    setValue('manager_id', value === 'no_manager' ? '' : value);
+    setValue('manager_id', value);
   };
 
-  // Get the display value for the manager select
   const getSelectValue = () => {
-    if (!selectedManagerId) return 'no_manager';
+    if (!selectedManagerId || selectedManagerId === '') return 'no_manager';
     return selectedManagerId;
   };
 
