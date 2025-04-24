@@ -13,6 +13,7 @@ import {
 import { Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 const EmployeeDirectory = () => {
   const { data: employees, isLoading } = useEmployeesData();
@@ -59,6 +60,7 @@ const EmployeeDirectory = () => {
                     <TableHead>Department</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -88,10 +90,24 @@ const EmployeeDirectory = () => {
                           "-"
                         )}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => navigator.clipboard.writeText(employee.email)}
+                        >
+                          Copy Email
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              {filteredEmployees?.length === 0 && (
+                <div className="text-center py-4 text-gray-500">
+                  No employees found
+                </div>
+              )}
             </div>
           )}
         </CardContent>
