@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { Employee } from '@/hooks/useEmployeesData';
 import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
+import { toast } from "@/components/ui/sonner";
 import {
   Select,
   SelectContent,
@@ -36,9 +37,12 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
     manager_id: employee?.manager_id || ''
   };
   
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
     defaultValues
   });
+
+  // Watch the manager_id field to update the select component
+  const selectedManagerId = watch('manager_id');
 
   // Reset form when employee prop changes or dialog opens
   useEffect(() => {
@@ -66,26 +70,38 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
         manager_id: data.manager_id === '' || data.manager_id === 'no_manager' ? null : data.manager_id
       };
       
+      console.log("Formatted data:", formattedData);
+      
       if (employee) {
         console.log("Updating employee:", employee.id, formattedData);
         await updateEmployee.mutateAsync({ id: employee.id, ...formattedData });
+        toast.success("Employee updated successfully");
       } else {
         console.log("Creating new employee:", formattedData);
         await createEmployee.mutateAsync(formattedData);
+        toast.success("Employee created successfully");
       }
       
       setOpen(false);
       reset(defaultValues);
       onSuccess?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting form:', error);
+      toast.error(`Error: ${error.message || 'Failed to save employee'}`);
     }
   };
 
   // Handle manager selection change
   const handleManagerChange = (value: string) => {
+    console.log("Manager selection changed to:", value);
     // Convert "no_manager" to empty string which will be converted to null in onSubmit
     setValue('manager_id', value === 'no_manager' ? '' : value);
+  };
+
+  // Get the display value for the manager select
+  const getSelectValue = () => {
+    if (!selectedManagerId) return 'no_manager';
+    return selectedManagerId;
   };
 
   return (
@@ -134,11 +150,16 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
           <div className="space-y-2">
             <Label htmlFor="manager">Manager</Label>
             <Select
-              value={employee?.manager_id || 'no_manager'}
+              value={getSelectValue()}
               onValueChange={handleManagerChange}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select a manager" />
+                <SelectValue placeholder="Select a manager">
+                  {getSelectValue() === 'no_manager' ? 'No Manager' : 
+                    employees?.find(e => e.id === selectedManagerId)
+                      ? `${employees.find(e => e.id === selectedManagerId)?.first_name} ${employees.find(e => e.id === selectedManagerId)?.last_name}`
+                      : 'Select a manager'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="no_manager">No Manager</SelectItem>
