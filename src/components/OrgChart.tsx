@@ -1,9 +1,8 @@
-
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
-  Background,
-  Controls,
   MiniMap,
+  Controls,
+  Background,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -11,8 +10,8 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Employee } from '@/hooks/useEmployeesData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { useState } from 'react';
 import { Briefcase, Mail, Phone, User } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
 
 interface OrgChartProps {
   employees: Employee[];
@@ -44,10 +43,15 @@ const OrgChart = ({ employees }: OrgChartProps) => {
   }, [employeeMap]);
 
   // Find the CEO (employee without manager)
-  const ceo = useMemo(() => 
-    employees.find(emp => !emp.manager_id && emp.title === 'CEO'),
-    [employees]
-  );
+  const ceo = useMemo(() => {
+    const foundCeo = employees.find(emp => !emp.manager_id && emp.title === 'CEO');
+    if (!foundCeo) {
+      toast.error("Organization structure error", {
+        description: "Could not find CEO in the organization"
+      });
+    }
+    return foundCeo;
+  }, [employees]);
   
   // Create nodes with hierarchical positioning
   const initialNodes = useMemo(() => employees.map((emp) => {
@@ -102,35 +106,40 @@ const OrgChart = ({ employees }: OrgChartProps) => {
 
   // Arrange nodes in a hierarchical layout
   useEffect(() => {
-    if (!ceo) return;
+    if (!ceo || nodes.length === 0) return;
 
     const layoutNodes = [...nodes];
     const levelWidth = 250;
     const levelHeight = 150;
     
-    // Position nodes based on their depth and number of siblings
-    employees.forEach((emp) => {
-      const node = layoutNodes.find(n => n.id === emp.id);
-      if (!node) return;
+    try {
+      // Position nodes based on their depth and number of siblings
+      employees.forEach((emp) => {
+        const node = layoutNodes.find(n => n.id === emp.id);
+        if (!node) return;
 
-      const depth = getEmployeeDepth(emp);
-      const siblings = employees.filter(e => 
-        e.manager_id === emp.manager_id
-      );
-      const siblingIndex = siblings.findIndex(s => s.id === emp.id);
-      const totalSiblings = siblings.length;
-      
-      // Calculate x position based on siblings
-      const xOffset = (siblingIndex - (totalSiblings - 1) / 2) * levelWidth;
-      
-      node.position = {
-        x: xOffset,
-        y: depth * levelHeight
-      };
-    });
+        const depth = getEmployeeDepth(emp);
+        const siblings = employees.filter(e => 
+          e.manager_id === emp.manager_id
+        );
+        const siblingIndex = siblings.findIndex(s => s.id === emp.id);
+        const totalSiblings = siblings.length;
+        
+        // Calculate x position based on siblings
+        const xOffset = (siblingIndex - (totalSiblings - 1) / 2) * levelWidth;
+        
+        node.position = {
+          x: xOffset,
+          y: depth * levelHeight
+        };
+      });
 
-    setNodes(layoutNodes);
-  }, [employees, setNodes, nodes, ceo, getEmployeeDepth]);
+      setNodes(layoutNodes);
+    } catch (error) {
+      console.error("Error arranging nodes:", error);
+      toast.error("Error arranging organization chart");
+    }
+  }, [ceo, employees, getEmployeeDepth, setNodes]);
 
   return (
     <div className="h-[600px] border rounded-lg">

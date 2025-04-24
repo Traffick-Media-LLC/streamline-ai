@@ -18,18 +18,29 @@ export const useEmployeesData = () => {
   return useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .order('last_name');
+      try {
+        const { data, error } = await supabase
+          .from('employees')
+          .select('*')
+          .order('last_name');
 
-      if (error) {
-        toast.error("Failed to fetch employees", {
-          description: error.message
-        });
+        if (error) {
+          toast.error("Failed to fetch employees", {
+            description: error.message
+          });
+          throw error;
+        }
+
+        if (!data || data.length === 0) {
+          toast.error("No employee data found");
+          return [];
+        }
+
+        return data as Employee[];
+      } catch (error: any) {
+        console.error("Error fetching employees:", error);
         throw error;
       }
-      return data as Employee[];
     },
     retry: 1
   });

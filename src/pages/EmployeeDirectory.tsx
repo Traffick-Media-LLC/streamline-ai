@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useEmployeesData, Employee } from "@/hooks/useEmployeesData";
@@ -16,10 +15,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import OrgChart from "@/components/OrgChart";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 
 const EmployeeDirectory = () => {
-  const { data: employees, isLoading } = useEmployeesData();
+  const { data: employees, isLoading, error } = useEmployeesData();
   const [searchTerm, setSearchTerm] = useState("");
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/auth');
+    }
+  }, [isAuthenticated, navigate]);
 
   const filteredEmployees = employees?.filter((employee) => {
     const searchTermLower = searchTerm.toLowerCase();
@@ -30,6 +40,20 @@ const EmployeeDirectory = () => {
       employee.email.toLowerCase().includes(searchTermLower)
     );
   });
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-red-500">
+              Error loading employee data. Please try again later.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 px-4">
