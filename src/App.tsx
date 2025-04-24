@@ -19,6 +19,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const KnowledgeManager = lazy(() => import("./components/KnowledgeManager"));
+const EmployeeDirectory = lazy(() => import("./pages/EmployeeDirectory"));
 
 // Create reusable loading component
 const PageLoader = () => (
@@ -100,6 +101,14 @@ const App = () => {
                         element={
                           <ProtectedRoute>
                             <KnowledgeManager />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route 
+                        path="/employees" 
+                        element={
+                          <ProtectedRoute>
+                            <EmployeeDirectory />
                           </ProtectedRoute>
                         }
                       />

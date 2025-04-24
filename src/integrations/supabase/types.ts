@@ -83,6 +83,39 @@ export type Database = {
         }
         Relationships: []
       }
+      employees: {
+        Row: {
+          created_at: string
+          department: string
+          email: string
+          first_name: string
+          id: string
+          last_name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department: string
+          email: string
+          first_name: string
+          id?: string
+          last_name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department?: string
+          email?: string
+          first_name?: string
+          id?: string
+          last_name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       knowledge_entries: {
         Row: {
           content: string
