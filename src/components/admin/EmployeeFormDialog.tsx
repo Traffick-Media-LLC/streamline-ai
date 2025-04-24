@@ -140,7 +140,7 @@ const EmployeeFormDialog = ({ employee, employees, onSuccess }: EmployeeFormDial
                 <SelectValue placeholder="Select a manager" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No Manager</SelectItem>
+                <SelectItem value="no_manager">No Manager</SelectItem>
                 {employees?.filter(e => e.id !== employee?.id).map((emp) => (
                   <SelectItem key={emp.id} value={emp.id}>
                     {emp.first_name} {emp.last_name}
