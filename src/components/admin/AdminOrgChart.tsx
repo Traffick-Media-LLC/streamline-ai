@@ -2,6 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEmployeesData } from '@/hooks/useEmployeesData';
+import { ReactFlowProvider } from '@xyflow/react';
 import OrgChart from '@/components/OrgChart';
 import { Button } from '@/components/ui/button';
 import { Download, RefreshCw, PlusCircle } from 'lucide-react';
@@ -74,16 +75,16 @@ const AdminOrgChart = () => {
           <ErrorBoundary>
             {isLoading ? (
               <div className="h-[600px] flex items-center justify-center">
-                <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                <Skeleton className="h-full w-full" />
               </div>
             ) : (
-              employees && employees.length > 0 ? (
-                <OrgChart employees={employees} isAdmin={isAdmin} editable />
-              ) : (
-                <div className="text-center py-4 text-gray-500">
-                  No employee data available for organization chart
-                </div>
-              )
+              <ReactFlowProvider>
+                <OrgChart 
+                  employees={employees || []} 
+                  isAdmin={isAdmin} 
+                  editable 
+                />
+              </ReactFlowProvider>
             )}
           </ErrorBoundary>
         </CardContent>
