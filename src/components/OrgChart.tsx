@@ -50,7 +50,7 @@ interface NodeStyle {
   boxShadow?: string;
 }
 
-const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProps) => {
+const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChartProps) => {
   const { updateEmployee } = useEmployeeOperations();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -661,38 +661,36 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         </Button>
       </div>
       
-      <ReactFlowProvider>
-        <ReactFlow
-          nodes={nodesWithContextMenu}
-          edges={edges}
-          onNodesChange={onNodesChange as OnNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDrag={onNodeDrag}
-          onNodeDragStop={onNodeDragStop}
-          fitView
-          minZoom={0.1}
-          maxZoom={1.5}
-          nodesDraggable={editable && isAdmin}
-        >
-          <Background />
-          <Controls />
-          <MiniMap 
-            nodeColor={node => {
-              const emp = employeeMap.get(node.id as string);
-              if (!emp) return '#94A3B8';
-              if (!emp.manager_id) return '#9b87f5';
-              if (emp.department.toLowerCase().includes('legal')) return '#8E9196';
-              if (emp.title.toLowerCase().includes('director') || 
-                  emp.title.toLowerCase().includes('vp')) {
-                return '#6E59A5';
-              }
-              return '#D3E4FD';
-            }}
-          />
-        </ReactFlow>
-      </ReactFlowProvider>
+      <ReactFlow
+        nodes={nodesWithContextMenu}
+        edges={edges}
+        onNodesChange={onNodesChange as OnNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
+        fitView
+        minZoom={0.1}
+        maxZoom={1.5}
+        nodesDraggable={editable && isAdmin}
+      >
+        <Background />
+        <Controls />
+        <MiniMap 
+          nodeColor={node => {
+            const emp = employeeMap.get(node.id as string);
+            if (!emp) return '#94A3B8';
+            if (!emp.manager_id) return '#9b87f5';
+            if (emp.department.toLowerCase().includes('legal')) return '#8E9196';
+            if (emp.title.toLowerCase().includes('director') || 
+                emp.title.toLowerCase().includes('vp')) {
+              return '#6E59A5';
+            }
+            return '#D3E4FD';
+          }}
+        />
+      </ReactFlow>
 
       <Dialog open={!!selectedEmployee && !editingEmployee} onOpenChange={() => setSelectedEmployee(null)}>
         <DialogContent>
@@ -789,6 +787,16 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         />
       )}
     </div>
+  );
+};
+
+const OrgChart = (props: OrgChartProps) => {
+  console.log("Rendering OrgChart wrapper with ReactFlowProvider");
+  
+  return (
+    <ReactFlowProvider>
+      <OrgChartInner {...props} />
+    </ReactFlowProvider>
   );
 };
 

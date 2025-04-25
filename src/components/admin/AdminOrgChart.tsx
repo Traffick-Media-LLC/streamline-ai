@@ -11,7 +11,7 @@ import { toast } from '@/components/ui/sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
 import EmployeeFormDialog from './EmployeeFormDialog';
-import { ReactFlowProvider } from '@xyflow/react';
+// Remove ReactFlowProvider import as we'll use the one from OrgChart
 
 const AdminOrgChart = () => {
   const { data: employees, isLoading, error, refetch } = useEmployeesData();
@@ -73,19 +73,17 @@ const AdminOrgChart = () => {
         </CardHeader>
         <CardContent>
           <ErrorBoundary>
-            <ReactFlowProvider>
-              {isLoading ? (
-                <div className="h-[600px] flex items-center justify-center">
-                  <Skeleton className="h-full w-full" />
-                </div>
-              ) : (
-                <OrgChart 
-                  employees={employees || []} 
-                  isAdmin={isAdmin} 
-                  editable 
-                />
-              )}
-            </ReactFlowProvider>
+            {isLoading ? (
+              <div className="h-[600px] flex items-center justify-center">
+                <Skeleton className="h-full w-full" />
+              </div>
+            ) : (
+              <OrgChart 
+                employees={employees || []} 
+                isAdmin={isAdmin} 
+                editable 
+              />
+            )}
           </ErrorBoundary>
         </CardContent>
       </Card>
@@ -106,4 +104,3 @@ const AdminOrgChart = () => {
 };
 
 export default AdminOrgChart;
-
