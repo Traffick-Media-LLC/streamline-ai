@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import USAMap from '../components/USAMap';
 import { supabase } from "@/integrations/supabase/client";
@@ -87,9 +88,9 @@ const MapPage = () => {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8 text-center">Streamline Product Legality by State</h1>
       
-      <div className={`flex ${isMobile ? 'flex-col' : 'items-start'} gap-8 transition-all duration-300 ease-in-out`}>
+      <div className={`flex ${isMobile ? 'flex-col' : 'items-start h-[calc(100vh-12rem)]'} gap-8 transition-all duration-300 ease-in-out`}>
         <div className={`transition-all duration-300 ease-in-out ${
-          selectedState && !isMobile ? 'w-1/2' : 'w-full'
+          selectedState && !isMobile ? 'w-1/2 sticky top-24' : 'w-full'
         }`}>
           <USAMap 
             onStateClick={handleStateClick} 
@@ -99,8 +100,9 @@ const MapPage = () => {
         </div>
         
         {selectedState && (
-          <div className={`${isMobile ? 'w-full' : 'w-1/2'} animate-fade-in`}>
-            <div className={`${isMobile ? '' : 'sticky top-24'} p-6 border border-gray-200 rounded-lg shadow-sm`}>
+          <div className={`${isMobile ? 'w-full' : 'w-1/2 overflow-y-auto'} animate-fade-in`} 
+               style={!isMobile ? { maxHeight: 'calc(100vh - 12rem)' } : undefined}>
+            <div className="p-6 border border-gray-200 rounded-lg shadow-sm">
               <h2 className="text-2xl font-semibold mb-4">{selectedState.name}</h2>
               <div>
                 <h3 className="text-lg font-medium mb-2">Allowed Products by Brand:</h3>
