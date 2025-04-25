@@ -35,7 +35,11 @@ interface OrgChartProps {
   editable?: boolean;
 }
 
-// Define type for node style with optional boxShadow property
+interface NodeData {
+  label: React.ReactNode;
+  employee: Employee;
+}
+
 interface NodeStyle {
   background: string;
   border: string;
@@ -361,6 +365,23 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
           textColorClass = 'text-gray-700';
         }
 
+        const nodeData: NodeData = {
+          label: (
+            <div 
+              className={`${textColorClass} ${editable && isAdmin ? 'with-actions' : ''}`}
+              onClick={() => setSelectedEmployee(emp)}
+            >
+              <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
+              <div className="text-sm">{emp.title}</div>
+              <div className="text-xs opacity-75">{emp.department}</div>
+              {editable && isAdmin && (
+                <div className="absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity" />
+              )}
+            </div>
+          ) as React.ReactNode,
+          employee: emp,
+        };
+
         return {
           id: emp.id,
           type: 'default',
@@ -368,21 +389,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             x: xOffset,
             y: level * levelHeight
           },
-          data: {
-            label: React.createElement('div', { 
-              className: `${textColorClass} ${editable && isAdmin ? 'with-actions' : ''}`,
-              onClick: () => setSelectedEmployee(emp)
-            }, [
-              React.createElement('div', { key: 'name', className: "font-semibold" }, `${emp.first_name} ${emp.last_name}`),
-              React.createElement('div', { key: 'title', className: "text-sm" }, emp.title),
-              React.createElement('div', { key: 'department', className: "text-xs opacity-75" }, emp.department),
-              editable && isAdmin ? React.createElement('div', {
-                key: 'edit-indicator',
-                className: "absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity"
-              }) : null
-            ].filter(Boolean) as React.ReactNode[]), // Explicitly type as ReactNode[]
-            employee: emp,
-          },
+          data: nodeData,
           style: nodeStyle,
           draggable: editable && isAdmin,
         };
@@ -480,7 +487,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         draggedNodeBounds.right < targetBounds.left || 
         draggedNodeBounds.left > targetBounds.right || 
         draggedNodeBounds.bottom < targetBounds.top || 
-        draggedNodeBounds.top > targetBounds.bottom
+        draggedNodeBounds.top > draggedNodeBounds.bottom
       );
       
       if (isOverlapping) {
