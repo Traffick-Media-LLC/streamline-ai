@@ -35,7 +35,7 @@ interface OrgChartProps {
   editable?: boolean;
 }
 
-// Define type for node style to fix boxShadow issues
+// Define type for node style with optional boxShadow property
 interface NodeStyle {
   background: string;
   border: string;
@@ -318,7 +318,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
           xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
         }
         
-        let nodeStyle = {
+        let nodeStyle: NodeStyle = {
           background: '#ffffff',
           border: '1px solid #e2e8f0',
           borderRadius: '8px',
@@ -503,7 +503,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
               boxShadow: '0 0 0 2px #6E59A5' 
             }
           };
-        } else if (n.id !== draggedNodeRef.current?.id && (n.style as NodeStyle)?.boxShadow) {
+        } else if (n.id !== draggedNodeRef.current?.id && ((n.style as NodeStyle)?.boxShadow)) {
           // Clear any highlight on other nodes
           const { boxShadow, ...restStyle } = n.style as NodeStyle;
           return { ...n, style: restStyle };
@@ -566,8 +566,8 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       // Clear any highlight styles
       setNodes((nds) => 
         nds.map((n) => {
-          if (n.style?.boxShadow) {
-            const { boxShadow, ...restStyle } = n.style;
+          if ((n.style as NodeStyle)?.boxShadow) {
+            const { boxShadow, ...restStyle } = n.style as NodeStyle;
             return { ...n, style: restStyle };
           }
           return n;
