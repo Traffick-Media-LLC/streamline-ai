@@ -2,19 +2,25 @@
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const useStatePermissionsOperations = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isError, setIsError] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const { isAuthenticated, isAdmin } = useAuth();
 
   const validatePermissions = (stateId: number, productIds: number[]): boolean => {
+    if (!isAuthenticated || !isAdmin) {
+      toast.error("Authentication required. Please ensure you're logged in as an admin.");
+      return false;
+    }
+
     if (!stateId || stateId <= 0) {
       toast.error("Invalid state selected");
       return false;
     }
 
-    // Validate product IDs - they should be positive numbers
     if (productIds.some(id => !id || id <= 0)) {
       toast.error("One or more invalid products selected");
       return false;
@@ -24,7 +30,8 @@ export const useStatePermissionsOperations = () => {
   };
 
   const saveStatePermissions = async (stateId: number, productIds: number[], retryCount = 0): Promise<boolean> => {
-    // Validate inputs before proceeding
+    console.log("Attempting to save state permissions:", { stateId, productIds, isAuthenticated, isAdmin });
+    
     if (!validatePermissions(stateId, productIds)) {
       return false;
     }
@@ -33,10 +40,8 @@ export const useStatePermissionsOperations = () => {
       setIsSaving(true);
       setIsError(false);
 
-      // Show immediate feedback
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
-      // Delete existing permissions for this state
       const { error: deleteError } = await supabase
         .from('state_allowed_products')
         .delete()
@@ -48,13 +53,11 @@ export const useStatePermissionsOperations = () => {
       }
 
       if (productIds.length > 0) {
-        // Insert new permissions
         const newPermissions = productIds.map(productId => ({
           state_id: stateId,
           product_id: productId
         }));
 
-        // Insert in batches of 50 if needed for large datasets
         const { error: insertError } = await supabase
           .from('state_allowed_products')
           .insert(newPermissions);
@@ -65,7 +68,6 @@ export const useStatePermissionsOperations = () => {
         }
       }
 
-      // Dismiss the loading toast and show success
       toast.dismiss("saving-permissions");
       toast.success('State permissions updated successfully');
       return true;
@@ -76,14 +78,14 @@ export const useStatePermissionsOperations = () => {
       
       toast.dismiss("saving-permissions");
       toast.error('Failed to update state permissions', {
-        description: error.message
+        description: `Error: ${error.message}. Please ensure you're logged in as an admin.`
       });
 
-      // Implement retry logic for certain types of errors
       if (retryCount < 2 && (
         error.message.includes('network') || 
         error.message.includes('timeout') || 
-        error.message.includes('connection')
+        error.message.includes('connection') ||
+        error.message.includes('authentication')
       )) {
         toast.info("Retrying save operation...");
         return await saveStatePermissions(stateId, productIds, retryCount + 1);

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -16,7 +15,7 @@ export const useStatePermissionsData = () => {
   const fetchStates = useCallback(async () => {
     try {
       setError(null);
-      console.log("Fetching states data...");
+      console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin });
       const { data, error } = await supabase
         .from('states')
         .select('*')
@@ -28,9 +27,11 @@ export const useStatePermissionsData = () => {
     } catch (error: any) {
       console.error('Error fetching states:', error);
       setError(`Failed to load states: ${error.message}`);
-      toast.error("Failed to load states");
+      toast.error("Failed to load states", {
+        description: "Please ensure you're logged in with proper permissions"
+      });
     }
-  }, []);
+  }, [isAuthenticated, isAdmin]);
 
   const fetchStateProducts = useCallback(async () => {
     try {
@@ -50,30 +51,21 @@ export const useStatePermissionsData = () => {
   }, []);
 
   const refreshData = useCallback(async (force = false) => {
-    // Skip refresh if not authenticated and not guest user
-    if (!isAuthenticated && !force) {
+    if (!isAuthenticated) {
       console.log("Not authenticated, skipping state permissions data fetch");
       setError("Authentication required. Please ensure you're logged in or continue as guest.");
       setLoading(false);
       return false;
     }
     
-    // Skip refresh if not admin and not guest user
-    if (!isAdmin && !force) {
-      console.log("Not admin, skipping state permissions data fetch");
-      setError("Admin privileges required. Please ensure you're logged in as an admin or continue as guest.");
-      setLoading(false);
-      return false;
-    }
-    
     setLoading(true);
     setError(null);
-    console.log("Starting state permissions data refresh... Auth state:", { isAuthenticated, isAdmin });
+    console.log("Starting state permissions data refresh...");
     
     try {
       await Promise.all([fetchStates(), fetchStateProducts()]);
       console.log("State permissions data refresh complete");
-      setRefreshAttempts(0); // Reset attempts on success
+      setRefreshAttempts(0);
       return true;
     } catch (error: any) {
       console.error("Error refreshing data:", error);
@@ -82,7 +74,7 @@ export const useStatePermissionsData = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchStates, fetchStateProducts, isAuthenticated, isAdmin]);
+  }, [fetchStates, fetchStateProducts, isAuthenticated]);
 
   // Implement automatic retry logic for initial load
   useEffect(() => {
