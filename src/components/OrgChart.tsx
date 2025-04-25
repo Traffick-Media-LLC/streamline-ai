@@ -14,7 +14,8 @@ import {
   XYPosition,
   useReactFlow,
   NodeMouseHandler,
-  NodeProps
+  NodeProps,
+  ReactFlowProvider
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Employee } from '@/hooks/useEmployeesData';
@@ -267,15 +268,15 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         employeesByLevel[level].push(emp);
       });
       
-      return employees.map((emp) => {
+      return employees.map((emp, index) => {
         const level = getEmployeeLevel(emp);
         const isLegal = emp.department.toLowerCase().includes('legal');
         const isCsuite = level === 0;
         
-        const isChuck = emp.first_name === 'Chuck' && emp.last_name === 'Melander';
-        const isDirector = emp.title.toLowerCase().includes('director') || 
-                          emp.title.toLowerCase().includes('vp');
-
+        const currentLevelEmployees = employeesByLevel[level] || [];
+        const positionInLevel = currentLevelEmployees.findIndex(e => e.id === emp.id);
+        const totalInLevel = currentLevelEmployees.length;
+        
         let xOffset;
         if (level === 0) {
           if (topNodes.length <= 3) {
@@ -286,13 +287,13 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             } else if (emp.first_name === 'Chuck' && emp.last_name === 'Melander') {
               xOffset = -levelWidth;
             } else {
-              xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+              xOffset = (positionInLevel - (totalInLevel - 1) / 2) * levelWidth;
             }
           } else {
-            xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+            xOffset = (positionInLevel - (totalInLevel - 1) / 2) * levelWidth;
           }
         } else {
-          xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
+          xOffset = (positionInLevel - (totalInLevel - 1) / 2) * levelWidth;
         }
         
         let nodeStyle: NodeStyle = {
