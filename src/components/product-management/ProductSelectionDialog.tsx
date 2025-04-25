@@ -6,6 +6,7 @@ import { FilterControls } from "./FilterControls";
 import { ProductsTable } from "./ProductsTable";
 import { useProductFiltering } from "@/hooks/useProductFiltering";
 import { Product, Brand } from '@/types/statePermissions';
+import { Loader2 } from 'lucide-react';
 
 interface ProductSelectionDialogProps {
   open: boolean;
@@ -16,6 +17,8 @@ interface ProductSelectionDialogProps {
   onSelectionChange: (selectedIds: number[]) => void;
   onSave: () => void;
   isSaving: boolean;
+  hasChanges?: boolean;
+  stateName?: string;
 }
 
 export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
@@ -26,7 +29,9 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
   selectedProducts,
   onSelectionChange,
   onSave,
-  isSaving
+  isSaving,
+  hasChanges = false,
+  stateName
 }) => {
   const {
     searchQuery,
@@ -60,14 +65,34 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
     onSelectionChange([]);
   };
 
+  // Prevent unintentional closing when saving
+  const handleOpenChange = (open: boolean) => {
+    if (!open && isSaving) {
+      return;
+    }
+    onOpenChange(open);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Select Allowed Products</DialogTitle>
+          <DialogTitle>
+            {stateName ? 
+              `Select Allowed Products for ${stateName}` : 
+              'Select Allowed Products'}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="py-4">
+          <div className="mb-4">
+            <p className="text-sm text-muted-foreground">
+              {selectedProducts.length === 0 ? 
+                "No products selected" : 
+                `${selectedProducts.length} product${selectedProducts.length === 1 ? '' : 's'} selected`}
+            </p>
+          </div>
+
           <FilterControls
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -87,17 +112,30 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
           <Button 
             variant="outline" 
             onClick={handleClearAll}
+            disabled={isSaving || selectedProducts.length === 0}
           >
             Clear All
           </Button>
           <Button 
             variant="outline" 
             onClick={handleSelectAllVisible}
+            disabled={isSaving || filteredProducts.length === 0}
           >
             Select All Visible
           </Button>
-          <Button onClick={onSave} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Permissions'}
+          <Button 
+            onClick={onSave} 
+            disabled={isSaving || !hasChanges}
+            className="min-w-[140px]"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Permissions'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

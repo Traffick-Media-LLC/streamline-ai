@@ -1,28 +1,19 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
-
-interface State {
-  id: number;
-  name: string;
-}
-
-interface StateProduct {
-  id: number;
-  state_id: number;
-  product_id: number;
-}
+import { State, StateProduct } from '@/types/statePermissions';
 
 export const useStatePermissionsData = () => {
   const [states, setStates] = useState<State[]>([]);
   const [stateProducts, setStateProducts] = useState<StateProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
   const { isAuthenticated, isAdmin } = useAuth();
 
-  const fetchStates = async () => {
+  const fetchStates = useCallback(async () => {
     try {
       setError(null);
       console.log("Fetching states data...");
@@ -39,9 +30,9 @@ export const useStatePermissionsData = () => {
       setError(`Failed to load states: ${error.message}`);
       toast.error("Failed to load states");
     }
-  };
+  }, []);
 
-  const fetchStateProducts = async () => {
+  const fetchStateProducts = useCallback(async () => {
     try {
       console.log("Fetching state products data...");
       const { data, error } = await supabase
@@ -56,27 +47,64 @@ export const useStatePermissionsData = () => {
       setError(`Failed to load state product permissions: ${error.message}`);
       toast.error("Failed to load state product permissions");
     }
-  };
+  }, []);
 
-  const refreshData = async () => {
-    if (!isAuthenticated || !isAdmin) {
-      console.log("Not authenticated or not admin, skipping state permissions data fetch");
-      setError("Authentication required. Please ensure you're logged in as an admin.");
+  const refreshData = useCallback(async (force = false) => {
+    // Skip refresh if not authenticated and not guest user
+    if (!isAuthenticated && !force) {
+      console.log("Not authenticated, skipping state permissions data fetch");
+      setError("Authentication required. Please ensure you're logged in or continue as guest.");
       setLoading(false);
-      return;
+      return false;
+    }
+    
+    // Skip refresh if not admin and not guest user
+    if (!isAdmin && !force) {
+      console.log("Not admin, skipping state permissions data fetch");
+      setError("Admin privileges required. Please ensure you're logged in as an admin or continue as guest.");
+      setLoading(false);
+      return false;
     }
     
     setLoading(true);
     setError(null);
-    console.log("Starting state permissions data refresh...");
-    await Promise.all([fetchStates(), fetchStateProducts()]);
-    setLoading(false);
-    console.log("State permissions data refresh complete");
-  };
+    console.log("Starting state permissions data refresh... Auth state:", { isAuthenticated, isAdmin });
+    
+    try {
+      await Promise.all([fetchStates(), fetchStateProducts()]);
+      console.log("State permissions data refresh complete");
+      setRefreshAttempts(0); // Reset attempts on success
+      return true;
+    } catch (error: any) {
+      console.error("Error refreshing data:", error);
+      setError(`Failed to refresh data: ${error.message}`);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchStates, fetchStateProducts, isAuthenticated, isAdmin]);
 
+  // Implement automatic retry logic for initial load
   useEffect(() => {
-    console.log("useStatePermissionsData hook initialized, auth state:", { isAuthenticated, isAdmin });
-    refreshData();
+    const attemptRefresh = async () => {
+      console.log(`State permissions data refresh attempt ${refreshAttempts + 1}`);
+      
+      const success = await refreshData();
+      
+      if (!success && refreshAttempts < 2) {
+        // Increment attempts and try again with exponential backoff
+        setRefreshAttempts(prev => prev + 1);
+        const delay = Math.pow(2, refreshAttempts) * 1000; // 1s, 2s, 4s backoff
+        console.log(`Scheduling retry in ${delay}ms`);
+        setTimeout(attemptRefresh, delay);
+      }
+    };
+    
+    if (isAuthenticated || isAdmin) {
+      attemptRefresh();
+    } else {
+      console.log("Waiting for authentication state before loading data");
+    }
   }, [isAuthenticated, isAdmin]);
 
   return {

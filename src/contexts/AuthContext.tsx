@@ -96,6 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     console.log("Auth provider initializing");
     let mounted = true;
     
+    // First set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log("Auth state changed:", event, "Session:", session?.user?.id);
@@ -120,7 +121,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     );
 
-    // Check for existing session
+    // Then check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log("Got initial session:", session?.user?.id);
       

@@ -26,3 +26,8 @@ export interface Brand {
 export interface StatePermissionsProps {
   onStateClick?: (stateName: string) => void;
 }
+
+export interface SavePermissionResult {
+  success: boolean;
+  error?: string;
+}

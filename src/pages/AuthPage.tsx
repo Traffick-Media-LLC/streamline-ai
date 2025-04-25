@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
@@ -9,13 +10,13 @@ import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { Animated } from "@/components/ui/animated";
 import { Card } from "@/components/ui/card";
+
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
-  const {
-    setIsGuest
-  } = useAuth();
+  const { isAuthenticated, setIsGuest } = useAuth();
+
   useEffect(() => {
     // Preload the homepage assets
     const preloadHomeAssets = async () => {
@@ -40,13 +41,10 @@ const AuthPage = () => {
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
+
   useEffect(() => {
     const checkSession = async () => {
-      const {
-        data: {
-          session
-        }
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         console.log("Session found:", session);
         setUser(session.user);
@@ -55,11 +53,8 @@ const AuthPage = () => {
       }
     };
     checkSession();
-    const {
-      data: {
-        subscription
-      }
-    } = supabase.auth.onAuthStateChange((event, session) => {
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state change:", event, session);
       setUser(session?.user || null);
       if (session?.user) {
@@ -69,18 +64,17 @@ const AuthPage = () => {
         console.log("No authenticated user");
       }
     });
+
     return () => {
       console.log("Cleaning up auth subscriptions");
       subscription.unsubscribe();
     };
   }, [navigate]);
+
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      const {
-        error,
-        data
-      } = await supabase.auth.signInWithOAuth({
+      const { error, data } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: window.location.origin,
@@ -90,12 +84,14 @@ const AuthPage = () => {
           }
         }
       });
+      
       if (error) {
         console.error("Google sign in error:", error);
         toast.error("Sign in failed", {
           description: error.message
         });
       }
+      
       if (data) {
         console.log("Auth response data:", data);
         console.log("Auth URL:", data.url);
@@ -109,17 +105,20 @@ const AuthPage = () => {
       setLoading(false);
     }
   };
+
   const handleGuestAccess = () => {
-    setUser(null);
     setIsGuest(true);
-    toast.success("Continuing as guest");
+    toast.success("Continuing as guest with admin access");
     navigate('/');
   };
-  if (user) {
-    console.log("Redirecting authenticated user to home");
+
+  if (isAuthenticated) {
+    console.log("Already authenticated, redirecting to home");
     return <Navigate to="/" />;
   }
-  return <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <Animated type="fade" className="w-full">
           <Card className="p-8 shadow-lg border-0">
@@ -157,6 +156,8 @@ const AuthPage = () => {
           </Card>
         </Animated>
       </div>
-    </div>;
+    </div>
+  );
 };
+
 export default AuthPage;

@@ -2,12 +2,13 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, MapPin, List } from "lucide-react";
+import { AlertTriangle, RefreshCw, MapPin, List, Loader2 } from "lucide-react";
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { StatePermissionsList } from "./StatePermissionsList";
 import { StatePermissionsMap } from "./StatePermissionsMap";
 import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
 import { StatePermissionsProps } from '@/types/statePermissions';
+import { useAuth } from "@/contexts/AuthContext";
 
 const StatePermissions: React.FC<StatePermissionsProps> = () => {
   const {
@@ -30,8 +31,37 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     handleSavePermissions,
     getStateProducts,
     handleEditState,
-    refreshData
+    refreshData,
+    hasChanges
   } = useStatePermissionsManager();
+
+  const { isAuthenticated, isAdmin } = useAuth();
+
+  // Show auth status for debugging
+  React.useEffect(() => {
+    console.log("StatePermissions component - Auth status:", { isAuthenticated, isAdmin });
+  }, [isAuthenticated, isAdmin]);
+
+  // Show appropriate loading or error states
+  if (!isAuthenticated || !isAdmin) {
+    return (
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Authentication Required</AlertTitle>
+          <AlertDescription>
+            This page requires admin access. Please ensure you're logged in with appropriate permissions.
+          </AlertDescription>
+        </Alert>
+        <Button 
+          onClick={() => window.location.href = '/auth'} 
+          className="mt-4 flex items-center gap-2"
+        >
+          Go to Login
+        </Button>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -56,6 +86,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
           <Button 
             variant={viewMode === 'map' ? 'default' : 'outline'} 
             onClick={() => setViewMode('map')}
+            disabled={loading}
           >
             <MapPin className="mr-2 h-4 w-4" />
             Map View
@@ -63,16 +94,31 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
           <Button 
             variant={viewMode === 'list' ? 'default' : 'outline'} 
             onClick={() => setViewMode('list')}
+            disabled={loading}
           >
             <List className="mr-2 h-4 w-4" />
             List View
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={refreshData}
+            disabled={loading}
+            className="ml-2"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Refresh
           </Button>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center my-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <div className="flex flex-col items-center justify-center my-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+          <p className="text-sm text-muted-foreground">Loading permission data...</p>
         </div>
       ) : viewMode === 'map' ? (
         <StatePermissionsMap onStateClick={handleStateClick} />
@@ -95,6 +141,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
         onSelectionChange={setSelectedProducts}
         onSave={handleSavePermissions}
         isSaving={isSaving}
+        hasChanges={hasChanges}
+        stateName={selectedState?.name}
       />
     </div>
   );
