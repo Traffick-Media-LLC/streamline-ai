@@ -35,7 +35,7 @@ interface OrgChartProps {
   editable?: boolean;
 }
 
-// Make NodeData extend Record<string, unknown> to satisfy React Flow requirements
+// Define our node data structure that will be used within ReactFlow's Node type
 interface NodeData extends Record<string, unknown> {
   label: React.ReactNode;
   employee: Employee;
@@ -60,8 +60,8 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
   const [addingDirectReportTo, setAddingDirectReportTo] = useState<string | null>(null);
   const reactFlowInstance = useReactFlow();
   const isInitialMount = useRef(true);
-  const draggedNodeRef = useRef<Node | null>(null);
-  const targetNodeRef = useRef<Node | null>(null);
+  const draggedNodeRef = useRef<Node<NodeData> | null>(null);
+  const targetNodeRef = useRef<Node<NodeData> | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const employeeMap = useMemo(() => {
@@ -429,7 +429,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     }
   }, [employees, layoutMode, employeeMap]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<NodeData>>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const onConnect = useCallback((params: Connection) => {
@@ -448,7 +448,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
   const onNodeDragStart: NodeMouseHandler = useCallback((event, node) => {
     if (!editable || !isAdmin) return;
     setIsDragging(true);
-    draggedNodeRef.current = node;
+    draggedNodeRef.current = node as Node<NodeData>;
     // Change cursor to grabbing
     if (event.target instanceof HTMLElement) {
       event.target.style.cursor = 'grabbing';
@@ -495,7 +495,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     }
     
     // Update the target node reference
-    targetNodeRef.current = targetNode;
+    targetNodeRef.current = targetNode as Node<NodeData> | null;
     
     // Update visual feedback for drag target
     setNodes((nds) => 
@@ -633,7 +633,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     [editable, isAdmin, handleRemoveManager]
   );
   
-  // Apply context menu to nodes
   const nodesWithContextMenu = useMemo(() => {
     return nodes.map(wrapWithContextMenu);
   }, [nodes, wrapWithContextMenu]);
@@ -704,7 +703,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       <ReactFlow
         nodes={nodesWithContextMenu}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={onNodesChange as OnNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStart={onNodeDragStart}
@@ -732,7 +731,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         />
       </ReactFlow>
 
-      {/* View Employee Dialog */}
       <Dialog open={!!selectedEmployee && !editingEmployee} onOpenChange={() => setSelectedEmployee(null)}>
         <DialogContent>
           <DialogHeader>
@@ -793,7 +791,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         </DialogContent>
       </Dialog>
 
-      {/* Edit Employee Dialog */}
       {editingEmployee && (
         <EmployeeFormDialog
           open={!!editingEmployee}
@@ -807,7 +804,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         />
       )}
 
-      {/* Add Direct Report Dialog */}
       {addingDirectReportTo && (
         <EmployeeFormDialog
           open={!!addingDirectReportTo}
