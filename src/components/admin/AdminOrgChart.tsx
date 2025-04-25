@@ -1,8 +1,6 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEmployeesData } from '@/hooks/useEmployeesData';
-import { ReactFlowProvider } from '@xyflow/react';
 import OrgChart from '@/components/OrgChart';
 import { Button } from '@/components/ui/button';
 import { Download, RefreshCw, PlusCircle } from 'lucide-react';
@@ -78,19 +76,16 @@ const AdminOrgChart = () => {
                 <Skeleton className="h-full w-full" />
               </div>
             ) : (
-              <ReactFlowProvider>
-                <OrgChart 
-                  employees={employees || []} 
-                  isAdmin={isAdmin} 
-                  editable 
-                />
-              </ReactFlowProvider>
+              <OrgChart 
+                employees={employees || []} 
+                isAdmin={isAdmin} 
+                editable 
+              />
             )}
           </ErrorBoundary>
         </CardContent>
       </Card>
       
-      {/* Add Employee Dialog */}
       {showAddDialog && (
         <EmployeeFormDialog 
           open={showAddDialog}

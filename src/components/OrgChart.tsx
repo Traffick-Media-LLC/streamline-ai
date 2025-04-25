@@ -35,7 +35,6 @@ interface OrgChartProps {
   editable?: boolean;
 }
 
-// Define our node data structure that will be used within ReactFlow's Node type
 interface NodeData extends Record<string, unknown> {
   label: React.ReactNode;
   employee: Employee;
@@ -82,22 +81,19 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
   }, [employees]);
 
   const getEmployeeLevel = useCallback((employee: Employee): number => {
-    // Special cases for top leadership - manually position at the same level
     if (employee.first_name === 'Patrick' && employee.last_name === 'Mulcahy') {
-      return 0; // Top level for CEO
+      return 0;
     }
     
     if (employee.first_name === 'Matthew' && employee.last_name === 'Halvorson') {
-      return 0; // Same level for COO
+      return 0;
     }
     
     if (employee.first_name === 'Chuck' && employee.last_name === 'Melander') {
-      return 0; // Same level for CSO
+      return 0;
     }
     
-    // Define titles for each level
     const titleLevels: { [key: string]: number } = {
-      // Top leadership - Level 0
       'ceo': 0,
       'chief executive officer': 0,
       'coo': 0,
@@ -105,17 +101,14 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       'cso': 0, 
       'chief strategy officer': 0,
       
-      // VP and Directors - Level 1
       'vp': 1,
       'vice president': 1,
       'director': 1,
       
-      // Managers - Level 2
       'manager': 2,
       'lead': 2,
       'counsel': 2,
       
-      // Staff - Level 3
       'staff': 3,
       'accountant': 3,
       'analyst': 3,
@@ -125,30 +118,26 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       'executive': 3,
     };
     
-    // Get title in lowercase for matching
     const titleLower = employee.title.toLowerCase();
     
-    // Check specific title keywords
     for (const [titleKey, level] of Object.entries(titleLevels)) {
       if (titleLower.includes(titleKey)) {
         return level;
       }
     }
     
-    // Default level based on position in org
     if (employee.manager_id === null) {
-      return 0; // No manager means top level
+      return 0;
     }
     
     const manager = employeeMap.get(employee.manager_id);
-    if (!manager) return 3; // Default to staff level
+    if (!manager) return 3;
     
     const managerLevel = getEmployeeLevel(manager);
     return managerLevel + 1;
   }, [employeeMap]);
 
   const topNodes = useMemo(() => {
-    // Look for specific people in the top leadership positions
     const patrick = employees.find(emp => 
       emp.first_name === 'Patrick' && 
       emp.last_name === 'Mulcahy' && 
@@ -172,7 +161,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     if (matthew) topList.push(matthew);
     if (chuck) topList.push(chuck);
     
-    // If we couldn't find the specific people, fall back to title-based search
     if (topList.length === 0) {
       return employees.filter(emp => {
         const title = emp.title.toLowerCase();
@@ -191,7 +179,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
 
   const ceo = useMemo(() => {
     try {
-      // First try to find Patrick Mulcahy as CEO
       let foundCeo = employees.find(emp => 
         emp.first_name === 'Patrick' && 
         emp.last_name === 'Mulcahy' && 
@@ -273,7 +260,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       const levelHeight = 200;
       const levelWidth = 250;
       
-      // Calculate horizontal positions based on peers at the same level
       const employeesByLevel: { [level: number]: Employee[] } = {};
       employees.forEach(emp => {
         const level = getEmployeeLevel(emp);
@@ -284,39 +270,28 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       return employees.map((emp) => {
         const level = getEmployeeLevel(emp);
         const isLegal = emp.department.toLowerCase().includes('legal');
-        const isCsuite = level === 0; // Top level executives
+        const isCsuite = level === 0;
         
         const isChuck = emp.first_name === 'Chuck' && emp.last_name === 'Melander';
         const isDirector = emp.title.toLowerCase().includes('director') || 
                           emp.title.toLowerCase().includes('vp');
 
-        // Calculate horizontal position based on siblings at the same level
-        const peersAtSameLevel = employeesByLevel[level] || [];
-        const siblingIndex = peersAtSameLevel.indexOf(emp);
-        const siblingCount = peersAtSameLevel.length;
-        
-        // Special positioning for top leadership (CEO, COO, CSO)
         let xOffset;
         if (level === 0) {
-          // Special positioning for C-suite
           if (topNodes.length <= 3) {
-            // If we have Patrick Mulcahy (CEO), Matthew Halvorson (COO), Chuck Melander (CSO)
             if (emp.first_name === 'Patrick' && emp.last_name === 'Mulcahy') {
-              xOffset = 0; // Center
+              xOffset = 0;
             } else if (emp.first_name === 'Matthew' && emp.last_name === 'Halvorson') {
-              xOffset = levelWidth; // Right
+              xOffset = levelWidth;
             } else if (emp.first_name === 'Chuck' && emp.last_name === 'Melander') {
-              xOffset = -levelWidth; // Left
+              xOffset = -levelWidth;
             } else {
-              // Fallback for other C-level positions
               xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
             }
           } else {
-            // Generic calculation for many top-level positions
             xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
           }
         } else {
-          // Standard calculation for all other levels
           xOffset = (siblingIndex - (siblingCount - 1) / 2) * levelWidth;
         }
         
@@ -335,7 +310,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             ...nodeStyle,
             background: '#9b87f5',
             border: '2px solid #1A1F2C',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           };
           textColorClass = 'text-white';
         } else if (isChuck) {
@@ -343,14 +318,14 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             ...nodeStyle,
             background: '#7E69AB',
             border: '2px solid #1A1F2C',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           };
           textColorClass = 'text-white';
         } else if (isDirector) {
           nodeStyle = {
             ...nodeStyle,
             background: '#6E59A5',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           };
           textColorClass = 'text-white';
         } else if (isLegal) {
@@ -358,7 +333,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             ...nodeStyle,
             background: '#F1F0FB',
             border: '2px dashed #8E9196',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           };
           textColorClass = 'text-gray-700';
         }
@@ -449,7 +424,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     if (!editable || !isAdmin) return;
     setIsDragging(true);
     draggedNodeRef.current = node as Node<NodeData>;
-    // Change cursor to grabbing
     if (event.target instanceof HTMLElement) {
       event.target.style.cursor = 'grabbing';
     }
@@ -458,14 +432,10 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
   const onNodeDrag: NodeMouseHandler = useCallback((event, node) => {
     if (!editable || !isAdmin || !draggedNodeRef.current) return;
 
-    // Find any node that the dragged node is hovering over
-    const flowNodes = reactFlowInstance.getNodes();
-    
     let targetNode = null;
-    for (const potentialTarget of flowNodes) {
+    for (const potentialTarget of reactFlowInstance.getNodes()) {
       if (potentialTarget.id === draggedNodeRef.current.id) continue;
       
-      // Check if dragged node is over target node
       const draggedNodeBounds = {
         left: node.position.x,
         right: node.position.x + (node.width || 0),
@@ -488,16 +458,13 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       );
       
       if (isOverlapping) {
-        // Highlight the target node
         targetNode = potentialTarget;
         break;
       }
     }
     
-    // Update the target node reference
     targetNodeRef.current = targetNode as Node<NodeData> | null;
     
-    // Update visual feedback for drag target
     setNodes((nds) => 
       nds.map((n) => {
         if (n.id === targetNode?.id) {
@@ -509,7 +476,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             }
           };
         } else if (n.id !== draggedNodeRef.current?.id && ((n.style as NodeStyle)?.boxShadow)) {
-          // Clear any highlight on other nodes
           const { boxShadow, ...restStyle } = n.style as NodeStyle;
           return { ...n, style: restStyle };
         }
@@ -523,18 +489,15 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     
     setIsDragging(false);
     
-    // Reset cursor
     if (event.target instanceof HTMLElement) {
       event.target.style.cursor = 'grab';
     }
     
     try {
-      // If we have a target node, update the dragged node's manager
       if (targetNodeRef.current && draggedNodeRef.current.id !== targetNodeRef.current.id) {
         const draggedEmployeeId = draggedNodeRef.current.id;
         const newManagerId = targetNodeRef.current.id;
         
-        // Check for circular references
         let currentManagerId = newManagerId;
         const managerChain = [draggedEmployeeId];
         
@@ -550,7 +513,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
           currentManagerId = manager?.manager_id || null;
         }
         
-        // Update the employee's manager
         await updateEmployee.mutateAsync({
           id: draggedEmployeeId,
           manager_id: newManagerId
@@ -564,11 +526,9 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       console.error("Failed to update reporting relationship:", error);
       toast.error("Failed to update reporting relationship");
     } finally {
-      // Clear the references and any highlights
       draggedNodeRef.current = null;
       targetNodeRef.current = null;
       
-      // Clear any highlight styles
       setNodes((nds) => 
         nds.map((n) => {
           if ((n.style as NodeStyle)?.boxShadow) {
@@ -580,7 +540,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       );
     }
     
-    // Return the node to its original position in the org chart
     setNodes(initialNodes);
     setEdges(initialEdges);
   }, [editable, isAdmin, employeeMap, updateEmployee, setNodes, initialNodes, initialEdges, setEdges]);
@@ -595,7 +554,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
       const employee = employeeMap.get(employeeId);
       toast.success(`${employee?.first_name} ${employee?.last_name} no longer has a manager`);
       
-      // Reset nodes and edges
       setNodes(initialNodes);
       setEdges(initialEdges);
     } catch (error) {
@@ -621,7 +579,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
               onAddDirectReport={(managerId) => setAddingDirectReportTo(managerId)}
               onRemoveManager={handleRemoveManager}
               onDeleteSuccess={() => {
-                // Nodes will be refreshed via refetch in parent component
               }}
             >
               {node.data.label as React.ReactNode}
@@ -700,36 +657,38 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         </Button>
       </div>
       
-      <ReactFlow
-        nodes={nodesWithContextMenu}
-        edges={edges}
-        onNodesChange={onNodesChange as OnNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeDragStart={onNodeDragStart}
-        onNodeDrag={onNodeDrag}
-        onNodeDragStop={onNodeDragStop}
-        fitView
-        minZoom={0.1}
-        maxZoom={1.5}
-        nodesDraggable={editable && isAdmin}
-      >
-        <Background />
-        <Controls />
-        <MiniMap 
-          nodeColor={node => {
-            const emp = employeeMap.get(node.id as string);
-            if (!emp) return '#94A3B8';
-            if (!emp.manager_id) return '#9b87f5';
-            if (emp.department.toLowerCase().includes('legal')) return '#8E9196';
-            if (emp.title.toLowerCase().includes('director') || 
-                emp.title.toLowerCase().includes('vp')) {
-              return '#6E59A5';
-            }
-            return '#D3E4FD';
-          }}
-        />
-      </ReactFlow>
+      <ReactFlowProvider>
+        <ReactFlow
+          nodes={nodesWithContextMenu}
+          edges={edges}
+          onNodesChange={onNodesChange as OnNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDrag={onNodeDrag}
+          onNodeDragStop={onNodeDragStop}
+          fitView
+          minZoom={0.1}
+          maxZoom={1.5}
+          nodesDraggable={editable && isAdmin}
+        >
+          <Background />
+          <Controls />
+          <MiniMap 
+            nodeColor={node => {
+              const emp = employeeMap.get(node.id as string);
+              if (!emp) return '#94A3B8';
+              if (!emp.manager_id) return '#9b87f5';
+              if (emp.department.toLowerCase().includes('legal')) return '#8E9196';
+              if (emp.title.toLowerCase().includes('director') || 
+                  emp.title.toLowerCase().includes('vp')) {
+                return '#6E59A5';
+              }
+              return '#D3E4FD';
+            }}
+          />
+        </ReactFlow>
+      </ReactFlowProvider>
 
       <Dialog open={!!selectedEmployee && !editingEmployee} onOpenChange={() => setSelectedEmployee(null)}>
         <DialogContent>
