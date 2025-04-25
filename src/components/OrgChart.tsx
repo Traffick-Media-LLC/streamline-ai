@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   ReactFlow,
@@ -11,10 +10,11 @@ import {
   Node,
   Edge,
   Connection,
-  NodeDragHandler,
   OnNodesChange,
   XYPosition,
-  useReactFlow
+  useReactFlow,
+  NodeMouseHandler,
+  NodeProps
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Employee } from '@/hooks/useEmployeesData';
@@ -33,6 +33,16 @@ interface OrgChartProps {
   employees: Employee[];
   isAdmin?: boolean;
   editable?: boolean;
+}
+
+// Define type for node style to fix boxShadow issues
+interface NodeStyle {
+  background: string;
+  border: string;
+  borderRadius: string;
+  padding: string;
+  cursor: string;
+  boxShadow?: string;
 }
 
 const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProps) => {
@@ -430,7 +440,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     }
   }, [initialNodes, initialEdges, setNodes, setEdges]);
 
-  const onNodeDragStart: NodeDragHandler = useCallback((event, node) => {
+  const onNodeDragStart: NodeMouseHandler = useCallback((event, node) => {
     if (!editable || !isAdmin) return;
     setIsDragging(true);
     draggedNodeRef.current = node;
@@ -440,14 +450,14 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     }
   }, [editable, isAdmin]);
 
-  const onNodeDrag: NodeDragHandler = useCallback((event, node) => {
+  const onNodeDrag: NodeMouseHandler = useCallback((event, node) => {
     if (!editable || !isAdmin || !draggedNodeRef.current) return;
 
     // Find any node that the dragged node is hovering over
-    const { nodeInternals } = reactFlowInstance.getState();
+    const flowNodes = reactFlowInstance.getNodes();
     
     let targetNode = null;
-    for (const [, potentialTarget] of nodeInternals) {
+    for (const potentialTarget of flowNodes) {
       if (potentialTarget.id === draggedNodeRef.current.id) continue;
       
       // Check if dragged node is over target node
@@ -488,11 +498,14 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         if (n.id === targetNode?.id) {
           return {
             ...n,
-            style: { ...n.style, boxShadow: '0 0 0 2px #6E59A5' }
+            style: { 
+              ...(n.style as NodeStyle), 
+              boxShadow: '0 0 0 2px #6E59A5' 
+            }
           };
-        } else if (n.id !== draggedNodeRef.current?.id && n.style?.boxShadow) {
+        } else if (n.id !== draggedNodeRef.current?.id && (n.style as NodeStyle)?.boxShadow) {
           // Clear any highlight on other nodes
-          const { boxShadow, ...restStyle } = n.style;
+          const { boxShadow, ...restStyle } = n.style as NodeStyle;
           return { ...n, style: restStyle };
         }
         return n;
@@ -500,7 +513,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     );
   }, [editable, isAdmin, reactFlowInstance, setNodes]);
 
-  const onNodeDragStop: NodeDragHandler = useCallback(async (event, node) => {
+  const onNodeDragStop: NodeMouseHandler = useCallback(async (event, node) => {
     if (!editable || !isAdmin || !draggedNodeRef.current) return;
     
     setIsDragging(false);

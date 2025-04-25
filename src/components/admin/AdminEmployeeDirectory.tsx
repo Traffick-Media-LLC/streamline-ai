@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { useEmployeesData } from '@/hooks/useEmployeesData';
@@ -5,7 +6,7 @@ import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
-import { Search, Trash2 } from "lucide-react";
+import { Search, Trash2, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -27,10 +28,12 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const AdminEmployeeDirectory = () => {
-  const { data: employees, isLoading, error } = useEmployeesData();
+  const { data: employees, isLoading, error, refetch } = useEmployeesData();
   const { deleteEmployee } = useEmployeeOperations();
   const [searchTerm, setSearchTerm] = useState("");
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [employeeToEdit, setEmployeeToEdit] = useState<any>(null);
   const { isAdmin } = useAuth();
 
   const filteredEmployees = employees?.filter((employee) => {
@@ -49,6 +52,7 @@ const AdminEmployeeDirectory = () => {
     try {
       await deleteEmployee.mutateAsync(employeeToDelete);
       setEmployeeToDelete(null);
+      refetch();
     } catch (error) {
       console.error('Error deleting employee:', error);
     }
@@ -73,7 +77,15 @@ const AdminEmployeeDirectory = () => {
         <CardHeader className="pb-2">
           <div className="flex justify-between items-center">
             <CardTitle>Manage Employees</CardTitle>
-            {isAdmin && <EmployeeFormDialog employees={employees} />}
+            {isAdmin && (
+              <Button 
+                onClick={() => setShowAddDialog(true)}
+                size="sm"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Employee
+              </Button>
+            )}
           </div>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -134,10 +146,13 @@ const AdminEmployeeDirectory = () => {
                           <TableCell className="text-right">
                             {isAdmin && (
                               <div className="flex justify-end gap-2">
-                                <EmployeeFormDialog 
-                                  employee={employee}
-                                  employees={employees}
-                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEmployeeToEdit(employee)}
+                                >
+                                  Edit
+                                </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -182,6 +197,28 @@ const AdminEmployeeDirectory = () => {
         </CardContent>
       </Card>
 
+      {/* Add/Edit Employee Dialog */}
+      {(showAddDialog || employeeToEdit) && (
+        <EmployeeFormDialog
+          open={showAddDialog || !!employeeToEdit}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowAddDialog(false);
+              setEmployeeToEdit(null);
+            }
+          }}
+          employees={employees || []}
+          employeeToEdit={employeeToEdit}
+          onSuccess={() => {
+            setShowAddDialog(false);
+            setEmployeeToEdit(null);
+            refetch();
+            toast.success(employeeToEdit ? "Employee updated" : "Employee added");
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!employeeToDelete} onOpenChange={() => setEmployeeToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

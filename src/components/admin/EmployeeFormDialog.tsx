@@ -23,7 +23,7 @@ const employeeSchema = z.object({
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
-interface EmployeeFormDialogProps {
+export interface EmployeeFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   employees: Employee[];
@@ -70,7 +70,18 @@ const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
           ...data
         });
       } else {
-        await createEmployee.mutateAsync(data);
+        // Ensure all required fields are present even if empty
+        const employeeData = {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone: data.phone || null,
+          title: data.title,
+          department: data.department,
+          manager_id: data.manager_id
+        };
+        
+        await createEmployee.mutateAsync(employeeData);
       }
       onSuccess();
     } catch (error) {
