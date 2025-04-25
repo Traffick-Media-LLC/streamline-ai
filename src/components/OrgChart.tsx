@@ -272,6 +272,9 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
         const level = getEmployeeLevel(emp);
         const isLegal = emp.department.toLowerCase().includes('legal');
         const isCsuite = level === 0;
+        const isChuck = emp.first_name === 'Chuck' && emp.last_name === 'Melander';
+        const isDirector = emp.title.toLowerCase().includes('director') || 
+                          emp.title.toLowerCase().includes('vp');
         
         const currentLevelEmployees = employeesByLevel[level] || [];
         const positionInLevel = currentLevelEmployees.findIndex(e => e.id === emp.id);
