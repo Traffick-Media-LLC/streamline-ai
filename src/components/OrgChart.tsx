@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -28,7 +28,6 @@ import EmployeeContextMenu from './admin/EmployeeContextMenu';
 import EmployeeFormDialog from './admin/EmployeeFormDialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
-import React from 'react';
 
 interface OrgChartProps {
   employees: Employee[];
@@ -334,6 +333,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             ...nodeStyle,
             background: '#9b87f5',
             border: '2px solid #1A1F2C',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
           };
           textColorClass = 'text-white';
         } else if (isChuck) {
@@ -341,12 +341,14 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             ...nodeStyle,
             background: '#7E69AB',
             border: '2px solid #1A1F2C',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
           };
           textColorClass = 'text-white';
         } else if (isDirector) {
           nodeStyle = {
             ...nodeStyle,
             background: '#6E59A5',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
           };
           textColorClass = 'text-white';
         } else if (isLegal) {
@@ -354,6 +356,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             ...nodeStyle,
             background: '#F1F0FB',
             border: '2px dashed #8E9196',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)' // Added boxShadow
           };
           textColorClass = 'text-gray-700';
         }
@@ -377,7 +380,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
                 key: 'edit-indicator',
                 className: "absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity"
               }) : null
-            ].filter(Boolean)),
+            ].filter(Boolean) as React.ReactNode[]), // Explicitly type as ReactNode[]
             employee: emp,
           },
           style: nodeStyle,
