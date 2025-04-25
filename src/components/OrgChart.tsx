@@ -28,6 +28,7 @@ import EmployeeContextMenu from './admin/EmployeeContextMenu';
 import EmployeeFormDialog from './admin/EmployeeFormDialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
+import React from 'react';
 
 interface OrgChartProps {
   employees: Employee[];
@@ -365,21 +366,18 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             y: level * levelHeight
           },
           data: {
-            label: (
-              <div 
-                className={`${textColorClass} ${editable && isAdmin ? 'with-actions' : ''}`}
-                onClick={() => setSelectedEmployee(emp)}
-              >
-                <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
-                <div className="text-sm">{emp.title}</div>
-                <div className="text-xs opacity-75">{emp.department}</div>
-                {editable && isAdmin && (
-                  <div className="absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity">
-                    {/* Edit indicator for admins */}
-                  </div>
-                )}
-              </div>
-            ),
+            label: React.createElement('div', { 
+              className: `${textColorClass} ${editable && isAdmin ? 'with-actions' : ''}`,
+              onClick: () => setSelectedEmployee(emp)
+            }, [
+              React.createElement('div', { key: 'name', className: "font-semibold" }, `${emp.first_name} ${emp.last_name}`),
+              React.createElement('div', { key: 'title', className: "text-sm" }, emp.title),
+              React.createElement('div', { key: 'department', className: "text-xs opacity-75" }, emp.department),
+              editable && isAdmin ? React.createElement('div', {
+                key: 'edit-indicator',
+                className: "absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity"
+              }) : null
+            ].filter(Boolean)),
             employee: emp,
           },
           style: nodeStyle,
