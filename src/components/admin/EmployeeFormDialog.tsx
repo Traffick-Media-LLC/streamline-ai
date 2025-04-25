@@ -202,7 +202,7 @@ const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">No Manager</SelectItem>
+                      <SelectItem value="null">No Manager</SelectItem>
                       {employees
                         .filter(e => !isEditing || e.id !== employeeToEdit?.id)
                         .map((employee) => (
