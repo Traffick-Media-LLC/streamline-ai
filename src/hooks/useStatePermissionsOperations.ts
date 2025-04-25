@@ -11,8 +11,13 @@ export const useStatePermissionsOperations = () => {
   const { isAuthenticated, isAdmin } = useAuth();
 
   const validatePermissions = (stateId: number, productIds: number[]): boolean => {
-    if (!isAuthenticated || !isAdmin) {
-      toast.error("Authentication required. Please ensure you're logged in as an admin.");
+    if (!isAuthenticated) {
+      toast.error("Authentication required. Please sign in.");
+      return false;
+    }
+
+    if (!isAdmin) {
+      toast.error("Admin access required to modify permissions.");
       return false;
     }
 
@@ -39,6 +44,7 @@ export const useStatePermissionsOperations = () => {
     try {
       setIsSaving(true);
       setIsError(false);
+      setLastError(null);
 
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
@@ -78,14 +84,15 @@ export const useStatePermissionsOperations = () => {
       
       toast.dismiss("saving-permissions");
       toast.error('Failed to update state permissions', {
-        description: `Error: ${error.message}. Please ensure you're logged in as an admin.`
+        description: error.message.includes('policy') 
+          ? 'Admin access required. Please ensure you have proper permissions.' 
+          : `Error: ${error.message}`
       });
 
       if (retryCount < 2 && (
         error.message.includes('network') || 
         error.message.includes('timeout') || 
-        error.message.includes('connection') ||
-        error.message.includes('authentication')
+        error.message.includes('connection')
       )) {
         toast.info("Retrying save operation...");
         return await saveStatePermissions(stateId, productIds, retryCount + 1);

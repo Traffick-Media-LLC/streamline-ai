@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -28,7 +29,9 @@ export const useStatePermissionsData = () => {
       console.error('Error fetching states:', error);
       setError(`Failed to load states: ${error.message}`);
       toast.error("Failed to load states", {
-        description: "Please ensure you're logged in with proper permissions"
+        description: error.message.includes('policy') 
+          ? "Admin access required. Please ensure you have proper permissions."
+          : error.message
       });
     }
   }, [isAuthenticated, isAdmin]);
