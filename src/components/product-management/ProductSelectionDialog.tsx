@@ -61,6 +61,18 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
     );
   };
 
+  // Fixed function to handle "Select All Visible" button
+  const handleSelectAllVisible = () => {
+    const visibleProductIds = filteredProducts.map(p => p.id);
+    // Create a new array with existing non-visible products and all visible ones
+    const newSelectedProducts = [
+      ...selectedProducts.filter(id => !visibleProductIds.includes(id)),
+      ...visibleProductIds
+    ];
+    // Pass the new array directly
+    onSelectionChange(newSelectedProducts);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -144,13 +156,7 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
           </Button>
           <Button 
             variant="outline" 
-            onClick={() => {
-              const visibleProductIds = filteredProducts.map(p => p.id);
-              onSelectionChange(prev => {
-                const existingNotVisible = prev.filter(id => !visibleProductIds.includes(id));
-                return [...existingNotVisible, ...visibleProductIds];
-              });
-            }}
+            onClick={handleSelectAllVisible}
           >
             Select All Visible
           </Button>
