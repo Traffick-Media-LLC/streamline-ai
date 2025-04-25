@@ -64,21 +64,27 @@ const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
   
   const onSubmit = async (data: EmployeeFormValues) => {
     try {
+      // Process manager_id to convert "null" string to actual null
+      const processedData = {
+        ...data,
+        manager_id: data.manager_id === "null" ? null : data.manager_id
+      };
+      
       if (isEditing && employeeToEdit) {
         await updateEmployee.mutateAsync({
           id: employeeToEdit.id,
-          ...data
+          ...processedData
         });
       } else {
         // Ensure all required fields are present even if empty
         const employeeData = {
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          phone: data.phone || null,
-          title: data.title,
-          department: data.department,
-          manager_id: data.manager_id
+          first_name: processedData.first_name,
+          last_name: processedData.last_name,
+          email: processedData.email,
+          phone: processedData.phone || null,
+          title: processedData.title,
+          department: processedData.department,
+          manager_id: processedData.manager_id
         };
         
         await createEmployee.mutateAsync(employeeData);
@@ -194,7 +200,7 @@ const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
                   <FormLabel>Manager</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value || undefined}
+                    defaultValue={field.value || "null"}
                   >
                     <FormControl>
                       <SelectTrigger>
