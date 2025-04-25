@@ -35,7 +35,8 @@ interface OrgChartProps {
   editable?: boolean;
 }
 
-interface NodeData {
+// Make NodeData extend Record<string, unknown> to satisfy React Flow requirements
+interface NodeData extends Record<string, unknown> {
   label: React.ReactNode;
   employee: Employee;
 }
@@ -67,7 +68,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     return new Map(employees.map(emp => [emp.id, emp]));
   }, [employees]);
 
-  // Employees with specific titles for top leadership
   const topLeadership = useMemo(() => {
     return employees.filter(emp => {
       const title = emp.title.toLowerCase();
@@ -81,7 +81,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     });
   }, [employees]);
 
-  // Map of employees and their designated level in the org chart
   const getEmployeeLevel = useCallback((employee: Employee): number => {
     // Special cases for top leadership - manually position at the same level
     if (employee.first_name === 'Patrick' && employee.last_name === 'Mulcahy') {
@@ -148,7 +147,6 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     return managerLevel + 1;
   }, [employeeMap]);
 
-  // Find the top leadership nodes
   const topNodes = useMemo(() => {
     // Look for specific people in the top leadership positions
     const patrick = employees.find(emp => 
@@ -265,7 +263,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     }
   }, [hasHierarchy, employees]);
 
-  const initialNodes = useMemo(() => {
+  const initialNodes = useMemo<Node<NodeData>[]>(() => {
     if (!employees.length) {
       setError('No employee data available');
       return [];
@@ -365,22 +363,19 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
           textColorClass = 'text-gray-700';
         }
 
-        const nodeData: NodeData = {
-          label: (
-            <div 
-              className={`${textColorClass} ${editable && isAdmin ? 'with-actions' : ''}`}
-              onClick={() => setSelectedEmployee(emp)}
-            >
-              <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
-              <div className="text-sm">{emp.title}</div>
-              <div className="text-xs opacity-75">{emp.department}</div>
-              {editable && isAdmin && (
-                <div className="absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity" />
-              )}
-            </div>
-          ) as React.ReactNode,
-          employee: emp,
-        };
+        const label = (
+          <div 
+            className={`${textColorClass} ${editable && isAdmin ? 'with-actions' : ''}`}
+            onClick={() => setSelectedEmployee(emp)}
+          >
+            <div className="font-semibold">{`${emp.first_name} ${emp.last_name}`}</div>
+            <div className="text-sm">{emp.title}</div>
+            <div className="text-xs opacity-75">{emp.department}</div>
+            {editable && isAdmin && (
+              <div className="absolute top-1 right-1 opacity-25 hover:opacity-100 transition-opacity" />
+            )}
+          </div>
+        );
 
         return {
           id: emp.id,
@@ -389,10 +384,13 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
             x: xOffset,
             y: level * levelHeight
           },
-          data: nodeData,
+          data: {
+            label,
+            employee: emp
+          } as NodeData,
           style: nodeStyle,
           draggable: editable && isAdmin,
-        };
+        } as Node<NodeData>;
       });
     } catch (err) {
       console.error('Error creating nodes:', err);
@@ -431,14 +429,13 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
     }
   }, [employees, layoutMode, employeeMap]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const onConnect = useCallback((params: Connection) => {
     setEdges((eds) => addEdge(params, eds));
   }, [setEdges]);
 
-  // Reset nodes and edges when employees data changes
   useEffect(() => {
     if (!isInitialMount.current) {
       setNodes(initialNodes);
@@ -608,7 +605,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
   };
 
   const wrapWithContextMenu = useCallback(
-    (node: Node) => {
+    (node: Node<NodeData>) => {
       if (!editable || !isAdmin) return node;
       
       const employee = node.data.employee as Employee;
@@ -627,7 +624,7 @@ const OrgChart = ({ employees, isAdmin = false, editable = false }: OrgChartProp
                 // Nodes will be refreshed via refetch in parent component
               }}
             >
-              {node.data.label}
+              {node.data.label as React.ReactNode}
             </EmployeeContextMenu>
           )
         }
