@@ -45,11 +45,11 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
   isSaving
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterBrandId, setFilterBrandId] = useState<string>('');
+  const [filterBrandId, setFilterBrandId] = useState<string>('all');
 
   const filteredProducts = products.filter(product => {
     const nameMatch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const brandMatch = !filterBrandId || product.brand?.id === parseInt(filterBrandId);
+    const brandMatch = filterBrandId === 'all' || product.brand?.id === parseInt(filterBrandId);
     return nameMatch && brandMatch;
   });
 
@@ -96,7 +96,7 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
                 <SelectValue placeholder="Filter by brand" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Brands</SelectItem>
+                <SelectItem value="all">All Brands</SelectItem>
                 {brands.map((brand) => (
                   <SelectItem key={brand.id} value={brand.id.toString()}>
                     {brand.name}
