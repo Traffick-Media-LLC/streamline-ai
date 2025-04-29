@@ -46,9 +46,7 @@ const ChatWindow = () => {
   if (!currentChat) {
     return <div className="flex flex-col items-center justify-center h-full p-4 text-center space-y-6">
         <Animated type="slide-up" delay={0.1}>
-          <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-streamline-red to-streamline-darkGray">
-            Welcome to Streamline AI
-          </h1>
+          <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-streamline-red to-streamline-darkGray">Hi, i'm Max.</h1>
         </Animated>
         
         <Animated type="slide-up" delay={0.2}>
