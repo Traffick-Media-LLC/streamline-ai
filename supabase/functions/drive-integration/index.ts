@@ -2,12 +2,129 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { GoogleAuth } from "https://deno.land/x/googledrive@v0.1.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Custom GoogleAuth implementation since the original module is not available
+class GoogleAuth {
+  private credentials: any;
+  private scopes: string[];
+  private token: string | null = null;
+  private tokenExpiry: Date | null = null;
+
+  constructor({ credentials, scopes }: { credentials: any, scopes: string[] }) {
+    this.credentials = credentials;
+    this.scopes = scopes;
+  }
+
+  async getAccessToken(): Promise<string> {
+    // Check if we have a valid token already
+    if (this.token && this.tokenExpiry && this.tokenExpiry > new Date()) {
+      return this.token;
+    }
+
+    try {
+      // Request a new token using JWT auth
+      const now = Math.floor(Date.now() / 1000);
+      const expiry = now + 3600; // 1 hour
+
+      const jwtHeader = {
+        alg: "RS256",
+        typ: "JWT",
+        kid: this.credentials.private_key_id
+      };
+
+      const jwtClaimSet = {
+        iss: this.credentials.client_email,
+        scope: this.scopes.join(' '),
+        aud: "https://oauth2.googleapis.com/token",
+        exp: expiry,
+        iat: now
+      };
+
+      // Encode the JWT components
+      const base64Header = btoa(JSON.stringify(jwtHeader)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const base64ClaimSet = btoa(JSON.stringify(jwtClaimSet)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      // Create the signing input
+      const signInput = `${base64Header}.${base64ClaimSet}`;
+      
+      // Sign the JWT using the private key
+      const encoder = new TextEncoder();
+      const keyData = this.credentials.private_key;
+      
+      // Import the private key
+      const privateKey = await crypto.subtle.importKey(
+        "pkcs8",
+        this._convertPemToBinary(keyData),
+        {
+          name: "RSASSA-PKCS1-v1_5",
+          hash: { name: "SHA-256" }
+        },
+        false,
+        ["sign"]
+      );
+      
+      // Sign the data
+      const signature = await crypto.subtle.sign(
+        { name: "RSASSA-PKCS1-v1_5" },
+        privateKey,
+        encoder.encode(signInput)
+      );
+      
+      // Convert the signature to base64url
+      const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      
+      // Assemble the JWT
+      const jwt = `${signInput}.${base64Signature}`;
+      
+      // Exchange the JWT for an access token
+      const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to get access token: ${await response.text()}`);
+      }
+      
+      const tokenResponse = await response.json();
+      this.token = tokenResponse.access_token;
+      this.tokenExpiry = new Date(Date.now() + (tokenResponse.expires_in * 1000));
+      
+      return this.token;
+    } catch (error) {
+      console.error("Error getting Google access token:", error);
+      throw error;
+    }
+  }
+
+  // Helper function to convert PEM encoded private key to binary format
+  private _convertPemToBinary(pem: string): ArrayBuffer {
+    // Remove header, footer, and newlines
+    const base64 = pem
+      .replace(/-----BEGIN PRIVATE KEY-----/, '')
+      .replace(/-----END PRIVATE KEY-----/, '')
+      .replace(/\n/g, '');
+      
+    // Decode base64 to binary
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -140,7 +257,7 @@ async function handleSyncDrive(supabase, credentialsJson) {
   try {
     const credentials = JSON.parse(credentialsJson);
     
-    // Initialize Google Auth
+    // Initialize Google Auth with our custom implementation
     const auth = new GoogleAuth({
       credentials: credentials,
       scopes: ['https://www.googleapis.com/auth/drive.readonly']

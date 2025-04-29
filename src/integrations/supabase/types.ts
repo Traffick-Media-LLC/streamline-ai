@@ -31,6 +31,7 @@ export type Database = {
         Row: {
           chat_id: string
           content: string
+          document_ids: string[] | null
           id: string
           role: string
           timestamp: string | null
@@ -38,6 +39,7 @@ export type Database = {
         Insert: {
           chat_id: string
           content: string
+          document_ids?: string[] | null
           id?: string
           role: string
           timestamp?: string | null
@@ -45,6 +47,7 @@ export type Database = {
         Update: {
           chat_id?: string
           content?: string
+          document_ids?: string[] | null
           id?: string
           role?: string
           timestamp?: string | null

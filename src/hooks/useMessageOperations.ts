@@ -30,7 +30,8 @@ export const useMessageOperations = (
         .insert({
           chat_id: chatId,
           role: message.role,
-          content: message.content
+          content: message.content,
+          document_ids: message.documentIds || [] // Include document_ids in the insert
         });
 
       if (error) {

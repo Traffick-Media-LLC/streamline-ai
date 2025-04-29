@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatsState } from "./useChatsState";
 import { useChatCreation } from "./useChatCreation";
@@ -17,7 +16,6 @@ export const useChatOperations = () => {
     setIsLoadingResponse,
     mode,
     setMode,
-    // We'll override this function
     getCurrentChat: originalGetCurrentChat
   } = useChatsState();
   
@@ -93,7 +91,7 @@ export const useChatOperations = () => {
             role: msg.role as "user" | "assistant" | "system",
             content: msg.content,
             timestamp: new Date(msg.timestamp).getTime(),
-            documentIds: msg.document_ids
+            documentIds: msg.document_ids && msg.document_ids.length > 0 ? msg.document_ids : undefined
           })),
           createdAt: new Date(chat.created_at).getTime(),
           updatedAt: new Date(chat.updated_at).getTime()
