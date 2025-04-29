@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -18,7 +17,7 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
   try {
-    const { content, mode, messages, documentIds = [] } = await req.json();
+    const { content, messages, documentIds = [] } = await req.json();
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
@@ -110,12 +109,7 @@ ${referencedSources.length > 0 ?
 
 Always cite your sources where appropriate (e.g., 'According to the State Map data...' or 'This document is retrieved from the Streamline Group Drive').
 
-Answer in a professional, clear, and helpful tone. If you cannot find an answer from the available sources, politely let the user know and suggest submitting a request via the Marketing Request Form or contacting the appropriate department.
-
-Response Format:
-${mode === 'simple' ? 
-  '- Provide concise, bullet-point answers\n- Keep responses to 3-4 sentences maximum\n- Use simple, non-technical language\n- Start with a clear yes/no when applicable\n- Focus on key points only' : 
-  '- Provide detailed explanations with citations\n- Break down information step-by-step\n- Include relevant context when applicable\n- Structure response in clear sections\n- Consider specific requirements and edge cases'}`;
+Answer in a professional, clear, and helpful tone. If you cannot find an answer from the available sources, politely let the user know and suggest submitting a request via the Marketing Request Form or contacting the appropriate department.`;
 
     // Build the final system message with the knowledge context
     let systemContent = baseSystemPrompt;
@@ -123,7 +117,7 @@ ${mode === 'simple' ?
       systemContent += `\n\n${knowledgeContext}`;
     }
     
-    systemContent += `\n\nMaintain the specified response format throughout the conversation.`;
+    systemContent += `\n\nMaintain a helpful and professional tone throughout the conversation.`;
 
     const conversationMessages = [
       { role: 'system', content: systemContent },
@@ -143,7 +137,7 @@ ${mode === 'simple' ?
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: conversationMessages,
-        temperature: mode === 'simple' ? 0.5 : 0.7,
+        temperature: 0.7,
       }),
     });
 

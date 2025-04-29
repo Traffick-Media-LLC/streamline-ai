@@ -17,11 +17,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const {
     currentChatId,
     isLoadingResponse,
-    mode,
     createNewChat,
     sendMessage,
     getCurrentChat,
-    setMode,
     chats,
     selectChat,
     isInitializing,
@@ -32,11 +30,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const value: ChatContextType = {
     currentChatId,
     isLoadingResponse,
-    mode,
     createNewChat,
     sendMessage,
     getCurrentChat,
-    setMode,
     chats,
     selectChat,
     isInitializing,
