@@ -21,281 +21,101 @@ serve(async (req) => {
     const { content, mode, messages, documentIds = [] } = await req.json();
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Extract potential brand and product names from the query
-    const words = content.split(' ');
-    const potentialBrands = words
-      .filter((word: string) => word.length > 2)
-      .map((word: string) => word.replace(/[^\w]/g, ''));
     
-    // First search: Look for exact brand matches
-    let { data: brandEntries, error: brandError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .filter('tags', 'cs', '{"brand"}')
-      .or(potentialBrands.map(brand => `title.ilike.%${brand}%`).join(','));
+    // Analyze the input to determine which sources to prioritize
+    const legalityQuery = isLegalityQuery(content);
+    const fileQuery = isFileQuery(content);
     
-    if (brandError) {
-      console.error('Error searching for brands:', brandError);
-      brandEntries = [];
-    }
-
-    // Second search: Look for product matches
-    let { data: productEntries, error: productError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .filter('tags', 'cs', '{"product"}')
-      .or(potentialBrands.map(term => `title.ilike.%${term}%`).join(','));
+    console.log(`Query analysis - Legality: ${legalityQuery}, File: ${fileQuery}`);
     
-    if (productError) {
-      console.error('Error searching for products:', productError);
-      productEntries = [];
-    }
-
-    // Third search: General content search for regulatory info
-    let { data: regulatoryEntries, error: regulatoryError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .textSearch('content', content.split(' ').join(' | '));
+    // Extract potential terms for database searches
+    const searchTerms = extractSearchTerms(content);
+    let knowledgeContext = "";
+    let referencedSources = [];
     
-    if (regulatoryError) {
-      console.error('Error searching regulatory content:', regulatoryError);
-      regulatoryEntries = [];
-    }
-    
-    // Fourth search: Find relevant JSON entries
-    let { data: jsonEntries, error: jsonError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .filter('tags', 'cs', '{"json"}');
+    // 1. LEGALITY CHECK: Check Supabase state permissions for product legality questions
+    if (legalityQuery) {
+      console.log("Processing legality query with state map data");
+      const legalityData = await checkProductLegality(supabase, searchTerms);
       
-    if (jsonError) {
-      console.error('Error searching json entries:', jsonError);
-      jsonEntries = [];
+      if (legalityData) {
+        knowledgeContext += "State Legality Data:\n\n" + legalityData + "\n\n";
+        referencedSources.push("State Map Database");
+      }
     }
-
-    // NEW: Fetch document content from drive_files if documentIds are provided
+    
+    // 2. KNOWLEDGE BASE: Extract brand, product, and regulatory information from Knowledge Base
+    // Extract potential brand and product names from the query
+    let knowledgeEntries = await getRelevantKnowledgeEntries(supabase, searchTerms, content);
+    
+    if (knowledgeEntries.length > 0) {
+      knowledgeContext += "Knowledge Base Information:\n\n" + knowledgeEntries.join("\n\n") + "\n\n";
+      referencedSources.push("Knowledge Base");
+    }
+    
+    // 3. DOCUMENT SEARCH: Search Google Drive for documents if it's a file query
+    // or if document IDs are explicitly provided
     let documentEntries = [];
+    
+    // Process explicitly provided document IDs
     if (documentIds && documentIds.length > 0) {
-      const { data: fileData, error: fileError } = await supabase
-        .from('drive_files')
-        .select('id, name, file_type, description')
-        .in('id', documentIds);
-        
-      if (!fileError && fileData) {
-        // Get content for each file
-        for (const file of fileData) {
-          const { data: contentData, error: contentError } = await supabase
-            .from('file_content')
-            .select('content')
-            .eq('file_id', file.id)
-            .single();
-            
-          if (!contentError && contentData) {
-            documentEntries.push({
-              title: `Document: ${file.name}`,
-              content: contentData.content,
-              file_id: file.id,
-              file_type: file.file_type,
-              tags: ['document']
-            });
-            
-            // Update last_accessed timestamp
-            await supabase
-              .from('drive_files')
-              .update({ last_accessed: new Date().toISOString() })
-              .eq('id', file.id);
-          }
+      documentEntries = await getDocumentContent(supabase, documentIds);
+      if (documentEntries.length > 0) {
+        referencedSources.push("Selected Documents");
+      }
+    } 
+    // Or search for documents if it's a file query
+    else if (fileQuery) {
+      const documentSearchResults = await searchDocuments(supabase, searchTerms);
+      
+      if (documentSearchResults.length > 0) {
+        documentEntries = await getDocumentContent(supabase, 
+          documentSearchResults.slice(0, 3).map(doc => doc.id));
+          
+        if (documentEntries.length > 0) {
+          referencedSources.push("Drive Search");
         }
       }
     }
-
-    // Combine results
-    const allEntries = [
-      ...(brandEntries || []), 
-      ...(productEntries || []),
-      ...(jsonEntries || []),
-      ...(documentEntries || []),
-      ...(regulatoryEntries || []).filter(entry => 
-        !brandEntries?.some(b => b.id === entry.id) && 
-        !productEntries?.some(p => p.id === entry.id) &&
-        !jsonEntries?.some(j => j.id === entry.id)
-      )
-    ];
-
-    console.log(`Found ${brandEntries?.length || 0} brand entries, ${productEntries?.length || 0} product entries, ${jsonEntries?.length || 0} JSON entries, ${documentEntries?.length || 0} document entries, and ${regulatoryEntries?.length || 0} regulatory entries`);
     
-    // Generate knowledge context
-    let knowledgeContext = "";
-    if (allEntries.length > 0) {
-      knowledgeContext = "Brand, Product, Regulatory Knowledge and Documents:\n\n";
-      
-      // Process brand entries
-      const brandInfo = brandEntries?.map(entry => 
-        `Brand: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
-      ).join('\n\n');
-      
-      if (brandInfo) {
-        knowledgeContext += `${brandInfo}\n\n`;
-      }
-
-      // Process product entries
-      const productInfo = productEntries?.map(entry => 
-        `Product: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
-      ).join('\n\n');
-      
-      if (productInfo) {
-        knowledgeContext += `${productInfo}\n\n`;
-      }
-      
-      // Process JSON entries - transform them to be more readable
-      if (jsonEntries?.length) {
-        knowledgeContext += "JSON Data:\n\n";
-        jsonEntries.forEach(entry => {
-          try {
-            // Try to parse the JSON content
-            const jsonData = JSON.parse(entry.content);
-            
-            if (typeof jsonData === 'object') {
-              knowledgeContext += `${entry.title}:\n`;
-              
-              // Handle both objects and arrays
-              if (Array.isArray(jsonData)) {
-                // For arrays, summarize with key data points
-                knowledgeContext += `Data contains ${jsonData.length} items/records.\n`;
-                
-                // Sample a few items to give context
-                if (jsonData.length > 0) {
-                  const sample = jsonData.slice(0, Math.min(3, jsonData.length));
-                  sample.forEach((item, index) => {
-                    knowledgeContext += `Sample ${index + 1}:\n`;
-                    if (typeof item === 'object') {
-                      Object.entries(item).forEach(([key, value]) => {
-                        knowledgeContext += `- ${key}: ${JSON.stringify(value)}\n`;
-                      });
-                    } else {
-                      knowledgeContext += `- Value: ${item}\n`;
-                    }
-                  });
-                }
-              } else {
-                // For objects, include all top-level key/values
-                Object.entries(jsonData).forEach(([key, value]) => {
-                  if (Array.isArray(value)) {
-                    knowledgeContext += `- ${key}: Array with ${value.length} items\n`;
-                  } else if (typeof value === 'object' && value !== null) {
-                    knowledgeContext += `- ${key}: Object with keys [${Object.keys(value).join(', ')}]\n`;
-                  } else {
-                    knowledgeContext += `- ${key}: ${value}\n`;
-                  }
-                });
-              }
-            } else {
-              // For primitive JSON values
-              knowledgeContext += `${entry.title}: ${entry.content}\n`;
-            }
-            knowledgeContext += `\nTags: ${entry.tags?.join(', ') || 'None'}\n\n`;
-          } catch (e) {
-            // Fallback if JSON parsing fails
-            knowledgeContext += `${entry.title} (Raw JSON data)\n`;
-            knowledgeContext += `Tags: ${entry.tags?.join(', ') || 'None'}\n\n`;
-          }
-        });
-      }
-      
-      // Process document entries
-      if (documentEntries?.length) {
-        knowledgeContext += "Document References:\n\n";
-        documentEntries.forEach(doc => {
-          knowledgeContext += `Document: ${doc.title.replace('Document: ', '')}\n`;
-          knowledgeContext += `Content Extract:\n${doc.content.substring(0, 1500)}${doc.content.length > 1500 ? '...' : ''}\n\n`;
-        });
-      }
-
-      // Process regulatory entries
-      const regulatoryInfo = regulatoryEntries
-        ?.filter(entry => 
-          !brandEntries?.some(b => b.id === entry.id) && 
-          !productEntries?.some(p => p.id === entry.id) &&
-          !jsonEntries?.some(j => j.id === entry.id)
-        )
-        .map(entry => 
-          `Regulatory: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
-        ).join('\n\n');
-      
-      if (regulatoryInfo) {
-        knowledgeContext += `${regulatoryInfo}\n\n`;
-      }
+    // Add document content to context
+    if (documentEntries.length > 0) {
+      knowledgeContext += "Document References:\n\n";
+      documentEntries.forEach(doc => {
+        knowledgeContext += `Document: ${doc.title.replace('Document: ', '')}\n`;
+        knowledgeContext += `Content Extract:\n${doc.content.substring(0, 1500)}${doc.content.length > 1500 ? '...' : ''}\n\n`;
+      });
     }
+    
+    // Build the system prompt with the updated instructions
+    const baseSystemPrompt = `You are the AI assistant for Streamline Group Employees inside the Streamline Group Portal. 
 
-    // Distinct prompts for simple and complex modes
-    const baseSystemPrompt = mode === 'simple' 
-      ? `You are a specialized legal and regulatory assistant focused on non-dispensary retail stores and online retail channels.
+Your role is to intelligently answer employee questions about product legality, information about Streamline Group's products, employee resources, and company documents.
 
-Response Format:
-- Provide concise, bullet-point answers
-- Keep responses to 3-4 sentences maximum
-- Use simple, non-technical language
-- Start with a clear yes/no when applicable
-- Focus on key points only
+Follow this strict source hierarchy based on the type of question:
 
-Important Notes:
-- The dispensary caveat ONLY applies to hemp and delta-related products
-- Focus on what is legally permissible for non-dispensary retail and online sales
-- When dealing with JSON data, extract and interpret relevant information
-- For tabular or structured data, organize your response in a clear, readable format
-- When referencing documents, cite the specific document name
+1. If the user asks about product legality or regulatory status by state (e.g., "Is Delta-8 legal in Texas?"), you must check and pull from the Supabase backend database that powers the U.S. State Map.
+2. If the user asks general questions about company information (e.g., "What brands does Streamline sell?" or "Where can I find the marketing request form?"), reference the AI Knowledge Base first.
+3. If the user asks for specific files, images, logos, product renders, sales sheets, POS kits, or documents (e.g., "Can I download the Alcohol Armor sales sheet?" or "Where is the POS kit for Juice Head?"), then search and retrieve information from the Google Drive integration.
 
-Regulated Products:
-1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
-2. Hemp-derived THC Products (ONLY for non-dispensary retail)
-3. Kratom Products (raw materials and processed products)
-4. 7-Hydroxy Products and Derivatives
+Understand the context of each question to determine which source to use:
+- Never reference Google Drive for questions about product legality.
+- Always use the Supabase backend for product legality first.
+- Use the Knowledge Base for broader company questions.
+- Use the Google Drive integration only for locating files and assets.
 
-Brand and Product Guidance:
-- When a specific brand or product is mentioned, prioritize that information
-- Address regulatory requirements specific to that brand or product's ingredients
-- Be explicit about which states allow sales of specific brands/products
-- When regulatory status varies by ingredient within a product, clarify this distinction
-- For JSON data, extract relevant information and present it clearly
-- For document references, include the document title in your response when citing information from it`
-      : `You are a specialized legal and regulatory assistant for non-dispensary retail channels.
+${referencedSources.length > 0 ? 
+  `For this question, the following sources were referenced: ${referencedSources.join(', ')}.` : 
+  'No specific sources were found for this question.'}
+
+Always cite your sources where appropriate (e.g., 'According to the State Map data...' or 'This document is retrieved from the Streamline Group Drive').
+
+Answer in a professional, clear, and helpful tone. If you cannot find an answer from the available sources, politely let the user know and suggest submitting a request via the Marketing Request Form or contacting the appropriate department.
 
 Response Format:
-- Provide detailed explanations with legal citations
-- Break down regulatory requirements step-by-step
-- Include relevant case examples when applicable
-- Explain the context behind regulations
-- Consider edge cases and specific requirements
-- Structure response in clear sections
-- For JSON or tabular data, clearly summarize the structured information
-- When referencing documents, cite specific sections and page numbers when possible
-
-Important Notes:
-- The dispensary caveat ONLY applies to hemp and delta-related products
-- Focus on what is legally permissible for non-dispensary retail and online sales
-- When working with JSON data, extract and explain the structured information
-- For document references, clearly identify which document contains the information
-
-Regulated Products:
-1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
-2. Hemp-derived THC Products (ONLY for non-dispensary retail)
-3. Kratom Products (raw materials and processed products)
-4. 7-Hydroxy Products and Derivatives
-
-Brand and Product Guidance:
-- When a user inquires about a specific brand or product, prioritize information related to that brand/product
-- Detail product-specific regulatory considerations based on the ingredients in that specific brand/product
-- For products with multiple regulated ingredients, break down regulatory status by ingredient
-- Include state-by-state analysis for specific brands or products when relevant
-- Explicitly mention when certain products within a brand may have different regulatory status
-- Cite the most up-to-date regulatory frameworks that apply to specific brand products
-- For JSON data, analyze and interpret the structured information in context
-- For document references, provide comprehensive analysis citing specific sections`;
+${mode === 'simple' ? 
+  '- Provide concise, bullet-point answers\n- Keep responses to 3-4 sentences maximum\n- Use simple, non-technical language\n- Start with a clear yes/no when applicable\n- Focus on key points only' : 
+  '- Provide detailed explanations with citations\n- Break down information step-by-step\n- Include relevant context when applicable\n- Structure response in clear sections\n- Consider specific requirements and edge cases'}`;
 
     // Build the final system message with the knowledge context
     let systemContent = baseSystemPrompt;
@@ -303,7 +123,7 @@ Brand and Product Guidance:
       systemContent += `\n\n${knowledgeContext}`;
     }
     
-    systemContent += `\n\nMaintain the specified response format throughout the conversation. Focus on actionable guidance within non-dispensary retail context.`;
+    systemContent += `\n\nMaintain the specified response format throughout the conversation.`;
 
     const conversationMessages = [
       { role: 'system', content: systemContent },
@@ -323,7 +143,7 @@ Brand and Product Guidance:
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: conversationMessages,
-        temperature: mode === 'simple' ? 0.5 : 0.7, // Lower temperature for simpler, more direct responses
+        temperature: mode === 'simple' ? 0.5 : 0.7,
       }),
     });
 
@@ -331,7 +151,7 @@ Brand and Product Guidance:
     
     // Extract document references from the message if any
     let referencedDocuments = [];
-    if (documentIds?.length > 0) {
+    if (documentEntries?.length > 0) {
       // Simple heuristic to find document references
       const assistantMessage = data.choices[0].message.content;
       documentEntries.forEach(doc => {
@@ -363,3 +183,324 @@ Brand and Product Guidance:
     );
   }
 });
+
+// Helper function to determine if a query is about legality
+function isLegalityQuery(content) {
+  const legalityKeywords = [
+    'legal', 'illegal', 'allowed', 'banned', 'prohibited', 'law', 'regulation',
+    'compliant', 'compliance', 'restriction', 'permit', 'authorized', 'lawful',
+    'policy', 'legality', 'prohibited', 'status', 'state law', 'federal law'
+  ];
+  
+  const contentLower = content.toLowerCase();
+  return legalityKeywords.some(keyword => contentLower.includes(keyword));
+}
+
+// Helper function to determine if a query is about files or documents
+function isFileQuery(content) {
+  const fileKeywords = [
+    'file', 'document', 'pdf', 'image', 'picture', 'photo', 'logo', 'sheet',
+    'presentation', 'slide', 'deck', 'brochure', 'manual', 'guide', 'form',
+    'template', 'spreadsheet', 'report', 'render', 'asset', 'marketing',
+    'sales sheet', 'pos kit', 'pos material', 'download', 'upload'
+  ];
+  
+  const contentLower = content.toLowerCase();
+  return fileKeywords.some(keyword => contentLower.includes(keyword));
+}
+
+// Extract meaningful terms for database searches
+function extractSearchTerms(content) {
+  // Simple extraction - can be enhanced with NLP in the future
+  return content
+    .split(/\s+/)
+    .filter(word => word.length > 3)
+    .map(word => word.replace(/[^\w-]/g, ''))
+    .filter(word => !/^(what|when|where|why|how|can|the|and|for|this|that)$/i.test(word));
+}
+
+// Check for product legality in state database
+async function checkProductLegality(supabase, searchTerms) {
+  try {
+    // First, try to identify product names from the query
+    let { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('id, name, brand_id')
+      .or(searchTerms.map(term => `name.ilike.%${term}%`).join(','))
+      .limit(5);
+    
+    if (productsError) {
+      console.error('Error searching products:', productsError);
+      return null;
+    }
+    
+    if (!products || products.length === 0) {
+      // If no direct product match, try brands
+      let { data: brands } = await supabase
+        .from('brands')
+        .select('id, name')
+        .or(searchTerms.map(term => `name.ilike.%${term}%`).join(','))
+        .limit(5);
+      
+      if (brands && brands.length > 0) {
+        // Get products by brand
+        const { data: brandProducts } = await supabase
+          .from('products')
+          .select('id, name, brand_id')
+          .in('brand_id', brands.map(b => b.id))
+          .limit(10);
+          
+        if (brandProducts && brandProducts.length > 0) {
+          products = brandProducts;
+        }
+      }
+    }
+    
+    if (!products || products.length === 0) {
+      return null; // No products found
+    }
+    
+    // Get state permissions for these products
+    const { data: statePermissions, error: permissionsError } = await supabase
+      .from('state_allowed_products')
+      .select('state_id, product_id')
+      .in('product_id', products.map(p => p.id));
+      
+    if (permissionsError) {
+      console.error('Error getting state permissions:', permissionsError);
+      return null;
+    }
+    
+    // Get state names
+    const { data: states, error: statesError } = await supabase
+      .from('states')
+      .select('id, name');
+      
+    if (statesError) {
+      console.error('Error getting states:', statesError);
+      return null;
+    }
+    
+    // Format the legality data
+    let legalityInfo = "";
+    
+    for (const product of products) {
+      // Get brand info
+      let brandName = "Unknown Brand";
+      if (product.brand_id) {
+        const { data: brand } = await supabase
+          .from('brands')
+          .select('name')
+          .eq('id', product.brand_id)
+          .single();
+          
+        if (brand) brandName = brand.name;
+      }
+      
+      // Find allowed states for this product
+      const allowedStateIds = statePermissions
+        .filter(sp => sp.product_id === product.id)
+        .map(sp => sp.state_id);
+        
+      const allowedStates = states
+        .filter(s => allowedStateIds.includes(s.id))
+        .map(s => s.name);
+        
+      const disallowedStates = states
+        .filter(s => !allowedStateIds.includes(s.id))
+        .map(s => s.name);
+      
+      legalityInfo += `Product: ${product.name} (${brandName})\n`;
+      legalityInfo += `Legal in ${allowedStates.length} states: ${allowedStates.join(', ')}\n`;
+      legalityInfo += `Not legal in ${disallowedStates.length} states: ${disallowedStates.length > 10 ? 
+        disallowedStates.slice(0, 10).join(', ') + '...' : 
+        disallowedStates.join(', ')}\n\n`;
+    }
+    
+    return legalityInfo;
+  } catch (error) {
+    console.error('Error in checkProductLegality:', error);
+    return null;
+  }
+}
+
+// Get relevant knowledge entries
+async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
+  try {
+    let results = [];
+    
+    // First search: Look for exact brand matches
+    let { data: brandEntries, error: brandError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content, updated_at, tags')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"brand"}')
+      .or(searchTerms.map(term => `title.ilike.%${term}%`).join(','));
+    
+    if (brandError) {
+      console.error('Error searching for brands:', brandError);
+    } else if (brandEntries?.length) {
+      results = results.concat(brandEntries.map(entry => 
+        `Brand: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
+      ));
+    }
+
+    // Second search: Look for product matches
+    let { data: productEntries, error: productError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content, updated_at, tags')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"product"}')
+      .or(searchTerms.map(term => `title.ilike.%${term}%`).join(','));
+    
+    if (productError) {
+      console.error('Error searching for products:', productError);
+    } else if (productEntries?.length) {
+      results = results.concat(productEntries.map(entry => 
+        `Product: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
+      ));
+    }
+    
+    // Third search: General content search
+    let { data: regulatoryEntries, error: regulatoryError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content, updated_at, tags')
+      .filter('is_active', 'eq', true)
+      .textSearch('content', searchTerms.join(' | '));
+    
+    if (regulatoryError) {
+      console.error('Error searching regulatory content:', regulatoryError);
+    } else if (regulatoryEntries?.length) {
+      // Filter out duplicates
+      const uniqueEntries = regulatoryEntries.filter(entry =>
+        !results.some(r => r.includes(entry.title))
+      );
+      
+      results = results.concat(uniqueEntries.map(entry => 
+        `Entry: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
+      ));
+    }
+    
+    // Fourth search: Find relevant JSON entries
+    let { data: jsonEntries, error: jsonError } = await supabase
+      .from('knowledge_entries')
+      .select('title, content, updated_at, tags')
+      .filter('is_active', 'eq', true)
+      .filter('tags', 'cs', '{"json"}');
+      
+    if (jsonError) {
+      console.error('Error searching json entries:', jsonError);
+    } else if (jsonEntries?.length) {
+      // Format JSON entries to be more readable
+      jsonEntries.forEach(entry => {
+        try {
+          // Try to parse the JSON content
+          const jsonData = JSON.parse(entry.content);
+          let jsonSummary = `JSON Data: ${entry.title}\n`;
+          
+          if (typeof jsonData === 'object') {
+            if (Array.isArray(jsonData)) {
+              jsonSummary += `Data contains ${jsonData.length} items/records.\n`;
+              
+              // Sample items to give context
+              const sample = jsonData.slice(0, 3);
+              sample.forEach((item, index) => {
+                jsonSummary += `Sample ${index + 1}:\n`;
+                if (typeof item === 'object') {
+                  Object.entries(item).forEach(([key, value]) => {
+                    jsonSummary += `- ${key}: ${JSON.stringify(value)}\n`;
+                  });
+                } else {
+                  jsonSummary += `- Value: ${item}\n`;
+                }
+              });
+            } else {
+              Object.entries(jsonData).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                  jsonSummary += `- ${key}: Array with ${value.length} items\n`;
+                } else if (typeof value === 'object' && value !== null) {
+                  jsonSummary += `- ${key}: Object with keys [${Object.keys(value).join(', ')}]\n`;
+                } else {
+                  jsonSummary += `- ${key}: ${value}\n`;
+                }
+              });
+            }
+          }
+          
+          jsonSummary += `Tags: ${entry.tags?.join(', ') || 'None'}\n`;
+          results.push(jsonSummary);
+        } catch (e) {
+          // Fallback for invalid JSON
+          results.push(`JSON Data: ${entry.title} (Invalid JSON format)\nTags: ${entry.tags?.join(', ') || 'None'}`);
+        }
+      });
+    }
+    
+    return results;
+  } catch (error) {
+    console.error('Error in getRelevantKnowledgeEntries:', error);
+    return [];
+  }
+}
+
+// Search for documents in Drive
+async function searchDocuments(supabase, searchTerms) {
+  try {
+    if (searchTerms.length === 0) return [];
+    
+    // Create search query string
+    const searchQuery = searchTerms.join(' ');
+    
+    const { data, error } = await supabase.functions.invoke('drive-integration', {
+      body: { 
+        operation: 'search', 
+        query: searchQuery,
+        limit: 5
+      },
+    });
+    
+    if (error) {
+      console.error('Error searching documents:', error);
+      return [];
+    }
+    
+    return data?.files || [];
+  } catch (error) {
+    console.error('Error in searchDocuments:', error);
+    return [];
+  }
+}
+
+// Get content for specific document IDs
+async function getDocumentContent(supabase, docIds) {
+  try {
+    if (!docIds || docIds.length === 0) return [];
+    
+    let documentEntries = [];
+    
+    for (const docId of docIds) {
+      try {
+        const { data } = await supabase.functions.invoke('drive-integration', {
+          body: { operation: 'get', fileId: docId },
+        });
+        
+        if (data?.content?.content) {
+          documentEntries.push({
+            title: data.file.name,
+            content: data.content.content,
+            file_id: docId,
+            file_type: data.file.file_type,
+            tags: ['document']
+          });
+        }
+      } catch (error) {
+        console.error(`Error fetching document ${docId}:`, error);
+      }
+    }
+    
+    return documentEntries;
+  } catch (error) {
+    console.error('Error in getDocumentContent:', error);
+    return [];
+  }
+}
