@@ -2,15 +2,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { SendHorizontal, PlusCircle, FileText, X } from "lucide-react";
+import { SendHorizontal, PlusCircle } from "lucide-react";
 import { useChatContext } from "../contexts/ChatContext";
 import ChatModeToggle from "./ChatModeToggle";
-import DocumentSelector from "./DocumentSelector";
 
 const ChatInput = () => {
   const [message, setMessage] = useState("");
-  const [isDocumentSelectorOpen, setIsDocumentSelectorOpen] = useState(false);
   const {
     sendMessage,
     createNewChat,
@@ -37,59 +34,11 @@ const ChatInput = () => {
     }
   };
 
-  const handleSelectDocuments = (docIds: string[]) => {
-    setDocumentContext(docIds);
-  };
-
-  const removeDocument = (docId: string) => {
-    setDocumentContext(selectedDocuments.filter(id => id !== docId));
-  };
-
   return (
     <div className="border-t p-4 bg-background">
       <div className="flex items-center justify-between mb-2">
         <ChatModeToggle mode={mode} onModeChange={setMode} />
-        
-        <Dialog open={isDocumentSelectorOpen} onOpenChange={setIsDocumentSelectorOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex items-center gap-2"
-            >
-              <FileText size={16} />
-              {selectedDocuments.length > 0 ? `${selectedDocuments.length} Document${selectedDocuments.length === 1 ? '' : 's'}` : 'Reference Documents'}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px] h-[550px]">
-            <h3 className="font-semibold text-lg mb-4">Select Reference Documents</h3>
-            <DocumentSelector 
-              selectedDocuments={selectedDocuments} 
-              onSelectDocument={handleSelectDocuments} 
-            />
-          </DialogContent>
-        </Dialog>
       </div>
-      
-      {selectedDocuments.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {selectedDocuments.map(docId => (
-            <div 
-              key={docId}
-              className="bg-muted text-xs px-2 py-1 rounded-full flex items-center gap-1"
-            >
-              <FileText size={12} />
-              <span className="truncate max-w-[150px]">{docId}</span>
-              <button 
-                onClick={() => removeDocument(docId)}
-                className="ml-1 text-muted-foreground hover:text-foreground"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="relative">
