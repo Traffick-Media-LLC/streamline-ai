@@ -8,6 +8,7 @@ export interface Message {
   timestamp: number;
   documentIds?: string[]; // Add reference to documents
   referencedDocuments?: DocumentReference[]; // Documents referenced in assistant responses
+  animationDelay?: number; // Added for animation timing
 }
 
 export interface DocumentReference {
