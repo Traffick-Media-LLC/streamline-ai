@@ -1,13 +1,10 @@
 
-
 export interface ChatContextType {
   currentChatId: string | null;
   isLoadingResponse: boolean;
-  mode: "simple" | "complex";
   createNewChat: () => Promise<string | null>;
   sendMessage: (content: string, docIds?: string[]) => Promise<void>;
   getCurrentChat: () => Chat | null;
-  setMode: (mode: "simple" | "complex") => void;
   chats: Chat[];
   selectChat: (chatId: string) => void;
   isInitializing: boolean;
@@ -30,7 +27,7 @@ export interface Message {
   timestamp: number;
   documentIds?: string[];
   referencedDocuments?: DocumentReference[];
-  animationDelay?: number; // Added this property to fix the TypeScript error
+  animationDelay?: number;
 }
 
 export interface DocumentReference {

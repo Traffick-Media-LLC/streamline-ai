@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SendHorizontal, PlusCircle } from "lucide-react";
 import { useChatContext } from "../contexts/ChatContext";
-import ChatModeToggle from "./ChatModeToggle";
 
 const ChatInput = () => {
   const [message, setMessage] = useState("");
@@ -12,8 +11,6 @@ const ChatInput = () => {
     sendMessage,
     createNewChat,
     isLoadingResponse,
-    mode,
-    setMode,
     getDocumentContext,
     setDocumentContext
   } = useChatContext();
@@ -36,10 +33,6 @@ const ChatInput = () => {
 
   return (
     <div className="border-t p-4 bg-background">
-      <div className="flex items-center justify-between mb-2">
-        <ChatModeToggle mode={mode} onModeChange={setMode} />
-      </div>
-
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="relative">
           <Textarea 

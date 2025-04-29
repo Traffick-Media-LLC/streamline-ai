@@ -5,7 +5,6 @@ import { Chat } from "../types/chat";
 export const useChatsState = () => {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
-  const [mode, setMode] = useState<"simple" | "complex">("simple");
 
   // This function needs to work with the chats from useChatOperations
   const getCurrentChat = () => {
@@ -19,8 +18,6 @@ export const useChatsState = () => {
     setCurrentChatId,
     isLoadingResponse,
     setIsLoadingResponse,
-    mode,
-    setMode,
     getCurrentChat,
   };
 };

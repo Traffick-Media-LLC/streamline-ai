@@ -14,8 +14,6 @@ export const useChatOperations = () => {
     setCurrentChatId,
     isLoadingResponse,
     setIsLoadingResponse,
-    mode,
-    setMode,
     getCurrentChat: originalGetCurrentChat
   } = useChatsState();
   
@@ -219,7 +217,6 @@ export const useChatOperations = () => {
       const { data, error } = await supabase.functions.invoke('chat', {
         body: { 
           content, 
-          mode,
           messages: chatMessages,
           documentIds,
           documentContents
@@ -255,11 +252,9 @@ export const useChatOperations = () => {
   return {
     currentChatId,
     isLoadingResponse,
-    mode,
     createNewChat,
     sendMessage,
     getCurrentChat,
-    setMode,
     chats,
     selectChat,
     isInitializing,
