@@ -36,3 +36,17 @@ export interface DocumentReference {
   content?: string;
   processed_at?: string;
 }
+
+export interface ChatLog {
+  requestId: string;
+  userId?: string;
+  chatId?: string;
+  eventType: string;
+  component: string;
+  message: string;
+  durationMs?: number;
+  metadata?: Record<string, any>;
+  errorDetails?: Record<string, any>;
+  severity?: 'info' | 'warning' | 'error' | 'critical';
+  timestamp?: number;
+}

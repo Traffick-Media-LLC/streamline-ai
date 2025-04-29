@@ -7,6 +7,73 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper functions for logging
+const startTimer = () => performance.now();
+const calculateDuration = (startTime) => Math.round(performance.now() - startTime);
+
+const logEvent = async (supabase, requestId, eventType, component, message, options = {}) => {
+  try {
+    const { 
+      userId = null, 
+      chatId = null, 
+      durationMs = null, 
+      metadata = null, 
+      errorDetails = null,
+      severity = 'info'
+    } = options;
+    
+    // Log to console
+    const logPrefix = `[${requestId}][${component}][${eventType}]`;
+    if (severity === 'error' || severity === 'critical') {
+      console.error(`${logPrefix} ${message}`, errorDetails || metadata || {});
+    } else if (severity === 'warning') {
+      console.warn(`${logPrefix} ${message}`, metadata || {});
+    } else {
+      console.log(`${logPrefix} ${message}`, metadata || {});
+    }
+    
+    // Store in database
+    if (supabase) {
+      await supabase
+        .from('chat_logs')
+        .insert({
+          request_id: requestId,
+          user_id: userId,
+          chat_id: chatId,
+          event_type: eventType,
+          component,
+          message,
+          duration_ms: durationMs,
+          metadata,
+          error_details: errorDetails,
+          severity
+        });
+    }
+  } catch (e) {
+    // Don't let logging failures break the main flow
+    console.error("Error in logging system:", e);
+  }
+};
+
+const logError = async (supabase, requestId, component, message, error, options = {}) => {
+  try {
+    const errorDetails = {
+      message: error?.message || 'Unknown error',
+      stack: error?.stack,
+      name: error?.name,
+      code: error?.code
+    };
+    
+    await logEvent(supabase, requestId, 'error', component, message, {
+      ...options,
+      errorDetails,
+      severity: options.severity || 'error'
+    });
+  } catch (e) {
+    console.error("Error in error logging system:", e);
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,40 +83,86 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
+  // Initialize supabase client outside the try block so it's available in catch
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  let requestId = '';
+  const mainStartTime = startTimer();
+  
   try {
-    const { content, messages, documentIds = [] } = await req.json();
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const request = await req.json();
+    const { content, messages, documentIds = [], documentContents = [], requestId: clientRequestId } = request;
+    
+    requestId = clientRequestId || `edge-${Date.now()}`;
+    
+    // Initial request log
+    await logEvent(supabase, requestId, 'edge_request_started', 'chat_function', 'Chat function request received', {
+      metadata: { 
+        messageCount: messages?.length || 0,
+        documentCount: documentIds?.length || 0,
+        contentLength: content?.length || 0
+      }
+    });
     
     // Analyze the input to determine which sources to prioritize
+    const analyzeStartTime = startTimer();
     const legalityQuery = isLegalityQuery(content);
     const fileQuery = isFileQuery(content);
     
-    console.log(`Query analysis - Legality: ${legalityQuery}, File: ${fileQuery}`);
+    await logEvent(supabase, requestId, 'query_analysis', 'chat_function', `Query analysis completed: Legality=${legalityQuery}, File=${fileQuery}`, {
+      durationMs: calculateDuration(analyzeStartTime),
+      metadata: { isLegalityQuery: legalityQuery, isFileQuery: fileQuery }
+    });
     
     // Extract potential terms for database searches
     const searchTerms = extractSearchTerms(content);
+    await logEvent(supabase, requestId, 'search_terms_extracted', 'chat_function', `Search terms extracted from query`, {
+      metadata: { searchTerms }
+    });
+    
     let knowledgeContext = "";
     let referencedSources = [];
     
     // 1. LEGALITY CHECK: Check Supabase state permissions for product legality questions
     if (legalityQuery) {
-      console.log("Processing legality query with state map data");
-      const legalityData = await checkProductLegality(supabase, searchTerms);
+      await logEvent(supabase, requestId, 'legality_check_started', 'chat_function', 'Processing legality query with state map data');
+      
+      const legalityStartTime = startTimer();
+      const legalityData = await checkProductLegality(supabase, searchTerms, requestId);
       
       if (legalityData) {
         knowledgeContext += "State Legality Data:\n\n" + legalityData + "\n\n";
         referencedSources.push("State Map Database");
+        
+        await logEvent(supabase, requestId, 'legality_data_found', 'chat_function', 'Found legality data in state map database', {
+          durationMs: calculateDuration(legalityStartTime),
+          metadata: { dataLength: legalityData.length }
+        });
+      } else {
+        await logEvent(supabase, requestId, 'legality_data_not_found', 'chat_function', 'No legality data found in state map database', {
+          durationMs: calculateDuration(legalityStartTime)
+        });
       }
     }
     
     // 2. KNOWLEDGE BASE: Extract brand, product, and regulatory information from Knowledge Base
     // Extract potential brand and product names from the query
-    let knowledgeEntries = await getRelevantKnowledgeEntries(supabase, searchTerms, content);
+    const knowledgeStartTime = startTimer();
+    await logEvent(supabase, requestId, 'knowledge_search_started', 'chat_function', 'Querying knowledge base');
+    
+    let knowledgeEntries = await getRelevantKnowledgeEntries(supabase, searchTerms, content, requestId);
     
     if (knowledgeEntries.length > 0) {
       knowledgeContext += "Knowledge Base Information:\n\n" + knowledgeEntries.join("\n\n") + "\n\n";
       referencedSources.push("Knowledge Base");
+      
+      await logEvent(supabase, requestId, 'knowledge_entries_found', 'chat_function', `Found ${knowledgeEntries.length} relevant knowledge entries`, {
+        durationMs: calculateDuration(knowledgeStartTime),
+        metadata: { entryCount: knowledgeEntries.length }
+      });
+    } else {
+      await logEvent(supabase, requestId, 'knowledge_entries_not_found', 'chat_function', 'No relevant knowledge entries found', {
+        durationMs: calculateDuration(knowledgeStartTime)
+      });
     }
     
     // 3. DOCUMENT SEARCH: Search Google Drive for documents if it's a file query
@@ -58,22 +171,81 @@ serve(async (req) => {
     
     // Process explicitly provided document IDs
     if (documentIds && documentIds.length > 0) {
-      documentEntries = await getDocumentContent(supabase, documentIds);
-      if (documentEntries.length > 0) {
-        referencedSources.push("Selected Documents");
+      await logEvent(supabase, requestId, 'process_provided_documents', 'chat_function', `Processing ${documentIds.length} provided document IDs`);
+      
+      // If document contents were passed from frontend, use them
+      if (documentContents && documentContents.length > 0) {
+        await logEvent(supabase, requestId, 'using_provided_document_contents', 'chat_function', `Using ${documentContents.length} pre-fetched document contents`);
+        
+        documentEntries = documentContents.map(doc => ({
+          file_id: doc.id,
+          title: `Document: ${doc.name}`,
+          content: doc.content
+        }));
+        
+        if (documentEntries.length > 0) {
+          referencedSources.push("Selected Documents");
+        }
+      } 
+      // Otherwise fetch document content
+      else {
+        const docStartTime = startTimer();
+        documentEntries = await getDocumentContent(supabase, documentIds, requestId);
+        
+        if (documentEntries.length > 0) {
+          referencedSources.push("Selected Documents");
+          
+          await logEvent(supabase, requestId, 'document_contents_fetched', 'chat_function', `Fetched ${documentEntries.length}/${documentIds.length} document contents`, {
+            durationMs: calculateDuration(docStartTime),
+            metadata: {
+              successCount: documentEntries.length,
+              totalRequested: documentIds.length
+            }
+          });
+        } else {
+          await logEvent(supabase, requestId, 'document_contents_not_found', 'chat_function', 'Failed to fetch document contents', {
+            durationMs: calculateDuration(docStartTime),
+            severity: 'warning'
+          });
+        }
       }
     } 
     // Or search for documents if it's a file query
     else if (fileQuery) {
-      const documentSearchResults = await searchDocuments(supabase, searchTerms);
+      const searchStartTime = startTimer();
+      await logEvent(supabase, requestId, 'document_search_started', 'chat_function', 'Searching for documents based on query');
+      
+      const documentSearchResults = await searchDocuments(supabase, searchTerms, requestId);
       
       if (documentSearchResults.length > 0) {
-        documentEntries = await getDocumentContent(supabase, 
-          documentSearchResults.slice(0, 3).map(doc => doc.id));
+        await logEvent(supabase, requestId, 'document_search_results', 'chat_function', `Found ${documentSearchResults.length} documents in search`, {
+          durationMs: calculateDuration(searchStartTime),
+          metadata: { resultCount: documentSearchResults.length }
+        });
+        
+        const contentStartTime = startTimer();
+        documentEntries = await getDocumentContent(
+          supabase, 
+          documentSearchResults.slice(0, 3).map(doc => doc.id),
+          requestId
+        );
           
         if (documentEntries.length > 0) {
           referencedSources.push("Drive Search");
+          
+          await logEvent(supabase, requestId, 'document_content_fetched_from_search', 'chat_function', `Fetched content for ${documentEntries.length} documents from search results`, {
+            durationMs: calculateDuration(contentStartTime)
+          });
+        } else {
+          await logEvent(supabase, requestId, 'document_content_not_found_from_search', 'chat_function', 'Failed to fetch content for search results', {
+            durationMs: calculateDuration(contentStartTime),
+            severity: 'warning'
+          });
         }
+      } else {
+        await logEvent(supabase, requestId, 'document_search_no_results', 'chat_function', 'No documents found matching search terms', {
+          durationMs: calculateDuration(searchStartTime)
+        });
       }
     }
     
@@ -84,9 +256,17 @@ serve(async (req) => {
         knowledgeContext += `Document: ${doc.title.replace('Document: ', '')}\n`;
         knowledgeContext += `Content Extract:\n${doc.content.substring(0, 1500)}${doc.content.length > 1500 ? '...' : ''}\n\n`;
       });
+      
+      await logEvent(supabase, requestId, 'added_document_context', 'chat_function', `Added ${documentEntries.length} documents to context`, {
+        metadata: {
+          documentTitles: documentEntries.map(d => d.title.replace('Document: ', ''))
+        }
+      });
     }
     
     // Build the system prompt with the updated instructions
+    await logEvent(supabase, requestId, 'building_system_prompt', 'chat_function', 'Building system prompt for AI');
+    
     const baseSystemPrompt = `You are the AI assistant for Streamline Group Employees inside the Streamline Group Portal. 
 
 Your role is to intelligently answer employee questions about product legality, information about Streamline Group's products, employee resources, and company documents.
@@ -128,6 +308,15 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
       { role: 'user', content }
     ];
 
+    await logEvent(supabase, requestId, 'calling_openai', 'chat_function', 'Calling OpenAI API', {
+      metadata: { 
+        modelName: 'gpt-4o',
+        promptLength: systemContent.length,
+        messageCount: conversationMessages.length
+      }
+    });
+    
+    const aiStartTime = startTimer();
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -143,6 +332,17 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
 
     const data = await response.json();
     
+    const aiDuration = calculateDuration(aiStartTime);
+    await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 'Received response from OpenAI API', {
+      durationMs: aiDuration,
+      metadata: { 
+        responseLength: data.choices[0].message.content.length,
+        promptTokens: data.usage?.prompt_tokens,
+        completionTokens: data.usage?.completion_tokens,
+        totalTokens: data.usage?.total_tokens
+      }
+    });
+    
     // Extract document references from the message if any
     let referencedDocuments = [];
     if (documentEntries?.length > 0) {
@@ -157,8 +357,18 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
           });
         }
       });
+      
+      await logEvent(supabase, requestId, 'document_references_extracted', 'chat_function', `Extracted ${referencedDocuments.length} document references from response`, {
+        metadata: {
+          referencedDocuments: referencedDocuments.map(d => d.name)
+        }
+      });
     }
 
+    await logEvent(supabase, requestId, 'request_completed', 'chat_function', 'Chat function request completed successfully', {
+      durationMs: calculateDuration(mainStartTime)
+    });
+    
     return new Response(
       JSON.stringify({ 
         message: data.choices[0].message.content,
@@ -168,7 +378,12 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
       }
     );
   } catch (error) {
-    console.error('Error:', error);
+    const errorMessage = `Error in chat function: ${error.message || 'Unknown error'}`;
+    await logError(supabase, requestId, 'chat_function', errorMessage, error, {
+      severity: 'critical',
+      durationMs: calculateDuration(mainStartTime)
+    });
+    
     return new Response(
       JSON.stringify({ error: 'Error processing your request' }), {
         status: 500,
@@ -214,9 +429,14 @@ function extractSearchTerms(content) {
 }
 
 // Check for product legality in state database
-async function checkProductLegality(supabase, searchTerms) {
+async function checkProductLegality(supabase, searchTerms, requestId) {
+  const startTime = startTimer();
   try {
     // First, try to identify product names from the query
+    await logEvent(supabase, requestId, 'searching_products', 'legality_check', 'Searching for products matching query terms', {
+      metadata: { searchTerms }
+    });
+    
     let { data: products, error: productsError } = await supabase
       .from('products')
       .select('id, name, brand_id')
@@ -224,44 +444,68 @@ async function checkProductLegality(supabase, searchTerms) {
       .limit(5);
     
     if (productsError) {
-      console.error('Error searching products:', productsError);
+      await logError(supabase, requestId, 'legality_check', 'Error searching products', productsError);
       return null;
     }
     
     if (!products || products.length === 0) {
+      await logEvent(supabase, requestId, 'no_direct_product_match', 'legality_check', 'No direct product matches found, trying brands');
+      
       // If no direct product match, try brands
-      let { data: brands } = await supabase
+      let { data: brands, error: brandsError } = await supabase
         .from('brands')
         .select('id, name')
         .or(searchTerms.map(term => `name.ilike.%${term}%`).join(','))
         .limit(5);
       
+      if (brandsError) {
+        await logError(supabase, requestId, 'legality_check', 'Error searching brands', brandsError);
+      }
+      
       if (brands && brands.length > 0) {
+        await logEvent(supabase, requestId, 'brands_found', 'legality_check', `Found ${brands.length} brands matching query`, {
+          metadata: { brandNames: brands.map(b => b.name) }
+        });
+        
         // Get products by brand
-        const { data: brandProducts } = await supabase
+        const { data: brandProducts, error: brandProductsError } = await supabase
           .from('products')
           .select('id, name, brand_id')
           .in('brand_id', brands.map(b => b.id))
           .limit(10);
           
+        if (brandProductsError) {
+          await logError(supabase, requestId, 'legality_check', 'Error getting products by brand', brandProductsError);
+        }
+        
         if (brandProducts && brandProducts.length > 0) {
           products = brandProducts;
+          await logEvent(supabase, requestId, 'products_by_brand_found', 'legality_check', `Found ${brandProducts.length} products from matched brands`);
         }
       }
+    } else {
+      await logEvent(supabase, requestId, 'direct_product_matches', 'legality_check', `Found ${products.length} products directly matching query`, {
+        metadata: { productNames: products.map(p => p.name) }
+      });
     }
     
     if (!products || products.length === 0) {
+      await logEvent(supabase, requestId, 'no_products_found', 'legality_check', 'No products found matching query terms', {
+        durationMs: calculateDuration(startTime)
+      });
       return null; // No products found
     }
     
     // Get state permissions for these products
+    await logEvent(supabase, requestId, 'fetching_state_permissions', 'legality_check', `Fetching state permissions for ${products.length} products`);
+    
     const { data: statePermissions, error: permissionsError } = await supabase
       .from('state_allowed_products')
       .select('state_id, product_id')
       .in('product_id', products.map(p => p.id));
       
     if (permissionsError) {
-      console.error('Error getting state permissions:', permissionsError);
+      await logError(supabase, requestId, 'legality_check', 'Error getting state permissions', permissionsError);
       return null;
     }
     
@@ -271,9 +515,11 @@ async function checkProductLegality(supabase, searchTerms) {
       .select('id, name');
       
     if (statesError) {
-      console.error('Error getting states:', statesError);
+      await logError(supabase, requestId, 'legality_check', 'Error getting states', statesError);
       return null;
     }
+    
+    await logEvent(supabase, requestId, 'formatting_legality_data', 'legality_check', 'Formatting legality information');
     
     // Format the legality data
     let legalityInfo = "";
@@ -311,19 +557,29 @@ async function checkProductLegality(supabase, searchTerms) {
         disallowedStates.join(', ')}\n\n`;
     }
     
+    await logEvent(supabase, requestId, 'legality_check_complete', 'legality_check', 'Successfully compiled legality information', {
+      durationMs: calculateDuration(startTime),
+      metadata: { productCount: products.length }
+    });
+    
     return legalityInfo;
   } catch (error) {
-    console.error('Error in checkProductLegality:', error);
+    await logError(supabase, requestId, 'legality_check', 'Exception in checkProductLegality', error, {
+      durationMs: calculateDuration(startTime)
+    });
     return null;
   }
 }
 
 // Get relevant knowledge entries
-async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
+async function getRelevantKnowledgeEntries(supabase, searchTerms, content, requestId) {
+  const startTime = startTimer();
   try {
     let results = [];
     
     // First search: Look for exact brand matches
+    await logEvent(supabase, requestId, 'searching_brand_entries', 'knowledge_search', 'Searching for brand entries');
+    
     let { data: brandEntries, error: brandError } = await supabase
       .from('knowledge_entries')
       .select('title, content, updated_at, tags')
@@ -332,14 +588,20 @@ async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
       .or(searchTerms.map(term => `title.ilike.%${term}%`).join(','));
     
     if (brandError) {
-      console.error('Error searching for brands:', brandError);
+      await logError(supabase, requestId, 'knowledge_search', 'Error searching for brands', brandError);
     } else if (brandEntries?.length) {
+      await logEvent(supabase, requestId, 'brand_entries_found', 'knowledge_search', `Found ${brandEntries.length} brand entries`, {
+        metadata: { brandTitles: brandEntries.map(e => e.title) }
+      });
+      
       results = results.concat(brandEntries.map(entry => 
         `Brand: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
       ));
     }
 
     // Second search: Look for product matches
+    await logEvent(supabase, requestId, 'searching_product_entries', 'knowledge_search', 'Searching for product entries');
+    
     let { data: productEntries, error: productError } = await supabase
       .from('knowledge_entries')
       .select('title, content, updated_at, tags')
@@ -348,14 +610,20 @@ async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
       .or(searchTerms.map(term => `title.ilike.%${term}%`).join(','));
     
     if (productError) {
-      console.error('Error searching for products:', productError);
+      await logError(supabase, requestId, 'knowledge_search', 'Error searching for products', productError);
     } else if (productEntries?.length) {
+      await logEvent(supabase, requestId, 'product_entries_found', 'knowledge_search', `Found ${productEntries.length} product entries`, {
+        metadata: { productTitles: productEntries.map(e => e.title) }
+      });
+      
       results = results.concat(productEntries.map(entry => 
         `Product: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
       ));
     }
     
     // Third search: General content search
+    await logEvent(supabase, requestId, 'searching_general_entries', 'knowledge_search', 'Searching for general content matches');
+    
     let { data: regulatoryEntries, error: regulatoryError } = await supabase
       .from('knowledge_entries')
       .select('title, content, updated_at, tags')
@@ -363,12 +631,16 @@ async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
       .textSearch('content', searchTerms.join(' | '));
     
     if (regulatoryError) {
-      console.error('Error searching regulatory content:', regulatoryError);
+      await logError(supabase, requestId, 'knowledge_search', 'Error searching regulatory content', regulatoryError);
     } else if (regulatoryEntries?.length) {
       // Filter out duplicates
       const uniqueEntries = regulatoryEntries.filter(entry =>
         !results.some(r => r.includes(entry.title))
       );
+      
+      await logEvent(supabase, requestId, 'general_entries_found', 'knowledge_search', `Found ${uniqueEntries.length} unique general entries`, {
+        metadata: { regularTitles: uniqueEntries.map(e => e.title) }
+      });
       
       results = results.concat(uniqueEntries.map(entry => 
         `Entry: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
@@ -376,6 +648,8 @@ async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
     }
     
     // Fourth search: Find relevant JSON entries
+    await logEvent(supabase, requestId, 'searching_json_entries', 'knowledge_search', 'Searching for JSON data entries');
+    
     let { data: jsonEntries, error: jsonError } = await supabase
       .from('knowledge_entries')
       .select('title, content, updated_at, tags')
@@ -383,8 +657,12 @@ async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
       .filter('tags', 'cs', '{"json"}');
       
     if (jsonError) {
-      console.error('Error searching json entries:', jsonError);
+      await logError(supabase, requestId, 'knowledge_search', 'Error searching json entries', jsonError);
     } else if (jsonEntries?.length) {
+      await logEvent(supabase, requestId, 'json_entries_found', 'knowledge_search', `Found ${jsonEntries.length} JSON entries`, {
+        metadata: { jsonTitles: jsonEntries.map(e => e.title) }
+      });
+      
       // Format JSON entries to be more readable
       jsonEntries.forEach(entry => {
         try {
@@ -423,60 +701,106 @@ async function getRelevantKnowledgeEntries(supabase, searchTerms, content) {
           
           jsonSummary += `Tags: ${entry.tags?.join(', ') || 'None'}\n`;
           results.push(jsonSummary);
+          
+          await logEvent(supabase, requestId, 'json_entry_parsed', 'knowledge_search', `Successfully parsed JSON entry: ${entry.title}`);
         } catch (e) {
           // Fallback for invalid JSON
           results.push(`JSON Data: ${entry.title} (Invalid JSON format)\nTags: ${entry.tags?.join(', ') || 'None'}`);
+          await logError(supabase, requestId, 'knowledge_search', `Error parsing JSON entry: ${entry.title}`, e);
         }
       });
     }
     
+    await logEvent(supabase, requestId, 'knowledge_search_complete', 'knowledge_search', `Knowledge search completed with ${results.length} total entries`, {
+      durationMs: calculateDuration(startTime)
+    });
+    
     return results;
   } catch (error) {
-    console.error('Error in getRelevantKnowledgeEntries:', error);
+    await logError(supabase, requestId, 'knowledge_search', 'Exception in getRelevantKnowledgeEntries', error, {
+      durationMs: calculateDuration(startTime)
+    });
     return [];
   }
 }
 
 // Search for documents in Drive
-async function searchDocuments(supabase, searchTerms) {
+async function searchDocuments(supabase, searchTerms, requestId) {
+  const startTime = startTimer();
   try {
-    if (searchTerms.length === 0) return [];
+    if (searchTerms.length === 0) {
+      await logEvent(supabase, requestId, 'search_documents_empty_terms', 'document_search', 'Empty search terms provided');
+      return [];
+    }
     
     // Create search query string
     const searchQuery = searchTerms.join(' ');
+    
+    await logEvent(supabase, requestId, 'search_documents_started', 'document_search', `Searching documents for: "${searchQuery}"`);
     
     const { data, error } = await supabase.functions.invoke('drive-integration', {
       body: { 
         operation: 'search', 
         query: searchQuery,
-        limit: 5
+        limit: 5,
+        requestId
       },
     });
     
     if (error) {
-      console.error('Error searching documents:', error);
+      await logError(supabase, requestId, 'document_search', 'Error searching documents', error, {
+        durationMs: calculateDuration(startTime),
+        metadata: { searchQuery }
+      });
       return [];
     }
     
+    await logEvent(supabase, requestId, 'search_documents_completed', 'document_search', `Document search found ${data?.files?.length || 0} results`, {
+      durationMs: calculateDuration(startTime),
+      metadata: { 
+        resultCount: data?.files?.length || 0,
+        fileNames: data?.files?.map(f => f.name) || [] 
+      }
+    });
+    
     return data?.files || [];
   } catch (error) {
-    console.error('Error in searchDocuments:', error);
+    await logError(supabase, requestId, 'document_search', 'Exception in searchDocuments', error, {
+      durationMs: calculateDuration(startTime),
+      metadata: { searchTerms }
+    });
     return [];
   }
 }
 
 // Get content for specific document IDs
-async function getDocumentContent(supabase, docIds) {
+async function getDocumentContent(supabase, docIds, requestId) {
+  const startTime = startTimer();
   try {
-    if (!docIds || docIds.length === 0) return [];
+    if (!docIds || docIds.length === 0) {
+      await logEvent(supabase, requestId, 'get_document_content_empty', 'document_content', 'No document IDs provided');
+      return [];
+    }
+    
+    await logEvent(supabase, requestId, 'get_document_content_started', 'document_content', `Fetching content for ${docIds.length} documents`);
     
     let documentEntries = [];
     
     for (const docId of docIds) {
       try {
-        const { data } = await supabase.functions.invoke('drive-integration', {
-          body: { operation: 'get', fileId: docId },
+        const docStartTime = startTimer();
+        const { data, error } = await supabase.functions.invoke('drive-integration', {
+          body: { 
+            operation: 'get', 
+            fileId: docId,
+            requestId 
+          },
         });
+        
+        if (error) {
+          await logError(supabase, requestId, 'document_content', `Error invoking drive-integration for document ${docId}`, error);
+          continue;
+        }
         
         if (data?.content?.content) {
           documentEntries.push({
@@ -486,15 +810,39 @@ async function getDocumentContent(supabase, docIds) {
             file_type: data.file.file_type,
             tags: ['document']
           });
+          
+          await logEvent(supabase, requestId, 'document_content_fetched', 'document_content', `Successfully fetched content for document ${docId}`, {
+            durationMs: calculateDuration(docStartTime),
+            metadata: { 
+              documentName: data.file.name, 
+              contentLength: data.content.content.length 
+            }
+          });
+        } else {
+          await logEvent(supabase, requestId, 'document_content_empty', 'document_content', `Document ${docId} has no content`, {
+            durationMs: calculateDuration(docStartTime),
+            severity: 'warning',
+            metadata: { documentId: docId }
+          });
         }
       } catch (error) {
-        console.error(`Error fetching document ${docId}:`, error);
+        await logError(supabase, requestId, 'document_content', `Exception fetching document ${docId}`, error);
       }
     }
     
+    await logEvent(supabase, requestId, 'get_document_content_completed', 'document_content', `Fetched ${documentEntries.length}/${docIds.length} document contents`, {
+      durationMs: calculateDuration(startTime),
+      metadata: { 
+        successCount: documentEntries.length,
+        totalRequested: docIds.length
+      }
+    });
+    
     return documentEntries;
   } catch (error) {
-    console.error('Error in getDocumentContent:', error);
+    await logError(supabase, requestId, 'document_content', 'Exception in getDocumentContent', error, {
+      durationMs: calculateDuration(startTime)
+    });
     return [];
   }
 }

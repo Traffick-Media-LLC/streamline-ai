@@ -27,6 +27,59 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_logs: {
+        Row: {
+          chat_id: string | null
+          component: string
+          duration_ms: number | null
+          error_details: Json | null
+          event_type: string
+          id: string
+          message: string
+          metadata: Json | null
+          request_id: string
+          severity: string | null
+          timestamp: string
+          user_id: string | null
+        }
+        Insert: {
+          chat_id?: string | null
+          component: string
+          duration_ms?: number | null
+          error_details?: Json | null
+          event_type: string
+          id?: string
+          message: string
+          metadata?: Json | null
+          request_id: string
+          severity?: string | null
+          timestamp?: string
+          user_id?: string | null
+        }
+        Update: {
+          chat_id?: string | null
+          component?: string
+          duration_ms?: number | null
+          error_details?: Json | null
+          event_type?: string
+          id?: string
+          message?: string
+          metadata?: Json | null
+          request_id?: string
+          severity?: string | null
+          timestamp?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_logs_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
           chat_id: string
