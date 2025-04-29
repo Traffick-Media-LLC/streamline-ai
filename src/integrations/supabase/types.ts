@@ -83,6 +83,39 @@ export type Database = {
         }
         Relationships: []
       }
+      drive_files: {
+        Row: {
+          created_at: string
+          description: string | null
+          file_type: string
+          id: string
+          last_accessed: string
+          name: string
+          size_bytes: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          file_type: string
+          id: string
+          last_accessed?: string
+          name: string
+          size_bytes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          file_type?: string
+          id?: string
+          last_accessed?: string
+          name?: string
+          size_bytes?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       employees: {
         Row: {
           created_at: string
@@ -126,6 +159,41 @@ export type Database = {
             columns: ["manager_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      file_content: {
+        Row: {
+          content: string
+          content_format: string
+          content_status: string
+          file_id: string
+          id: string
+          processed_at: string
+        }
+        Insert: {
+          content: string
+          content_format?: string
+          content_status?: string
+          file_id: string
+          id?: string
+          processed_at?: string
+        }
+        Update: {
+          content?: string
+          content_format?: string
+          content_status?: string
+          file_id?: string
+          id?: string
+          processed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_content_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "drive_files"
             referencedColumns: ["id"]
           },
         ]
