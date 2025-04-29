@@ -1,3 +1,4 @@
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatsState } from "./useChatsState";
 import { useChatCreation } from "./useChatCreation";
@@ -69,7 +70,8 @@ export const useChatOperations = () => {
               id,
               role,
               content,
-              timestamp
+              timestamp,
+              document_ids
             )
           `)
           .eq('user_id', user.id)
@@ -90,7 +92,8 @@ export const useChatOperations = () => {
             id: msg.id,
             role: msg.role as "user" | "assistant" | "system",
             content: msg.content,
-            timestamp: new Date(msg.timestamp).getTime()
+            timestamp: new Date(msg.timestamp).getTime(),
+            documentIds: msg.document_ids
           })),
           createdAt: new Date(chat.created_at).getTime(),
           updatedAt: new Date(chat.updated_at).getTime()
@@ -100,6 +103,15 @@ export const useChatOperations = () => {
         if (formattedChats.length > 0 && !currentChatId) {
           console.log("Setting current chat ID to first chat:", formattedChats[0].id);
           setCurrentChatId(formattedChats[0].id);
+          
+          // Set document context if the first message has documents
+          const firstChat = formattedChats[0];
+          const lastUserMessage = [...firstChat.messages].reverse()
+            .find(msg => msg.role === 'user' && msg.documentIds?.length);
+            
+          if (lastUserMessage?.documentIds) {
+            setDocumentContext(lastUserMessage.documentIds);
+          }
         }
       }
     } catch (e) {
@@ -120,8 +132,19 @@ export const useChatOperations = () => {
     console.log("Selecting chat:", chatId);
     setCurrentChatId(chatId);
     
-    // Clear document context when changing chats
-    setDocumentContext([]);
+    // Set document context to the most recent user message with documents
+    const selectedChat = chats.find(chat => chat.id === chatId);
+    if (selectedChat) {
+      const lastUserMessage = [...selectedChat.messages].reverse()
+        .find(msg => msg.role === 'user' && msg.documentIds?.length);
+        
+      if (lastUserMessage?.documentIds) {
+        setDocumentContext(lastUserMessage.documentIds);
+      } else {
+        // Clear document context if no documents in this chat
+        setDocumentContext([]);
+      }
+    }
   };
 
   const { createNewChat } = useChatCreation(user, isGuest, setChats, setCurrentChatId);
@@ -130,30 +153,9 @@ export const useChatOperations = () => {
   // Functions to manage document context
   const handleSetDocumentContext = (docIds: string[]) => {
     setDocumentContext(docIds);
-    
-    // If we have a current chat, update its document context
-    if (currentChatId) {
-      setChats(prev => 
-        prev.map(chat => {
-          if (chat.id === currentChatId) {
-            return {
-              ...chat,
-              documentContext: docIds
-            };
-          }
-          return chat;
-        })
-      );
-    }
   };
   
   const handleGetDocumentContext = () => {
-    // If we have a current chat with document context, use that
-    const currentChat = getCurrentChat();
-    if (currentChat?.documentContext) {
-      return currentChat.documentContext;
-    }
-    // Otherwise use the local state
     return documentContext;
   };
 
@@ -192,12 +194,37 @@ export const useChatOperations = () => {
       const chatMessages = currentChat ? [...currentChat.messages, userMessage] : [userMessage];
 
       console.log("Sending message to AI assistant with document context:", documentIds);
+      
+      // Fetch document content for context if documentIds are provided
+      let documentContents = [];
+      if (documentIds.length > 0) {
+        for (const docId of documentIds) {
+          try {
+            const { data } = await supabase.functions.invoke('drive-integration', {
+              body: { operation: 'get', fileId: docId },
+            });
+            
+            if (data?.content?.content) {
+              documentContents.push({
+                id: docId,
+                name: data.file.name,
+                content: data.content.content,
+                processed_at: data.content.processed_at
+              });
+            }
+          } catch (error) {
+            console.error(`Error fetching document ${docId}:`, error);
+          }
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('chat', {
         body: { 
           content, 
           mode,
           messages: chatMessages,
-          documentIds
+          documentIds,
+          documentContents
         },
       });
 

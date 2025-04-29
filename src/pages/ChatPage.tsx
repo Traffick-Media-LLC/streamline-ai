@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 import { Database, FileText, X } from "lucide-react";
@@ -10,11 +9,46 @@ import { ChatProvider } from "../contexts/ChatContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { useChatContext } from "../contexts/ChatContext";
+import { supabase } from "@/integrations/supabase/client";
 
 // Panel showing active documents
 const DocumentPanel = () => {
   const { getDocumentContext, setDocumentContext } = useChatContext();
+  const [documentNames, setDocumentNames] = useState<Record<string, string>>({});
   const documentIds = getDocumentContext();
+  
+  useEffect(() => {
+    // Fetch document names when IDs change
+    const fetchDocumentNames = async () => {
+      if (!documentIds || documentIds.length === 0) return;
+      
+      try {
+        const { data, error } = await supabase.functions.invoke('drive-integration', {
+          body: { 
+            operation: 'list', 
+            limit: documentIds.length * 2 // Get more than we need to ensure all IDs are covered
+          },
+        });
+        
+        if (error) throw error;
+        
+        const nameMap: Record<string, string> = {};
+        
+        // Create a map of id -> name for all fetched documents
+        for (const doc of data?.files || []) {
+          if (documentIds.includes(doc.id)) {
+            nameMap[doc.id] = doc.name;
+          }
+        }
+        
+        setDocumentNames(nameMap);
+      } catch (err) {
+        console.error("Error fetching document names:", err);
+      }
+    };
+    
+    fetchDocumentNames();
+  }, [documentIds]);
   
   if (!documentIds || documentIds.length === 0) return null;
   
@@ -30,7 +64,9 @@ const DocumentPanel = () => {
             key={docId} 
             className="bg-background border px-2 py-0.5 rounded-full flex items-center text-xs"
           >
-            <span className="truncate max-w-[150px]">{docId}</span>
+            <span className="truncate max-w-[150px]">
+              {documentNames[docId] || docId.substring(0, 8)}
+            </span>
             <button 
               onClick={() => setDocumentContext(documentIds.filter(id => id !== docId))}
               className="ml-1 text-muted-foreground hover:text-foreground"

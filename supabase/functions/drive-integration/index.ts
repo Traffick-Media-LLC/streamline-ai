@@ -2,6 +2,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { GoogleAuth } from "https://deno.land/x/googledrive@v0.1.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,7 +39,7 @@ serve(async (req) => {
       case 'get':
         return await handleGetFile(supabase, fileId);
       case 'sync':
-        return await handleSyncDrive(supabase);
+        return await handleSyncDrive(supabase, googleCredentials);
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid operation' }), 
@@ -134,21 +135,143 @@ async function handleGetFile(supabase, fileId) {
   );
 }
 
-// Sync with Google Drive (placeholder for now)
-// In production, this would use the Google Drive API to fetch files
-async function handleSyncDrive(supabase) {
-  // This is a placeholder. In production, we would:
-  // 1. Authenticate with Google using service account credentials
-  // 2. List files from the master Drive account
-  // 3. Update our database with file metadata
-  // 4. Process and cache file contents
-  
-  // Demo version - just return a message
-  return new Response(
-    JSON.stringify({ 
-      message: 'Drive sync requested',
-      note: 'This is a placeholder. In production, this would sync with Google Drive.'
-    }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
+// Sync with Google Drive using the provided credentials
+async function handleSyncDrive(supabase, credentialsJson) {
+  try {
+    const credentials = JSON.parse(credentialsJson);
+    
+    // Initialize Google Auth
+    const auth = new GoogleAuth({
+      credentials: credentials,
+      scopes: ['https://www.googleapis.com/auth/drive.readonly']
+    });
+    
+    // Get access token
+    const accessToken = await auth.getAccessToken();
+    
+    // Fetch files from Google Drive
+    const response = await fetch('https://www.googleapis.com/drive/v3/files?fields=files(id,name,mimeType,createdTime,modifiedTime,description,size)&pageSize=100&q=mimeType=\'application/pdf\' or mimeType=\'text/plain\' or mimeType=\'application/vnd.google-apps.document\'', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Google Drive API error: ${response.status} ${errorData}`);
+    }
+    
+    const { files } = await response.json();
+    console.log(`Retrieved ${files.length} files from Google Drive`);
+    
+    // Process and store each file
+    const processedFiles = [];
+    for (const file of files) {
+      // Check if file already exists in our database
+      const { data: existingFile } = await supabase
+        .from('drive_files')
+        .select('id, updated_at')
+        .eq('id', file.id)
+        .single();
+      
+      const fileUpdateTime = new Date(file.modifiedTime).toISOString();
+      
+      // If file exists and hasn't been modified, skip it
+      if (existingFile && existingFile.updated_at === fileUpdateTime) {
+        processedFiles.push({ id: file.id, name: file.name, status: 'unchanged' });
+        continue;
+      }
+      
+      // Prepare file metadata for database
+      const fileData = {
+        id: file.id,
+        name: file.name,
+        description: file.description || null,
+        file_type: file.mimeType,
+        created_at: new Date(file.createdTime).toISOString(),
+        updated_at: fileUpdateTime,
+        last_accessed: new Date().toISOString(),
+        size_bytes: file.size ? parseInt(file.size) : null
+      };
+      
+      // Upsert file metadata
+      const { error: upsertError } = await supabase
+        .from('drive_files')
+        .upsert(fileData, { onConflict: 'id' });
+      
+      if (upsertError) {
+        console.error(`Error upserting file ${file.id}:`, upsertError);
+        processedFiles.push({ id: file.id, name: file.name, status: 'error', error: upsertError.message });
+        continue;
+      }
+      
+      // Download and process file content if it's PDF or text
+      let content = '';
+      
+      if (file.mimeType === 'text/plain') {
+        // Download text file
+        const contentResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (contentResponse.ok) {
+          content = await contentResponse.text();
+        } else {
+          console.error(`Error downloading content for ${file.id}: ${contentResponse.status}`);
+        }
+      } else if (file.mimeType === 'application/vnd.google-apps.document') {
+        // Export Google Doc as text
+        const contentResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=text/plain`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (contentResponse.ok) {
+          content = await contentResponse.text();
+        } else {
+          console.error(`Error exporting Google Doc ${file.id}: ${contentResponse.status}`);
+        }
+      } else if (file.mimeType === 'application/pdf') {
+        // For PDFs, we just store a placeholder since we can't extract text directly in this function
+        content = `PDF file: ${file.name}. Content not extracted yet.`;
+      }
+      
+      if (content) {
+        // Store content in the database
+        const { error: contentError } = await supabase
+          .from('file_content')
+          .upsert({
+            file_id: file.id,
+            content: content,
+            content_format: 'text',
+            content_status: 'processed',
+            processed_at: new Date().toISOString(),
+            id: crypto.randomUUID()
+          }, { onConflict: 'file_id' });
+        
+        if (contentError) {
+          console.error(`Error storing content for ${file.id}:`, contentError);
+        }
+      }
+      
+      processedFiles.push({ id: file.id, name: file.name, status: 'updated' });
+    }
+    
+    return new Response(
+      JSON.stringify({ 
+        message: 'Drive sync completed',
+        processed: processedFiles,
+        total: files.length
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error in syncing with Google Drive:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to sync with Google Drive', 
+        details: error.message 
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
 }

@@ -1,11 +1,13 @@
 
 import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle2, FileText, Search } from "lucide-react";
+import { CheckCircle2, FileText, Search, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
+import { Badge } from "@/components/ui/badge";
 
 interface Document {
   id: string;
@@ -23,6 +25,7 @@ interface DocumentSelectorProps {
 const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelectorProps) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +50,32 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
       setError("Failed to load documents");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const syncWithDrive = async () => {
+    setIsSyncing(true);
+    setError(null);
+    
+    try {
+      toast.info("Syncing with Google Drive...");
+      
+      const { data, error } = await supabase.functions.invoke('drive-integration', {
+        body: { operation: 'sync' },
+      });
+
+      if (error) throw new Error(error.message);
+      
+      toast.success(`Drive sync completed. Processed ${data?.processed?.length || 0} files.`);
+      
+      // Refresh document list
+      fetchDocuments();
+    } catch (err) {
+      console.error("Error syncing with Drive:", err);
+      toast.error("Failed to sync with Google Drive");
+      setError("Sync failed. Check console for details.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -86,19 +115,56 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
       onSelectDocument([...selectedDocuments, docId]);
     }
   };
+  
+  const getFileTypeBadge = (fileType: string) => {
+    let color = "bg-blue-500";
+    let label = "Document";
+    
+    if (fileType.includes('pdf')) {
+      color = "bg-red-500";
+      label = "PDF";
+    } else if (fileType.includes('spreadsheet')) {
+      color = "bg-green-500";
+      label = "Spreadsheet";
+    } else if (fileType.includes('presentation')) {
+      color = "bg-yellow-500";
+      label = "Presentation";
+    } else if (fileType.includes('text')) {
+      color = "bg-gray-500";
+      label = "Text";
+    }
+    
+    return (
+      <Badge variant="secondary" className="text-xs">
+        {label}
+      </Badge>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full border rounded-md">
-      <div className="p-3 border-b flex gap-2">
-        <Input
-          placeholder="Search documents..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          className="flex-1"
-        />
-        <Button variant="outline" size="icon" onClick={handleSearch}>
-          <Search size={16} />
+      <div className="p-3 border-b flex justify-between">
+        <div className="flex gap-2 flex-1">
+          <Input
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="flex-1"
+          />
+          <Button variant="outline" size="icon" onClick={handleSearch}>
+            <Search size={16} />
+          </Button>
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={syncWithDrive} 
+          disabled={isSyncing}
+          className="ml-2"
+        >
+          <RefreshCw size={16} className={`mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
+          {isSyncing ? 'Syncing...' : 'Sync'}
         </Button>
       </div>
       
@@ -136,12 +202,15 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
                   )}
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <p className="font-medium text-sm truncate">{doc.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm truncate">{doc.name}</p>
+                    {getFileTypeBadge(doc.file_type)}
+                  </div>
                   {doc.description && (
                     <p className="text-xs text-muted-foreground truncate">{doc.description}</p>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(doc.last_accessed).toLocaleDateString()}
+                    Last accessed: {new Date(doc.last_accessed).toLocaleDateString()}
                   </p>
                 </div>
               </button>
@@ -150,6 +219,14 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
             <div className="py-8 text-center text-muted-foreground">
               <FileText className="mx-auto h-8 w-8 opacity-50 mb-2" />
               <p className="text-sm">No documents found</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={syncWithDrive} 
+                className="mt-2"
+              >
+                Sync with Drive
+              </Button>
             </div>
           )}
         </div>
