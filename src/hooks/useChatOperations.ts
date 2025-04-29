@@ -1,9 +1,8 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatsState } from "./useChatsState";
 import { useChatCreation } from "./useChatCreation";
 import { useMessageOperations } from "./useMessageOperations";
-import { Message, Chat } from "../types/chat";
+import { Message, Chat, DocumentReference } from "../types/chat";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
@@ -24,6 +23,7 @@ export const useChatOperations = () => {
   // Add chats state
   const [chats, setChats] = useState<Chat[]>([]);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [documentContext, setDocumentContext] = useState<string[]>([]);
 
   // Fetch chats when user changes
   useEffect(() => {
@@ -119,12 +119,45 @@ export const useChatOperations = () => {
   const selectChat = (chatId: string) => {
     console.log("Selecting chat:", chatId);
     setCurrentChatId(chatId);
+    
+    // Clear document context when changing chats
+    setDocumentContext([]);
   };
 
   const { createNewChat } = useChatCreation(user, isGuest, setChats, setCurrentChatId);
   const { handleMessageUpdate } = useMessageOperations(user, isGuest, setChats);
 
-  const sendMessage = async (content: string) => {
+  // Functions to manage document context
+  const handleSetDocumentContext = (docIds: string[]) => {
+    setDocumentContext(docIds);
+    
+    // If we have a current chat, update its document context
+    if (currentChatId) {
+      setChats(prev => 
+        prev.map(chat => {
+          if (chat.id === currentChatId) {
+            return {
+              ...chat,
+              documentContext: docIds
+            };
+          }
+          return chat;
+        })
+      );
+    }
+  };
+  
+  const handleGetDocumentContext = () => {
+    // If we have a current chat with document context, use that
+    const currentChat = getCurrentChat();
+    if (currentChat?.documentContext) {
+      return currentChat.documentContext;
+    }
+    // Otherwise use the local state
+    return documentContext;
+  };
+
+  const sendMessage = async (content: string, docIds?: string[]) => {
     if (!user && !isGuest) {
       toast.error("Please sign in to send messages");
       return;
@@ -139,11 +172,15 @@ export const useChatOperations = () => {
       if (!chatId) return;
     }
 
+    // Use provided document IDs or the document context
+    const documentIds = docIds || handleGetDocumentContext();
+
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: "user",
       content,
       timestamp: Date.now(),
+      documentIds: documentIds.length > 0 ? documentIds : undefined
     };
 
     await handleMessageUpdate(chatId, userMessage);
@@ -154,12 +191,13 @@ export const useChatOperations = () => {
       const currentChat = getCurrentChat();
       const chatMessages = currentChat ? [...currentChat.messages, userMessage] : [userMessage];
 
-      console.log("Sending message to AI assistant");
+      console.log("Sending message to AI assistant with document context:", documentIds);
       const { data, error } = await supabase.functions.invoke('chat', {
         body: { 
           content, 
           mode,
-          messages: chatMessages
+          messages: chatMessages,
+          documentIds
         },
       });
 
@@ -171,6 +209,7 @@ export const useChatOperations = () => {
         role: "assistant",
         content: data.message,
         timestamp: Date.now(),
+        referencedDocuments: data.referencedDocuments
       };
 
       await handleMessageUpdate(chatId, aiResponse);
@@ -198,6 +237,8 @@ export const useChatOperations = () => {
     setMode,
     chats,
     selectChat,
-    isInitializing
+    isInitializing,
+    setDocumentContext: handleSetDocumentContext,
+    getDocumentContext: handleGetDocumentContext
   };
 };

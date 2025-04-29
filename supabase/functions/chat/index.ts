@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -17,7 +18,7 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
   try {
-    const { content, mode, messages } = await req.json();
+    const { content, mode, messages, documentIds = [] } = await req.json();
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -77,11 +78,48 @@ serve(async (req) => {
       jsonEntries = [];
     }
 
+    // NEW: Fetch document content from drive_files if documentIds are provided
+    let documentEntries = [];
+    if (documentIds && documentIds.length > 0) {
+      const { data: fileData, error: fileError } = await supabase
+        .from('drive_files')
+        .select('id, name, file_type, description')
+        .in('id', documentIds);
+        
+      if (!fileError && fileData) {
+        // Get content for each file
+        for (const file of fileData) {
+          const { data: contentData, error: contentError } = await supabase
+            .from('file_content')
+            .select('content')
+            .eq('file_id', file.id)
+            .single();
+            
+          if (!contentError && contentData) {
+            documentEntries.push({
+              title: `Document: ${file.name}`,
+              content: contentData.content,
+              file_id: file.id,
+              file_type: file.file_type,
+              tags: ['document']
+            });
+            
+            // Update last_accessed timestamp
+            await supabase
+              .from('drive_files')
+              .update({ last_accessed: new Date().toISOString() })
+              .eq('id', file.id);
+          }
+        }
+      }
+    }
+
     // Combine results
     const allEntries = [
       ...(brandEntries || []), 
       ...(productEntries || []),
       ...(jsonEntries || []),
+      ...(documentEntries || []),
       ...(regulatoryEntries || []).filter(entry => 
         !brandEntries?.some(b => b.id === entry.id) && 
         !productEntries?.some(p => p.id === entry.id) &&
@@ -89,12 +127,12 @@ serve(async (req) => {
       )
     ];
 
-    console.log(`Found ${brandEntries?.length || 0} brand entries, ${productEntries?.length || 0} product entries, ${jsonEntries?.length || 0} JSON entries, and ${regulatoryEntries?.length || 0} regulatory entries`);
+    console.log(`Found ${brandEntries?.length || 0} brand entries, ${productEntries?.length || 0} product entries, ${jsonEntries?.length || 0} JSON entries, ${documentEntries?.length || 0} document entries, and ${regulatoryEntries?.length || 0} regulatory entries`);
     
     // Generate knowledge context
     let knowledgeContext = "";
     if (allEntries.length > 0) {
-      knowledgeContext = "Brand, Product, and Regulatory Knowledge:\n\n";
+      knowledgeContext = "Brand, Product, Regulatory Knowledge and Documents:\n\n";
       
       // Process brand entries
       const brandInfo = brandEntries?.map(entry => 
@@ -168,6 +206,15 @@ serve(async (req) => {
           }
         });
       }
+      
+      // Process document entries
+      if (documentEntries?.length) {
+        knowledgeContext += "Document References:\n\n";
+        documentEntries.forEach(doc => {
+          knowledgeContext += `Document: ${doc.title.replace('Document: ', '')}\n`;
+          knowledgeContext += `Content Extract:\n${doc.content.substring(0, 1500)}${doc.content.length > 1500 ? '...' : ''}\n\n`;
+        });
+      }
 
       // Process regulatory entries
       const regulatoryInfo = regulatoryEntries
@@ -201,6 +248,7 @@ Important Notes:
 - Focus on what is legally permissible for non-dispensary retail and online sales
 - When dealing with JSON data, extract and interpret relevant information
 - For tabular or structured data, organize your response in a clear, readable format
+- When referencing documents, cite the specific document name
 
 Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
@@ -213,7 +261,8 @@ Brand and Product Guidance:
 - Address regulatory requirements specific to that brand or product's ingredients
 - Be explicit about which states allow sales of specific brands/products
 - When regulatory status varies by ingredient within a product, clarify this distinction
-- For JSON data, extract relevant information and present it clearly`
+- For JSON data, extract relevant information and present it clearly
+- For document references, include the document title in your response when citing information from it`
       : `You are a specialized legal and regulatory assistant for non-dispensary retail channels.
 
 Response Format:
@@ -224,11 +273,13 @@ Response Format:
 - Consider edge cases and specific requirements
 - Structure response in clear sections
 - For JSON or tabular data, clearly summarize the structured information
+- When referencing documents, cite specific sections and page numbers when possible
 
 Important Notes:
 - The dispensary caveat ONLY applies to hemp and delta-related products
 - Focus on what is legally permissible for non-dispensary retail and online sales
 - When working with JSON data, extract and explain the structured information
+- For document references, clearly identify which document contains the information
 
 Regulated Products:
 1. Nicotine Products (e-liquids, disposable vapes, nicotine pouches)
@@ -243,7 +294,8 @@ Brand and Product Guidance:
 - Include state-by-state analysis for specific brands or products when relevant
 - Explicitly mention when certain products within a brand may have different regulatory status
 - Cite the most up-to-date regulatory frameworks that apply to specific brand products
-- For JSON data, analyze and interpret the structured information in context`;
+- For JSON data, analyze and interpret the structured information in context
+- For document references, provide comprehensive analysis citing specific sections`;
 
     // Build the final system message with the knowledge context
     let systemContent = baseSystemPrompt;
@@ -276,10 +328,27 @@ Brand and Product Guidance:
     });
 
     const data = await response.json();
+    
+    // Extract document references from the message if any
+    let referencedDocuments = [];
+    if (documentIds?.length > 0) {
+      // Simple heuristic to find document references
+      const assistantMessage = data.choices[0].message.content;
+      documentEntries.forEach(doc => {
+        const docName = doc.title.replace('Document: ', '');
+        if (assistantMessage.includes(docName)) {
+          referencedDocuments.push({
+            id: doc.file_id,
+            name: docName
+          });
+        }
+      });
+    }
 
     return new Response(
       JSON.stringify({ 
-        message: data.choices[0].message.content 
+        message: data.choices[0].message.content,
+        referencedDocuments
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }

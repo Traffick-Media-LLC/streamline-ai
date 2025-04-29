@@ -6,6 +6,13 @@ export interface Message {
   role: MessageRole;
   content: string;
   timestamp: number;
+  documentIds?: string[]; // Add reference to documents
+  referencedDocuments?: DocumentReference[]; // Documents referenced in assistant responses
+}
+
+export interface DocumentReference {
+  id: string;
+  name: string;
 }
 
 export interface Chat {
@@ -14,6 +21,7 @@ export interface Chat {
   messages: Message[];
   createdAt: number;
   updatedAt: number;
+  documentContext?: string[]; // Active document context for the chat
 }
 
 export interface ChatContextType {
@@ -23,7 +31,11 @@ export interface ChatContextType {
   mode: "simple" | "complex";
   createNewChat: () => Promise<string | null>;
   selectChat: (chatId: string) => void;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, documentIds?: string[]) => Promise<void>;
   getCurrentChat: () => Chat | null;
   setMode: (mode: "simple" | "complex") => void;
+  isInitializing: boolean;
+  // New document context methods
+  setDocumentContext: (docIds: string[]) => void;
+  getDocumentContext: () => string[];
 }
