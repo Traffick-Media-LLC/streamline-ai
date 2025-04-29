@@ -1,4 +1,5 @@
 
+
 export interface ChatContextType {
   currentChatId: string | null;
   isLoadingResponse: boolean;
@@ -29,6 +30,7 @@ export interface Message {
   timestamp: number;
   documentIds?: string[];
   referencedDocuments?: DocumentReference[];
+  animationDelay?: number; // Added this property to fix the TypeScript error
 }
 
 export interface DocumentReference {
