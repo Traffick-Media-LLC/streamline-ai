@@ -535,7 +535,7 @@ export const useChatDocuments = () => {
         `Exception searching documents: ${errorMessage}`,
         err,
         { searchQuery: query },
-        formattedChatId,
+        formattedChatId, // This is now properly defined
         userId,
         'error',
         'document'
@@ -553,7 +553,7 @@ export const useChatDocuments = () => {
     setDocumentContext,
     getDocumentContext,
     fetchDocumentContents,
-    searchDocuments, // Add the new function
+    searchDocuments,
     isFetching
   };
 };

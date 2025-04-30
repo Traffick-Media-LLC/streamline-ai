@@ -1,5 +1,5 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { google } from 'https://deno.land/x/googleapis@v2.2.0/mod.ts';
 import { OAuth2Client } from 'https://deno.land/x/google_auth@1.5.1/mod.ts';
 import { DOMParser } from 'https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts';
 
@@ -57,39 +57,26 @@ const generateJWT = async () => {
   }
 };
 
-const getDriveClient = async () => {
-  const privateKey = Deno.env.get('GOOGLE_PRIVATE_KEY')?.replace(/\\n/g, '\n');
-  const clientEmail = Deno.env.get('GOOGLE_CLIENT_EMAIL');
-
-  try {
-    const auth = new google.auth.JWT({
-      email: clientEmail,
-      key: privateKey,
-      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-    });
-
-    await auth.authorize();
-    return google.drive({ version: 'v3', auth });
-  } catch (error) {
-    console.error('Error initializing Google Drive client:', error);
-    throw new Error('Failed to initialize Google Drive client');
-  }
-};
-
-const extractContent = async (file, driveClient) => {
+// Since we can't use googleapis directly due to the module issue,
+// we'll implement the functions using direct REST API calls instead
+const extractContent = async (file, accessToken) => {
   try {
     if (file.mime_type === 'application/vnd.google-apps.document') {
-      const response = await driveClient.files.export({
-        fileId: file.id,
-        mimeType: 'text/html',
-      });
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=text/html`, 
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
 
-      if (response.status !== 200) {
+      if (!response.ok) {
         console.error('Error exporting Google Doc as HTML:', response.status, response.statusText);
         throw new Error(`Failed to export Google Doc as HTML: ${response.status} ${response.statusText}`);
       }
 
-      const htmlContent = response.data as string;
+      const htmlContent = await response.text();
       const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
       const textContent = doc?.body?.textContent || '';
 
@@ -98,19 +85,24 @@ const extractContent = async (file, driveClient) => {
         content: textContent,
       };
     } else if (file.mime_type === 'text/plain') {
-      const response = await driveClient.files.get({
-        fileId: file.id,
-        alt: 'media',
-      }, { responseType: 'text' });
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, 
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
 
-      if (response.status !== 200) {
+      if (!response.ok) {
         console.error('Error getting plain text file:', response.status, response.statusText);
         throw new Error(`Failed to get plain text file: ${response.status} ${response.statusText}`);
       }
 
+      const textContent = await response.text();
       return {
         type: 'text',
-        content: response.data as string,
+        content: textContent,
       };
     } else {
       console.warn(`Unsupported MIME type: ${file.mime_type}`);
@@ -125,14 +117,14 @@ const extractContent = async (file, driveClient) => {
   }
 };
 
-// In the getFile function, add fields for webLink and webContentLink
-const getFileDetails = async (driveClient, fileId) => {
+const getFileDetails = async (fileId) => {
   try {
+    const accessToken = await generateJWT();
     const response = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,webViewLink,webContentLink,thumbnailLink&supportsAllDrives=true`,
       {
         headers: {
-          'Authorization': `Bearer ${await generateJWT()}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       }
     );
@@ -157,10 +149,11 @@ const getFileDetails = async (driveClient, fileId) => {
   }
 };
 
-const getFile = async (driveClient, fileId) => {
+const getFile = async (fileId) => {
   try {
-    const fileDetails = await getFileDetails(driveClient, fileId);
-    const content = await extractContent(fileDetails, driveClient);
+    const accessToken = await generateJWT();
+    const fileDetails = await getFileDetails(fileId);
+    const content = await extractContent(fileDetails, accessToken);
 
     return {
       file: fileDetails,
@@ -172,9 +165,10 @@ const getFile = async (driveClient, fileId) => {
   }
 };
 
-// In the searchFiles function, include additional fields
-const searchFiles = async (driveClient, query, driveId, limit = 10) => {
+const searchFiles = async (query, driveId, limit = 10) => {
   try {
+    const accessToken = await generateJWT();
+    
     // Build the query string
     let queryString = `name contains '${query}' and trashed = false`;
     if (driveId) {
@@ -189,7 +183,7 @@ const searchFiles = async (driveClient, query, driveId, limit = 10) => {
       (driveId ? `&corpora=drive&driveId=${driveId}` : ''),
       {
         headers: {
-          'Authorization': `Bearer ${await generateJWT()}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
       }
     );
@@ -222,7 +216,6 @@ serve(async (req) => {
 
   try {
     const { operation, fileId, query, includeWebLink } = await req.json();
-    const driveClient = await getDriveClient();
     const sharedDriveId = Deno.env.get('GOOGLE_SHARED_DRIVE_ID');
 
     switch (operation) {
@@ -235,7 +228,7 @@ serve(async (req) => {
         }
 
         try {
-          const fileData = await getFile(driveClient, fileId);
+          const fileData = await getFile(fileId);
           return new Response(
             JSON.stringify({ 
               file: {
@@ -262,7 +255,7 @@ serve(async (req) => {
         }
 
         try {
-          const files = await searchFiles(driveClient, query, sharedDriveId);
+          const files = await searchFiles(query, sharedDriveId);
           return new Response(JSON.stringify({ files }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
