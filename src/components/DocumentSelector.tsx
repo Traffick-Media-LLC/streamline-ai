@@ -20,9 +20,14 @@ interface Document {
 interface DocumentSelectorProps {
   selectedDocuments: string[];
   onSelectDocument: (docIds: string[]) => void;
+  sharedDriveId?: string; // Optional shared drive ID
 }
 
-const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelectorProps) => {
+const DocumentSelector = ({ 
+  selectedDocuments, 
+  onSelectDocument, 
+  sharedDriveId 
+}: DocumentSelectorProps) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -31,15 +36,25 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
 
   useEffect(() => {
     fetchDocuments();
-  }, []);
+  }, [sharedDriveId]); // Re-fetch when sharedDriveId changes
 
   const fetchDocuments = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
+      const requestBody: Record<string, any> = { 
+        operation: 'list', 
+        limit: 20 
+      };
+      
+      // Include shared drive ID if provided
+      if (sharedDriveId) {
+        requestBody.driveId = sharedDriveId;
+      }
+      
       const { data, error } = await supabase.functions.invoke('drive-integration', {
-        body: { operation: 'list', limit: 20 },
+        body: requestBody,
       });
 
       if (error) throw new Error(error.message);
@@ -61,8 +76,15 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
     try {
       toast.info("Syncing with Google Drive...");
       
+      const requestBody: Record<string, any> = { operation: 'sync' };
+      
+      // Include shared drive ID if provided
+      if (sharedDriveId) {
+        requestBody.driveId = sharedDriveId;
+      }
+      
       const { data, error } = await supabase.functions.invoke('drive-integration', {
-        body: { operation: 'sync' },
+        body: requestBody,
       });
 
       if (error) throw new Error(error.message);
@@ -90,12 +112,19 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
     setError(null);
     
     try {
+      const requestBody: Record<string, any> = {
+        operation: 'search',
+        query: searchQuery,
+        limit: 20
+      };
+      
+      // Include shared drive ID if provided
+      if (sharedDriveId) {
+        requestBody.driveId = sharedDriveId;
+      }
+      
       const { data, error } = await supabase.functions.invoke('drive-integration', {
-        body: { 
-          operation: 'search', 
-          query: searchQuery,
-          limit: 20 
-        },
+        body: requestBody,
       });
 
       if (error) throw new Error(error.message);
@@ -172,6 +201,12 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
         </Button>
       </div>
       
+      {sharedDriveId && (
+        <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground border-b">
+          Connected to Shared Drive
+        </div>
+      )}
+      
       {error && (
         <div className="p-4 text-center text-red-500 text-sm">
           {error}
@@ -222,7 +257,12 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
           ) : (
             <div className="py-8 text-center text-muted-foreground">
               <FileText className="mx-auto h-8 w-8 opacity-50 mb-2" />
-              <p className="text-sm">No documents found in your Google Drive</p>
+              <p className="text-sm">
+                {sharedDriveId 
+                  ? "No documents found in this Shared Drive" 
+                  : "No documents found in your Google Drive"
+                }
+              </p>
               <Button 
                 variant="outline" 
                 size="sm" 

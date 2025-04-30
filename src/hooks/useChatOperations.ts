@@ -102,6 +102,14 @@ export const useChatOperations = () => {
         { duration: 8000 }
       );
     }, 1500);
+    
+    // Add new instruction specific to Shared Drives
+    setTimeout(() => {
+      toast.info(
+        "4. For Shared Drives, add the GOOGLE_SHARED_DRIVE_ID in your Supabase secrets",
+        { duration: 8000 }
+      );
+    }, 2000);
   };
 
   return {

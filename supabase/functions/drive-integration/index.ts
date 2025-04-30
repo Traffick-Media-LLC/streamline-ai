@@ -289,6 +289,23 @@ async function createDriveClient(requestId: string | undefined) {
     // Generate access token
     const accessToken = await generateJWT(requestId);
     
+    // Get shared drive ID from environment variables
+    const sharedDriveId = Deno.env.get("GOOGLE_SHARED_DRIVE_ID");
+    
+    // Log whether we have a shared drive ID
+    await logEvent(
+      requestId, 
+      'drive-integration', 
+      'shared_drive_config', 
+      `Shared Drive configuration check`, 
+      { 
+        hasSharedDriveId: !!sharedDriveId,
+        sharedDriveIdLength: sharedDriveId?.length || 0 
+      }, 
+      'log', 
+      'document'
+    );
+    
     // Return a client object with methods for interacting with Google Drive
     return {
       // Search for files in Google Drive
@@ -301,14 +318,22 @@ async function createDriveClient(requestId: string | undefined) {
           'drive-integration',
           'drive_search_files',
           `Searching files with query: ${query}`,
-          { query, maxResults },
+          { query, maxResults, useSharedDrive: !!sharedDriveId },
           'log',
           'document'
         );
         
         try {
+          // Build the API URL with shared drive parameters if available
+          let apiUrl = `https://www.googleapis.com/drive/v3/files?q=${searchQuery}&fields=${fields}&pageSize=${maxResults}`;
+          
+          // Add shared drive parameters if we have a drive ID
+          if (sharedDriveId) {
+            apiUrl += `&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=drive&driveId=${sharedDriveId}`;
+          }
+          
           const response = await fetch(
-            `https://www.googleapis.com/drive/v3/files?q=${searchQuery}&fields=${fields}&pageSize=${maxResults}`,
+            apiUrl,
             {
               headers: {
                 'Authorization': `Bearer ${accessToken}`
@@ -327,7 +352,7 @@ async function createDriveClient(requestId: string | undefined) {
                 statusText: response.statusText,
                 error: errorText 
               },
-              { query, endpoint: 'files' },
+              { query, endpoint: 'files', useSharedDrive: !!sharedDriveId },
               'error',
               'document'
             );
@@ -342,7 +367,7 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'drive_search_complete',
             `Search completed, found ${data.files?.length || 0} files`,
-            { fileCount: data.files?.length || 0 },
+            { fileCount: data.files?.length || 0, useSharedDrive: !!sharedDriveId },
             'log',
             'document'
           );
@@ -354,7 +379,7 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'Search files error',
             error,
-            { query },
+            { query, useSharedDrive: !!sharedDriveId },
             'error',
             'document'
           );
@@ -370,14 +395,22 @@ async function createDriveClient(requestId: string | undefined) {
           'drive-integration',
           'drive_get_file',
           `Getting file metadata for ID: ${fileId}`,
-          { fileId },
+          { fileId, useSharedDrive: !!sharedDriveId },
           'log',
           'document'
         );
         
         try {
+          // Build the API URL with shared drive parameters if available
+          let metadataUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,description,fileExtension,size,modifiedTime,webViewLink`;
+          
+          // Add shared drive support parameter if needed
+          if (sharedDriveId) {
+            metadataUrl += `&supportsAllDrives=true`;
+          }
+          
           const metadataResponse = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,description,fileExtension,size,modifiedTime,webViewLink`,
+            metadataUrl,
             {
               headers: {
                 'Authorization': `Bearer ${accessToken}`
@@ -396,7 +429,7 @@ async function createDriveClient(requestId: string | undefined) {
                 statusText: metadataResponse.statusText,
                 error: errorText 
               },
-              { fileId },
+              { fileId, useSharedDrive: !!sharedDriveId },
               'error',
               'document'
             );
@@ -411,13 +444,21 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'drive_get_content',
             `Getting content for file: ${file.name}`,
-            { fileId, fileName: file.name },
+            { fileId, fileName: file.name, useSharedDrive: !!sharedDriveId },
             'log',
             'document'
           );
           
+          // Build the content URL with shared drive parameters if available
+          let contentUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+          
+          // Add shared drive support parameter if needed
+          if (sharedDriveId) {
+            contentUrl += `&supportsAllDrives=true`;
+          }
+          
           const contentResponse = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            contentUrl,
             {
               headers: {
                 'Authorization': `Bearer ${accessToken}`
@@ -436,7 +477,7 @@ async function createDriveClient(requestId: string | undefined) {
                 statusText: contentResponse.statusText,
                 error: errorText 
               },
-              { fileId, fileName: file.name },
+              { fileId, fileName: file.name, useSharedDrive: !!sharedDriveId },
               'error',
               'document'
             );
@@ -453,7 +494,7 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'drive_file_retrieved',
             `Successfully retrieved file: ${file.name}`,
-            { fileId, fileName: file.name, fileType, contentLength: content.length },
+            { fileId, fileName: file.name, fileType, contentLength: content.length, useSharedDrive: !!sharedDriveId },
             'log',
             'document'
           );
@@ -475,7 +516,7 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'Get file error',
             error,
-            { fileId },
+            { fileId, useSharedDrive: !!sharedDriveId },
             'error',
             'document'
           );
@@ -492,7 +533,7 @@ async function createDriveClient(requestId: string | undefined) {
           'drive-integration',
           'drive_list_files',
           `Listing files (limit: ${limit})`,
-          { limit },
+          { limit, useSharedDrive: !!sharedDriveId },
           'log',
           'document'
         );
@@ -519,7 +560,7 @@ async function createDriveClient(requestId: string | undefined) {
                 statusText: testResponse.statusText,
                 error: errorText 
               },
-              { endpoint: 'about' },
+              { endpoint: 'about', useSharedDrive: !!sharedDriveId },
               'error',
               'permission'
             );
@@ -533,13 +574,21 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'drive_permission_check',
             `Permission check passed`,
-            { user: aboutData.user },
+            { user: aboutData.user, useSharedDrive: !!sharedDriveId },
             'log',
             'permission'
           );
         
+          // Build the API URL with shared drive parameters if available
+          let listUrl = `https://www.googleapis.com/drive/v3/files?fields=${fields}&pageSize=${limit}`;
+          
+          // Add shared drive parameters if we have a drive ID
+          if (sharedDriveId) {
+            listUrl += `&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=drive&driveId=${sharedDriveId}`;
+          }
+          
           const response = await fetch(
-            `https://www.googleapis.com/drive/v3/files?fields=${fields}&pageSize=${limit}`,
+            listUrl,
             {
               headers: {
                 'Authorization': `Bearer ${accessToken}`
@@ -575,7 +624,7 @@ async function createDriveClient(requestId: string | undefined) {
                 statusText: response.statusText,
                 error: errorJson
               },
-              { endpoint: 'files', limit },
+              { endpoint: 'files', limit, useSharedDrive: !!sharedDriveId },
               'error',
               errorCategory
             );
@@ -596,7 +645,7 @@ async function createDriveClient(requestId: string | undefined) {
               'drive-integration',
               'drive_no_files_found',
               `No files found in Drive for this service account`,
-              { },
+              { useSharedDrive: !!sharedDriveId },
               'warning',
               'document'
             );
@@ -613,7 +662,7 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'drive_list_complete',
             `List files completed, found ${data.files?.length || 0} files`,
-            { fileCount: data.files?.length || 0 },
+            { fileCount: data.files?.length || 0, useSharedDrive: !!sharedDriveId },
             'log',
             'document'
           );
@@ -636,7 +685,7 @@ async function createDriveClient(requestId: string | undefined) {
             'drive-integration',
             'List files error',
             error,
-            { limit },
+            { limit, useSharedDrive: !!sharedDriveId },
             'error',
             'document'
           );
@@ -684,7 +733,7 @@ serve(async (req) => {
       );
     }
     
-    const { operation, fileId, query, limit, debug, test_credentials } = body;
+    const { operation, fileId, query, limit, debug, test_credentials, driveId } = body;
     
     // Log the request details
     await logEvent(
@@ -692,10 +741,27 @@ serve(async (req) => {
       'drive-integration', 
       'drive_request_started', 
       `Drive integration request: ${operation}`, 
-      { operation, fileId, query, limit, timestamp: Date.now() },
+      { operation, fileId, query, limit, driveId, timestamp: Date.now() },
       'log',
       'document'
     );
+    
+    // Process the Shared Drive ID from the request if provided
+    if (driveId) {
+      // Override the environment variable with the provided driveId
+      // This allows for dynamic selection of shared drives
+      Deno.env.set("GOOGLE_SHARED_DRIVE_ID", driveId);
+      
+      await logEvent(
+        requestId, 
+        'drive-integration', 
+        'drive_id_override', 
+        `Using provided drive ID: ${driveId}`, 
+        { driveId },
+        'log',
+        'document'
+      );
+    }
     
     if (operation === 'health_check' && debug) {
       // Detailed health check that returns credential status info
@@ -703,8 +769,10 @@ serve(async (req) => {
         clientEmailExists: !!Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL"),
         privateKeyExists: !!Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY"),
         projectIdExists: !!Deno.env.get("GOOGLE_DRIVE_PROJECT_ID"),
+        sharedDriveIdExists: !!Deno.env.get("GOOGLE_SHARED_DRIVE_ID"),
         clientEmail: Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL")?.replace(/^["']|["']$/g, "") || 'missing',
         projectId: Deno.env.get("GOOGLE_DRIVE_PROJECT_ID")?.replace(/^["']|["']$/g, "") || 'missing',
+        sharedDriveId: Deno.env.get("GOOGLE_SHARED_DRIVE_ID") || 'missing',
         privateKeyLength: Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY")?.length || 0,
         privateKeyHasBeginMarker: Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY")?.includes("-----BEGIN PRIVATE KEY-----") || false,
         privateKeyHasEndMarker: Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY")?.includes("-----END PRIVATE KEY-----") || false
@@ -827,8 +895,26 @@ serve(async (req) => {
             const aboutData = await aboutResponse.json();
             
             // Now test the files.list endpoint (requires more permissions)
+            // Include shared drive parameters if we have a shared drive ID
+            let testUrl = `https://www.googleapis.com/drive/v3/files?pageSize=1`;
+            const sharedDriveId = Deno.env.get("GOOGLE_SHARED_DRIVE_ID");
+            
+            if (sharedDriveId) {
+              testUrl += `&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=drive&driveId=${sharedDriveId}`;
+              
+              await logEvent(
+                requestId,
+                'drive-integration',
+                'using_shared_drive',
+                `Testing with Shared Drive ID: ${sharedDriveId}`,
+                { sharedDriveId },
+                'log',
+                'permission'
+              );
+            }
+            
             const filesResponse = await fetch(
-              `https://www.googleapis.com/drive/v3/files?pageSize=1`,
+              testUrl,
               {
                 headers: {
                   'Authorization': `Bearer ${accessToken}`
@@ -844,10 +930,23 @@ serve(async (req) => {
                 'drive-integration',
                 'Files API failed',
                 { status: filesResponse.status, error: errorText },
-                {},
+                { useSharedDrive: !!sharedDriveId },
                 'error',
                 'permission'
               );
+              
+              // Check for specific shared drive errors
+              if (sharedDriveId && errorText.includes('driveId')) {
+                return new Response(
+                  JSON.stringify({
+                    status: 'error',
+                    message: 'Shared Drive ID error',
+                    error: `Invalid or inaccessible Shared Drive ID: ${sharedDriveId}`,
+                    detail: 'Make sure the service account has access to this Shared Drive and the ID is correct.'
+                  }),
+                  { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                );
+              }
               
               // Since about worked but files failed, this is likely a permission issue
               return new Response(
@@ -867,12 +966,23 @@ serve(async (req) => {
             
             // Check if no files were found
             if (fileCount === 0) {
+              let message = 'No accessible files found';
+              let detail = 'The service account is authenticated but no files are shared with it. Share files directly with the service account email.';
+              
+              // If using a shared drive, provide more specific guidance
+              if (sharedDriveId) {
+                message = 'No files found in the Shared Drive';
+                detail = 'Make sure the service account has access to this Shared Drive and files exist within it.';
+              }
+              
               return new Response(
                 JSON.stringify({
                   status: 'warning',
-                  message: 'No accessible files found',
+                  message: message,
                   serviceAccount: aboutData.user,
-                  detail: 'The service account is authenticated but no files are shared with it. Share files directly with the service account email.'
+                  detail: detail,
+                  useSharedDrive: !!sharedDriveId,
+                  sharedDriveId: sharedDriveId || undefined
                 }),
                 { status: 203, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
               );
@@ -884,7 +994,9 @@ serve(async (req) => {
               message: 'Google Drive permissions test passed',
               user: aboutData.user,
               quota: aboutData.storageQuota,
-              fileCount: fileCount
+              fileCount: fileCount,
+              useSharedDrive: !!sharedDriveId,
+              sharedDriveId: sharedDriveId || undefined
             };
           } catch (error) {
             // Check if this is a specific API-related error
