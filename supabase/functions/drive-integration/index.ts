@@ -79,65 +79,47 @@ const logError = async (supabase, requestId, component, message, error, options 
   }
 };
 
-// Google Drive API client
-async function createDriveClient(credentials) {
+// Google Drive API client - using individual credential fields instead of parsing JSON
+async function createDriveClient() {
   try {
-    let key;
-    try {
-      // First, ensure credentials is a string
-      if (typeof credentials !== 'string') {
-        const credType = typeof credentials;
-        console.error(`Invalid credentials type: expected string, got ${credType}`);
-        throw new Error(`Credentials must be a string, got ${credType}`);
-      }
-      
-      // Trim whitespace to ensure clean parsing
-      const credentialsString = credentials.trim();
-      
-      // Check if the credentials look like a JSON string
-      if (!credentialsString.startsWith('{')) {
-        console.error("Credentials don't appear to be in JSON format");
-        const preview = credentialsString.substring(0, 30);
-        throw new Error(`Credentials don't appear to be in JSON format. Preview: ${preview}...`);
-      }
-      
-      // Attempt to parse with detailed error catching
-      try {
-        key = JSON.parse(credentialsString);
-      } catch (jsonError) {
-        console.error("JSON parsing error:", jsonError);
-        throw new Error(`Failed to parse credentials JSON: ${jsonError.message}`);
-      }
-      
-      // Validate that key has required properties
-      if (!key) {
-        throw new Error("Parsed credentials resulted in null or undefined");
-      }
-      
-      if (!key.client_email) {
-        throw new Error("Credentials missing required field: client_email");
-      }
-      
-      if (!key.private_key) {
-        throw new Error("Credentials missing required field: private_key");
-      }
-      
-      console.log("Successfully parsed Google Drive credentials");
-      
-    } catch (e) {
-      console.error("Error parsing Google Drive credentials:", e);
-      const credentialPreview = typeof credentials === 'string' 
-        ? `${credentials.substring(0, 20)}...` 
-        : `<non-string: ${typeof credentials}>`;
-      throw new Error(`Failed to parse credentials: ${e.message}. Preview: ${credentialPreview}`);
+    // Get individual credential fields from environment
+    const clientEmail = Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL");
+    const privateKey = Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY");
+    const projectId = Deno.env.get("GOOGLE_DRIVE_PROJECT_ID");
+    
+    // Validate required fields
+    if (!clientEmail) {
+      throw new Error("GOOGLE_DRIVE_CLIENT_EMAIL is not configured in environment");
     }
+    
+    if (!privateKey) {
+      throw new Error("GOOGLE_DRIVE_PRIVATE_KEY is not configured in environment");
+    }
+    
+    // Log successful credential loading
+    console.log("Successfully loaded Google Drive credentials for:", clientEmail);
+    
+    // Create key object with required JWT fields
+    const key = {
+      type: Deno.env.get("GOOGLE_DRIVE_TYPE") || "service_account",
+      project_id: projectId,
+      private_key_id: Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY_ID") || "",
+      private_key: privateKey.replace(/\\n/g, '\n'), // Handle escaped newlines if any
+      client_email: clientEmail,
+      client_id: Deno.env.get("GOOGLE_DRIVE_CLIENT_ID") || "",
+      auth_uri: Deno.env.get("GOOGLE_DRIVE_AUTH_URI") || "https://accounts.google.com/o/oauth2/auth",
+      token_uri: Deno.env.get("GOOGLE_DRIVE_TOKEN_URI") || "https://oauth2.googleapis.com/token",
+      auth_provider_x509_cert_url: Deno.env.get("GOOGLE_DRIVE_AUTH_CERT_URL") || "https://www.googleapis.com/oauth2/v1/certs",
+      client_x509_cert_url: Deno.env.get("GOOGLE_DRIVE_CLIENT_CERT_URL") || "",
+      universe_domain: Deno.env.get("GOOGLE_DRIVE_UNIVERSE_DOMAIN") || "googleapis.com"
+    };
     
     // Use the JWT client from Google Auth library for Deno
     const token = await generateJWT(key);
     
     return {
       token,
-      clientEmail: key.client_email
+      clientEmail
     };
   } catch (e) {
     console.error("Error creating Drive client:", e);
@@ -401,14 +383,21 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const driveCredentials = Deno.env.get("GOOGLE_DRIVE_CREDENTIALS");
+  
+  // Check for required credentials
+  const clientEmail = Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL");
+  const privateKey = Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY");
 
-  if (!driveCredentials) {
-    console.error("Google Drive credentials not configured");
+  if (!clientEmail || !privateKey) {
+    console.error("Google Drive credentials not configured properly");
+    const missingFields = [];
+    if (!clientEmail) missingFields.push("GOOGLE_DRIVE_CLIENT_EMAIL");
+    if (!privateKey) missingFields.push("GOOGLE_DRIVE_PRIVATE_KEY");
+    
     return new Response(
       JSON.stringify({ 
-        error: "Google Drive credentials not configured", 
-        details: "Please set the GOOGLE_DRIVE_CREDENTIALS secret in your Supabase project"
+        error: "Google Drive credentials not configured properly", 
+        details: `Missing required secret(s): ${missingFields.join(", ")}`
       }),
       { 
         status: 500, 
@@ -453,7 +442,7 @@ serve(async (req) => {
     
     let driveClient;
     try {
-      driveClient = await createDriveClient(driveCredentials);
+      driveClient = await createDriveClient();
       
       await logEvent(supabase, requestId, 'drive_auth_completed', 'drive_integration', 'Google Drive client initialized', {
         durationMs: calculateDuration(startAuthTime)
