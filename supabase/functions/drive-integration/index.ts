@@ -78,7 +78,32 @@ const logError = async (supabase, requestId, component, message, error, options 
 // Google Drive API client
 async function createDriveClient(credentials) {
   try {
-    const key = JSON.parse(credentials);
+    let key;
+    try {
+      // First, ensure credentials is a string
+      if (typeof credentials !== 'string') {
+        throw new Error(`Credentials must be a string, got ${typeof credentials}`);
+      }
+      
+      // Check if the credentials look like a JSON string
+      if (!credentials.trim().startsWith('{')) {
+        throw new Error("Credentials don't appear to be in JSON format");
+      }
+      
+      // Attempt to parse
+      key = JSON.parse(credentials);
+      
+      // Validate that key has required properties
+      if (!key.client_email || !key.private_key) {
+        throw new Error("Credentials missing required fields (client_email or private_key)");
+      }
+    } catch (e) {
+      console.error("Error parsing Google Drive credentials:", e);
+      const credentialPreview = typeof credentials === 'string' 
+        ? `${credentials.substring(0, 20)}...` 
+        : `<non-string: ${typeof credentials}>`;
+      throw new Error(`Failed to parse credentials: ${e.message}. Preview: ${credentialPreview}`);
+    }
     
     // Use the JWT client from Google Auth library for Deno
     const token = await generateJWT(key);
@@ -116,69 +141,83 @@ async function generateJWT(key) {
   
   const signatureInput = `${headerBase64}.${claimBase64}`;
   
-  // Import private key
-  const privateKey = await crypto.subtle.importKey(
-    "pkcs8",
-    pemToArrayBuffer(key.private_key),
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      hash: "SHA-256"
-    },
-    false,
-    ["sign"]
-  );
-  
-  // Sign the JWT
-  const signature = await crypto.subtle.sign(
-    { name: "RSASSA-PKCS1-v1_5" },
-    privateKey,
-    encoder.encode(signatureInput)
-  );
-  
-  // Convert signature to base64url
-  const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-  
-  const jwt = `${signatureInput}.${signatureBase64}`;
-  
-  // Exchange JWT for access token
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: jwt
-    })
-  });
-  
-  const tokenData = await tokenResponse.json();
-  
-  if (!tokenData.access_token) {
-    throw new Error(`Failed to obtain access token: ${JSON.stringify(tokenData)}`);
+  try {
+    // Import private key
+    const privateKey = await crypto.subtle.importKey(
+      "pkcs8",
+      pemToArrayBuffer(key.private_key),
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        hash: "SHA-256"
+      },
+      false,
+      ["sign"]
+    );
+    
+    // Sign the JWT
+    const signature = await crypto.subtle.sign(
+      { name: "RSASSA-PKCS1-v1_5" },
+      privateKey,
+      encoder.encode(signatureInput)
+    );
+    
+    // Convert signature to base64url
+    const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+    
+    const jwt = `${signatureInput}.${signatureBase64}`;
+    
+    // Exchange JWT for access token
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt
+      })
+    });
+    
+    const tokenData = await tokenResponse.json();
+    
+    if (!tokenData.access_token) {
+      throw new Error(`Failed to obtain access token: ${JSON.stringify(tokenData)}`);
+    }
+    
+    return tokenData.access_token;
+  } catch (e) {
+    console.error("Error generating JWT:", e);
+    throw new Error(`JWT generation failed: ${e.message}`);
   }
-  
-  return tokenData.access_token;
 }
 
 // Helper function to convert PEM to ArrayBuffer
 function pemToArrayBuffer(pem) {
-  const base64 = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/, "")
-    .replace(/-----END PRIVATE KEY-----/, "")
-    .replace(/\n/g, "");
-  
-  const binary = atob(base64);
-  const buffer = new Uint8Array(binary.length);
-  
-  for (let i = 0; i < binary.length; i++) {
-    buffer[i] = binary.charCodeAt(i);
+  try {
+    if (!pem || typeof pem !== 'string') {
+      throw new Error(`Invalid private key format: ${typeof pem}`);
+    }
+    
+    const base64 = pem
+      .replace(/-----BEGIN PRIVATE KEY-----/, "")
+      .replace(/-----END PRIVATE KEY-----/, "")
+      .replace(/\n/g, "");
+    
+    const binary = atob(base64);
+    const buffer = new Uint8Array(binary.length);
+    
+    for (let i = 0; i < binary.length; i++) {
+      buffer[i] = binary.charCodeAt(i);
+    }
+    
+    return buffer.buffer;
+  } catch (e) {
+    console.error("Error converting PEM to ArrayBuffer:", e);
+    throw new Error(`Private key conversion failed: ${e.message}`);
   }
-  
-  return buffer.buffer;
 }
 
 // List files from Google Drive
@@ -343,11 +382,29 @@ serve(async (req) => {
     const startAuthTime = startTimer(); 
     await logEvent(supabase, requestId, 'drive_auth_started', 'drive_integration', 'Initializing Google Drive client');
     
-    const driveClient = await createDriveClient(driveCredentials);
-    
-    await logEvent(supabase, requestId, 'drive_auth_completed', 'drive_integration', 'Google Drive client initialized', {
-      durationMs: calculateDuration(startAuthTime)
-    });
+    let driveClient;
+    try {
+      driveClient = await createDriveClient(driveCredentials);
+      
+      await logEvent(supabase, requestId, 'drive_auth_completed', 'drive_integration', 'Google Drive client initialized', {
+        durationMs: calculateDuration(startAuthTime)
+      });
+    } catch (authError) {
+      await logError(supabase, requestId, 'drive_integration', 'Failed to initialize Google Drive client', authError, {
+        severity: 'critical'
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          error: "Google Drive authentication failed", 
+          details: authError.message
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
+    }
 
     if (operation === "list") {
       await logEvent(supabase, requestId, 'list_files_started', 'drive_integration', 'Listing files from Google Drive');
@@ -538,15 +595,25 @@ serve(async (req) => {
       }
     );
   } catch (error) {
+    let errorMessage = "An error occurred";
+    let statusCode = 500;
+    
+    if (error instanceof SyntaxError && error.message.includes("JSON")) {
+      errorMessage = "Invalid JSON in request body";
+      statusCode = 400;
+    } else {
+      errorMessage = error.message || "An unknown error occurred";
+    }
+    
     await logError(supabase, requestId, 'drive_integration', 'Exception in drive integration function', error, {
       severity: 'critical',
       durationMs: calculateDuration(mainStartTime)
     });
     
     return new Response(
-      JSON.stringify({ error: error.message || "An error occurred" }),
+      JSON.stringify({ error: errorMessage }),
       { 
-        status: 500, 
+        status: statusCode, 
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       }
     );

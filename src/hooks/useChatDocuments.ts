@@ -32,9 +32,14 @@ export const useChatDocuments = () => {
       // For guest chats, we'll generate a UUID to use as a reference in the database
       // but we'll use the original chatId for client-side operations
       let formattedChatId = chatId;
-      if (chatId && chatId.startsWith('guest-')) {
-        // Create a UUID derived from the guest chat ID for database compatibility
-        formattedChatId = uuidv4();
+      try {
+        if (chatId && chatId.startsWith('guest-')) {
+          // Create a stable UUID derived from the guest chat ID for database compatibility
+          formattedChatId = uuidv4();
+        }
+      } catch (chatIdError) {
+        console.error("Error formatting chatId:", chatIdError);
+        // Continue with original chatId if formatting fails
       }
       
       // Log the document fetch attempt
@@ -63,7 +68,7 @@ export const useChatDocuments = () => {
             continue;
           }
 
-          const { data, error } = await supabase.functions.invoke('drive-integration', {
+          const response = await supabase.functions.invoke('drive-integration', {
             body: { 
               operation: 'get', 
               fileId: id, 
@@ -71,8 +76,22 @@ export const useChatDocuments = () => {
             }
           });
           
-          if (error) {
-            // Log error but continue with other documents
+          // Check for response.error first (API-level error)
+          if (response.error) {
+            console.error("Drive function error:", response.error);
+            
+            // Determine if this is a credentials error
+            const isCredentialsError = response.error.message?.includes("credentials") || 
+                                      response.error.message?.includes("authentication") ||
+                                      response.error.message?.includes("parse");
+                                      
+            // Provide a user-friendly error message based on error type
+            if (isCredentialsError) {
+              toast.error("Google Drive credentials are invalid or malformed. Please check your configuration.");
+            } else {
+              toast.error(`Error fetching document: ${response.error.message || "Unknown error"}`);
+            }
+            
             try {
               logChatEvent({
                 requestId: formattedRequestId,
@@ -80,19 +99,42 @@ export const useChatDocuments = () => {
                 chatId: formattedChatId,
                 eventType: 'fetch_document_error',
                 component: 'useChatDocuments',
-                message: `Error fetching document ${id}: ${error.message || "Unknown error"}`,
+                message: `Drive function error: ${response.error.message || "Unknown error"}`,
                 severity: 'error',
-                errorDetails: error
+                errorDetails: response.error
+              });
+            } catch (logErr) {
+              console.error("Failed to log document fetch error:", logErr);
+            }
+            
+            continue;
+          }
+          
+          // Check for application-level error in the data object
+          const data = response.data;
+          if (data?.error) {
+            try {
+              logChatEvent({
+                requestId: formattedRequestId,
+                userId,
+                chatId: formattedChatId,
+                eventType: 'fetch_document_error',
+                component: 'useChatDocuments',
+                message: `Error fetching document ${id}: ${data.error || "Unknown error"}`,
+                severity: 'error',
+                errorDetails: data.error
               });
             } catch (logErr) {
               console.error("Failed to log document fetch error:", logErr);
             }
             
             // Show user-friendly error message
-            if (error.message?.includes("Google Drive credentials not configured")) {
+            if (data.error?.includes("Google Drive credentials not configured")) {
               toast.error("Document access is unavailable. Google Drive credentials are not configured.");
+            } else if (data.error?.includes("credentials") || data.error?.includes("parse")) {
+              toast.error("Invalid Google Drive credentials format. Please check your configuration.");
             } else {
-              toast.error(`Error fetching document: ${error.message}`);
+              toast.error(`Error fetching document: ${data.error}`);
             }
             
             continue;
