@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { logChatEvent } from "../utils/chatLogging";
 import { toast } from "@/components/ui/sonner";
+import { v4 as uuidv4 } from 'uuid';
 
 export const useChatDocuments = () => {
   const [documentContext, setDocumentContext] = useState<string[]>([]);
@@ -24,11 +25,16 @@ export const useChatDocuments = () => {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
       
+      // Use UUID for request ID to ensure it's compatible with UUID columns in the database
+      const formattedRequestId = requestId || uuidv4();
+      // Ensure chatId is UUID compatible for database logging
+      const formattedChatId = chatId && chatId.startsWith('guest-') ? null : chatId;
+      
       // Log the document fetch attempt
       logChatEvent({
-        requestId: requestId || 'unknown',
+        requestId: formattedRequestId,
         userId,
-        chatId,
+        chatId: formattedChatId,
         eventType: 'fetch_document_contents',
         component: 'useChatDocuments',
         message: `Fetching contents for ${documentIds.length} documents directly from Google Drive`,
@@ -40,14 +46,14 @@ export const useChatDocuments = () => {
       for (const id of documentIds) {
         try {
           const { data, error } = await supabase.functions.invoke('drive-integration', {
-            body: { operation: 'get', fileId: id, requestId }
+            body: { operation: 'get', fileId: id, requestId: formattedRequestId }
           });
           
           if (error) {
             logChatEvent({
-              requestId: requestId || 'unknown',
+              requestId: formattedRequestId,
               userId,
-              chatId,
+              chatId: formattedChatId,
               eventType: 'fetch_document_error',
               component: 'useChatDocuments',
               message: `Error fetching document ${id}: ${error.message || "Unknown error"}`,
@@ -67,9 +73,9 @@ export const useChatDocuments = () => {
           
           if (!data) {
             logChatEvent({
-              requestId: requestId || 'unknown',
+              requestId: formattedRequestId,
               userId,
-              chatId,
+              chatId: formattedChatId,
               eventType: 'fetch_document_empty',
               component: 'useChatDocuments',
               message: `Empty response fetching document ${id}`,
@@ -87,9 +93,9 @@ export const useChatDocuments = () => {
             });
             
             logChatEvent({
-              requestId: requestId || 'unknown',
+              requestId: formattedRequestId,
               userId,
-              chatId,
+              chatId: formattedChatId,
               eventType: 'document_content_fetched',
               component: 'useChatDocuments',
               message: `Successfully fetched document: ${data.file.name}`,
@@ -101,9 +107,9 @@ export const useChatDocuments = () => {
             });
           } else {
             logChatEvent({
-              requestId: requestId || 'unknown',
+              requestId: formattedRequestId,
               userId,
-              chatId,
+              chatId: formattedChatId,
               eventType: 'document_invalid_structure',
               component: 'useChatDocuments',
               message: `Invalid document structure for ${id}`,
@@ -116,9 +122,9 @@ export const useChatDocuments = () => {
           }
         } catch (err) {
           logChatEvent({
-            requestId: requestId || 'unknown',
+            requestId: formattedRequestId,
             userId,
-            chatId,
+            chatId: formattedChatId,
             eventType: 'document_fetch_exception',
             component: 'useChatDocuments',
             message: `Exception fetching document ${id}: ${err instanceof Error ? err.message : "Unknown error"}`,
@@ -129,9 +135,9 @@ export const useChatDocuments = () => {
       }
       
       logChatEvent({
-        requestId: requestId || 'unknown',
+        requestId: formattedRequestId,
         userId,
-        chatId,
+        chatId: formattedChatId,
         eventType: 'document_fetch_complete',
         component: 'useChatDocuments',
         message: `Fetched ${documents.length}/${documentIds.length} documents successfully`,
@@ -146,16 +152,26 @@ export const useChatDocuments = () => {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       
-      logChatEvent({
-        requestId: requestId || 'unknown',
-        userId,
-        chatId,
-        eventType: 'document_fetch_failed',
-        component: 'useChatDocuments',
-        message: `Failed to fetch document contents: ${errorMessage}`,
-        severity: 'error',
-        errorDetails: err
-      });
+      console.error("Failed to fetch document contents:", errorMessage);
+      
+      // Use a valid UUID for request ID in case of errors
+      const fallbackRequestId = uuidv4();
+      
+      // Safely log the error without referencing potentially invalid chatId
+      try {
+        logChatEvent({
+          requestId: fallbackRequestId,
+          userId,
+          eventType: 'document_fetch_failed',
+          component: 'useChatDocuments',
+          message: `Failed to fetch document contents: ${errorMessage}`,
+          severity: 'error',
+          errorDetails: err
+        });
+      } catch (logErr) {
+        // If even logging fails, just console log
+        console.error("Error in document fetching and logging:", logErr);
+      }
       
       toast.error("Failed to retrieve document contents. Please try again.");
       
