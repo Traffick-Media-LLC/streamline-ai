@@ -1,3 +1,4 @@
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatState } from "./useChatState";
 import { useChatCreation } from "./useChatCreation";
@@ -122,47 +123,41 @@ export const useChatOperations = () => {
     }
   };
 
-  // Update the showDriveSetupInstructions function to be more informative
+  // Helper function to show appropriate Google Drive setup instructions
   const showDriveSetupInstructions = () => {
     toast.info(
-      "To use Google Drive documents with this chat, you need to set up your credentials.",
+      "To use Google Drive documents with this chat, you need to:",
       { duration: 8000 }
     );
     
     setTimeout(() => {
       toast.info(
-        "1. Make sure to add GOOGLE_DRIVE_PRIVATE_KEY and GOOGLE_DRIVE_CLIENT_EMAIL in your Supabase secrets",
+        "1. Make sure the Google Drive API is enabled for your project",
         { duration: 8000 }
       );
     }, 500);
     
     setTimeout(() => {
       toast.info(
-        "2. Create a service account in Google Cloud Console with Drive API access",
+        "2. Share files directly with the service account email address",
         { duration: 8000 }
       );
     }, 1000);
     
     setTimeout(() => {
       toast.info(
-        "3. Share files directly with the service account email address",
+        "3. Verify the service account has the necessary Drive permissions",
         { duration: 8000 }
       );
     }, 1500);
     
+    // Add new instruction specific to Shared Drives
     setTimeout(() => {
       toast.info(
         "4. For Shared Drives, add the GOOGLE_SHARED_DRIVE_ID in your Supabase secrets",
         { duration: 8000 }
       );
     }, 2000);
-    
-    setTimeout(() => {
-      toast.info(
-        "5. Check Edge Function logs for detailed error messages",
-        { duration: 8000 }
-      );
-    }, 2500);
   };
 
   return {

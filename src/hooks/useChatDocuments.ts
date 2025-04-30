@@ -473,13 +473,10 @@ export const useChatDocuments = () => {
       });
       
       if (response.error) {
-        // Check for specific error messages about credentials
-        const errorMessage = response.error.message || "Unknown error";
-        
         await logChatError(
           searchRequestId,
           'useChatDocuments',
-          `Error searching documents: ${errorMessage}`,
+          `Error searching documents: ${response.error.message || "Unknown error"}`,
           response.error,
           { searchQuery: query },
           formattedChatId,
@@ -488,14 +485,7 @@ export const useChatDocuments = () => {
           'document'
         );
         
-        // If it's a credentials issue, show a more specific message
-        if (errorMessage.includes('credentials') || errorMessage.includes('JWT')) {
-          toast.error("Google Drive credentials are not properly configured");
-          console.error("Google Drive credentials error:", errorMessage);
-        } else {
-          toast.error(`Error searching documents: ${errorMessage}`);
-        }
-        
+        toast.error(`Error searching documents: ${response.error.message || "Unknown error"}`);
         return [];
       }
       
@@ -553,7 +543,7 @@ export const useChatDocuments = () => {
         'document'
       );
       
-      toast.error("Failed to search documents. Please check if Google Drive is properly configured.");
+      toast.error("Failed to search documents. Please try again.");
       return [];
     } finally {
       setIsFetching(false);

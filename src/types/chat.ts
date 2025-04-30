@@ -32,15 +32,6 @@ export interface Message {
   documentIds?: string[];
   referencedDocuments?: DocumentReference[];
   animationDelay?: number;
-  searchResults?: FileSearchResult[];
-}
-
-export interface FileSearchResult {
-  id: string;
-  name: string;
-  fileType: string;
-  webLink?: string;
-  thumbnailLink?: string;
 }
 
 export interface DocumentReference {

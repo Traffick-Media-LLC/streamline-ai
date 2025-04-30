@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { DOMParser } from 'https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts';
 
@@ -33,12 +34,7 @@ const generateJWT = async () => {
     const clientEmail = Deno.env.get('GOOGLE_DRIVE_CLIENT_EMAIL');
     
     if (!privateKey || !clientEmail) {
-      console.error("Missing Google Drive credentials:", {
-        hasPrivateKey: !!privateKey,
-        hasClientEmail: !!clientEmail
-      });
-      
-      throw new Error('Google Drive credentials not configured. Please set GOOGLE_DRIVE_PRIVATE_KEY and GOOGLE_DRIVE_CLIENT_EMAIL in Supabase secrets.');
+      throw new Error('Google Drive credentials not configured. Check environment variables.');
     }
     
     // Create JWT payload
@@ -92,16 +88,11 @@ const generateJWT = async () => {
     console.error('Error generating JWT:', error);
     
     // Better error message for common issues
-    if (error.message?.includes('invalid format')) {
-      throw new Error('Invalid private key format. Check that GOOGLE_DRIVE_PRIVATE_KEY environment variable is properly formatted with newlines preserved.');
+    if (error.message.includes('invalid format')) {
+      throw new Error('Invalid private key format. Check GOOGLE_DRIVE_PRIVATE_KEY environment variable.');
     }
     
-    if (error.message?.includes('credentials not configured')) {
-      // Pass through our custom error message
-      throw error;
-    }
-    
-    throw new Error(`Failed to generate JWT: ${error.message || "Unknown error"}`);
+    throw new Error(`Failed to generate JWT: ${error.message}`);
   }
 };
 

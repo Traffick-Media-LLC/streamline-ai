@@ -1,143 +1,83 @@
-
-import { useRef, useEffect, Fragment } from "react";
-import { ScrollArea } from "./ui/scroll-area";
-import { Loader2 } from "lucide-react";
 import { useChatContext } from "../contexts/ChatContext";
-import { Message } from "../types/chat";
-import { useAuth } from "@/contexts/AuthContext";
-import FileSearchResults from "./FileSearchResults";
-
-// Component to display a single message
-const ChatMessage = ({ message }: { message: Message }) => {
-  const formatContent = (content: string) => {
-    // Convert Markdown links to HTML
-    let formatted = content.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">$1</a>');
-    
-    // Convert line breaks to <br> tags
-    formatted = formatted.replace(/\n/g, '<br>');
-    
-    return formatted;
-  };
-
-  return (
-    <div
-      className={`p-4 ${
-        message.role === "user" ? "bg-muted/50" : "bg-background"
-      }`}
-    >
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-start gap-3">
-          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
-            {message.role === "user" ? "U" : "A"}
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-sm mb-1">
-              {message.role === "user" ? "You" : "Assistant"}
-            </p>
-            <div 
-              className="prose prose-sm dark:prose-invert max-w-none"
-              dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
-            />
-            
-            {/* File search results */}
-            {message.referencedDocuments && message.referencedDocuments.length > 0 && (
-              <FileSearchResults 
-                results={message.referencedDocuments.map(doc => ({
-                  id: doc.id,
-                  name: doc.name,
-                  fileType: 'Document',
-                  webLink: doc.webLink
-                }))}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+import ChatMessage from "./ChatMessage";
+import TypingIndicator from "./TypingIndicator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Animated, AnimatedList } from "@/components/ui/animated";
+import { useMemo } from "react";
 const ChatWindow = () => {
-  const { getCurrentChat, isLoadingResponse } = useChatContext();
-  const { isGuest, user } = useAuth();
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  
-  const chat = getCurrentChat();
-  const messages = chat?.messages || [];
+  const {
+    getCurrentChat,
+    isLoadingResponse,
+    isInitializing
+  } = useChatContext();
+  const currentChat = getCurrentChat();
 
-  // Auto scroll to bottom on new messages
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      setTimeout(() => {
-        scrollAreaRef.current?.scrollTo({
-          top: scrollAreaRef.current.scrollHeight,
-          behavior: "smooth",
-        });
-      }, 100);
+  // Calculate optimized messages array with staggered animation delays
+  const optimizedMessages = useMemo(() => {
+    if (!currentChat) return [];
+    // Only apply staggered animations to the most recent messages (up to 5)
+    const messages = [...currentChat.messages];
+    const messageCount = messages.length;
+
+    // Apply stagger to last few messages only
+    if (messageCount > 5) {
+      const staggerCount = Math.min(3, messageCount);
+      const startIndex = messageCount - staggerCount;
+      for (let i = startIndex; i < messageCount; i++) {
+        messages[i] = {
+          ...messages[i],
+          animationDelay: (i - startIndex) * 0.15
+        };
+      }
     }
-  }, [messages, isLoadingResponse]);
-
-  return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="min-h-full">
-          {/* Empty state */}
-          {messages.length === 0 && !isLoadingResponse && (
-            <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-              <div className="max-w-md space-y-4">
-                <h2 className="text-2xl font-semibold">
-                  Welcome to the Streamline Group Assistant
-                </h2>
-                <p className="text-muted-foreground">
-                  Ask me questions about products, files, or company resources.
-                </p>
-                <div className="border rounded-md p-4 bg-muted/20">
-                  <p className="text-sm text-left font-medium mb-2">Try asking:</p>
-                  <ul className="text-sm text-left space-y-2 text-muted-foreground">
-                    <li>"Is Delta-8 legal in Texas?"</li>
-                    <li>"Find me the Galaxy Treats logo"</li>
-                    <li>"Where can I find the marketing request form?"</li>
-                    <li>"Search for Juice Head POS materials"</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Messages */}
-          {messages.map((message, i) => (
-            <Fragment key={message.id}>
-              <ChatMessage message={message} />
-              {i < messages.length - 1 && <div className="border-t" />}
-            </Fragment>
-          ))}
-
-          {/* Loading state */}
-          {isLoadingResponse && (
-            <>
-              {messages.length > 0 && <div className="border-t" />}
-              <div className="p-4">
-                <div className="max-w-3xl mx-auto">
-                  <div className="flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold text-sm">
-                      A
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm mb-1">Assistant</p>
-                      <div className="flex items-center text-muted-foreground">
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Thinking...
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+    return messages;
+  }, [currentChat]);
+  if (isInitializing) {
+    return <div className="flex items-center justify-center h-full">
+        <Animated type="scale">
+          <div className="flex flex-col items-center">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+            <p className="mt-4 text-muted-foreground">Loading chats...</p>
+          </div>
+        </Animated>
+      </div>;
+  }
+  if (!currentChat) {
+    return <div className="flex flex-col items-center justify-center h-full p-4 text-center space-y-6">
+        <Animated type="slide-up" delay={0.1}>
+          <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-streamline-red to-streamline-darkGray">Hi, i'm Max.</h1>
+        </Animated>
+        
+        <Animated type="slide-up" delay={0.2}>
+          <h2 className="text-2xl font-medium text-foreground/90">Your personal Streamline assistant</h2>
+        </Animated>
+        
+        <Animated type="fade" delay={0.3} className="max-w-md">
+          <p className="text-base text-foreground/80">
+            Start a new chat to get legal guidance on topics related to nicotine, 
+            hemp-derived cannabinoids, kratom, and other regulated industries.
+          </p>
+        </Animated>
+      </div>;
+  }
+  return <div className="flex-1 h-full overflow-hidden flex flex-col">
+      <ScrollArea className="flex-1">
+        <div className="p-4 min-h-full">
+          {currentChat.messages.length === 0 ? <Animated type="fade" className="flex flex-col items-center justify-center h-full text-center">
+              <p className="text-lg text-muted-foreground font-medium">
+                Ask a question to start the conversation
+              </p>
+            </Animated> : <div className="space-y-6">
+              {optimizedMessages.map(message => <Animated key={message.id} type={message.role === 'user' ? 'slide-in' : 'fade'} delay={message.animationDelay || 0} threshold={0.01}>
+                  <ChatMessage message={message} />
+                </Animated>)}
+            </div>}
+          {isLoadingResponse && <Animated type="fade">
+              <TypingIndicator />
+            </Animated>}
         </div>
       </ScrollArea>
-    </div>
-  );
+    </div>;
 };
-
 export default ChatWindow;

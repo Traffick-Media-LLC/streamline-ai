@@ -1,53 +1,73 @@
+# Welcome to your Lovable project
 
-# Streamline Group Portal
+## Project info
 
-## Google Drive Integration Setup
+**URL**: https://lovable.dev/projects/79b98bec-1e0b-4271-a16a-f6e376702101
 
-To enable the Google Drive integration for file search and document access, follow these steps:
+## How can I edit this code?
 
-### 1. Create a Google Cloud Service Account
+There are several ways of editing your application.
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Google Drive API
-4. Create a service account:
-   - Go to IAM & Admin > Service Accounts
-   - Click "Create Service Account"
-   - Name your service account (e.g., "streamline-portal")
-   - Grant it appropriate permissions (at minimum, "Drive API > Drive API Reader")
-   - Create a JSON key for this service account
+**Use Lovable**
 
-### 2. Set up Supabase Secrets
+Simply visit the [Lovable Project](https://lovable.dev/projects/79b98bec-1e0b-4271-a16a-f6e376702101) and start prompting.
 
-Add these secrets to your Supabase project:
+Changes made via Lovable will be committed automatically to this repo.
 
-1. `GOOGLE_DRIVE_PRIVATE_KEY`: Copy the entire private key from the JSON file, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` markers
-2. `GOOGLE_DRIVE_CLIENT_EMAIL`: The service account email address from the JSON file
-3. `GOOGLE_SHARED_DRIVE_ID`: (Optional) If using a shared drive, enter the ID of the drive
+**Use your preferred IDE**
 
-To add these secrets:
-- Go to your Supabase project dashboard
-- Navigate to Settings > API > Edge Functions
-- Add each secret under "Edge Function Secrets"
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-### 3. Share Google Drive Files with the Service Account
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
-1. Locate files or folders in your Google Drive that you want to access
-2. Right-click > Share
-3. Add the service account email address as an editor or viewer
-4. For shared drives, add the service account as a member of the shared drive
+Follow these steps:
 
-### 4. Testing the Integration
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
 
-After setting up:
-1. Try searching for a file in the chat interface
-2. If issues persist, check the Edge Function logs in the Supabase dashboard
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
 
-## Troubleshooting
+# Step 3: Install the necessary dependencies.
+npm i
 
-If you encounter errors:
-- Verify the service account has the correct permissions
-- Ensure the private key is properly formatted in Supabase secrets
-- Check that files are properly shared with the service account
+# Step 4: Start the development server with auto-reloading and an instant preview.
+npm run dev
+```
 
-For more detailed setup instructions and troubleshooting, refer to the Google Drive API documentation.
+**Edit a file directly in GitHub**
+
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
+
+**Use GitHub Codespaces**
+
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
+
+## What technologies are used for this project?
+
+This project is built with:
+
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
+
+## How can I deploy this project?
+
+Simply open [Lovable](https://lovable.dev/projects/79b98bec-1e0b-4271-a16a-f6e376702101) and click on Share -> Publish.
+
+## Can I connect a custom domain to my Lovable project?
+
+Yes, you can!
+
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
