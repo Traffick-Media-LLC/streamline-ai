@@ -24,7 +24,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     selectChat,
     isInitializing,
     setDocumentContext,
-    getDocumentContext
+    getDocumentContext,
+    showDriveSetupInstructions,
+    isFetchingDocuments
   } = useChatOperations();
 
   const value: ChatContextType = {
@@ -37,7 +39,9 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     selectChat,
     isInitializing,
     setDocumentContext,
-    getDocumentContext
+    getDocumentContext,
+    showDriveSetupInstructions,
+    isFetchingDocuments
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

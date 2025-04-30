@@ -9,6 +9,8 @@ export interface ChatContextType {
   isInitializing: boolean;
   setDocumentContext: (docIds: string[]) => void;
   getDocumentContext: () => string[];
+  showDriveSetupInstructions: () => void;
+  isFetchingDocuments?: boolean;
 }
 
 export interface Chat {
