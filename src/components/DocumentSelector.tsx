@@ -47,7 +47,8 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
       setDocuments(data?.files || []);
     } catch (err) {
       console.error("Error fetching documents:", err);
-      setError("Failed to load documents");
+      setError("Failed to load documents from Google Drive");
+      toast.error("Couldn't connect to Google Drive. Please check your credentials.");
     } finally {
       setIsLoading(false);
     }
@@ -132,6 +133,9 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
     } else if (fileType.includes('text')) {
       color = "bg-gray-500";
       label = "Text";
+    } else if (fileType.includes('document')) {
+      color = "bg-blue-500";
+      label = "Doc";
     }
     
     return (
@@ -146,7 +150,7 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
       <div className="p-3 border-b flex justify-between">
         <div className="flex gap-2 flex-1">
           <Input
-            placeholder="Search documents..."
+            placeholder="Search Google Drive..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -218,7 +222,7 @@ const DocumentSelector = ({ selectedDocuments, onSelectDocument }: DocumentSelec
           ) : (
             <div className="py-8 text-center text-muted-foreground">
               <FileText className="mx-auto h-8 w-8 opacity-50 mb-2" />
-              <p className="text-sm">No documents found</p>
+              <p className="text-sm">No documents found in your Google Drive</p>
               <Button 
                 variant="outline" 
                 size="sm" 

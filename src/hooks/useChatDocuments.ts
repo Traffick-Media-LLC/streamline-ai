@@ -31,7 +31,7 @@ export const useChatDocuments = () => {
         chatId,
         eventType: 'fetch_document_contents',
         component: 'useChatDocuments',
-        message: `Fetching contents for ${documentIds.length} documents`,
+        message: `Fetching contents for ${documentIds.length} documents directly from Google Drive`,
         metadata: { documentIds }
       });
 
@@ -58,6 +58,8 @@ export const useChatDocuments = () => {
             // Show user-friendly error message
             if (error.message?.includes("Google Drive credentials not configured")) {
               toast.error("Document access is unavailable. Google Drive credentials are not configured.");
+            } else {
+              toast.error(`Error fetching document: ${error.message}`);
             }
             
             continue;
