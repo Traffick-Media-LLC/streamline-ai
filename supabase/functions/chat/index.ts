@@ -23,6 +23,12 @@ function isFileQuery(content) {
     'need', 'want', 'send me', 'share', 'send the', 'get the'
   ];
   
+  // Add brand-specific keywords
+  const brandKeywords = [
+    'galaxy treats', 'juice head', 'alcohol armor', 'crossover',
+    'streamline', 'brand', 'product', 'logo', 'render'
+  ];
+  
   const contentLower = content.toLowerCase();
   
   // Check for file request patterns:
@@ -31,10 +37,16 @@ function isFileQuery(content) {
     return true;
   }
   
-  // 2. Keywords that indicate file searching
+  // 2. Brand-specific matches
+  const brandMatches = brandKeywords.filter(keyword => contentLower.includes(keyword)).length;
+  if (brandMatches > 0 && contentLower.includes('logo')) {
+    return true;
+  }
+  
+  // 3. Keywords that indicate file searching
   const keywordMatches = fileKeywords.filter(keyword => contentLower.includes(keyword)).length;
   
-  // 3. Phrases that suggest looking for specific assets
+  // 4. Phrases that suggest looking for specific assets
   const lookingForPatterns = [
     /find (me |)(a |the |)(.+)/i,
     /looking for (a |the |)(.+)/i,
@@ -62,9 +74,30 @@ function extractFileSearchQuery(content) {
     /search for (a |the |)(.+)/i,
     /where (can I |do I |to |)find (a |the |)(.+)/i,
     /need (a |the |)(.+) (file|document|logo|image|sheet)/i,
-    /get (me |)(a |the |)(.+) (file|document|logo|image|sheet)/i
+    /get (me |)(a |the |)(.+) (file|document|logo|image|sheet)/i,
+    /where (is |are |)(the |)(.+) (logo|image|file|document)/i
+  ];
+
+  // Extract brand names or specific file/document names
+  const brandPatterns = [
+    /(galaxy treats|juice head|alcohol armor|crossover|streamline) (logo|image|file|document|render)/i,
+    /(logo|image|file|document|render) (for|of) (galaxy treats|juice head|alcohol armor|crossover|streamline)/i
   ];
   
+  // Try brand-specific patterns first
+  for (const pattern of brandPatterns) {
+    const match = content.match(pattern);
+    if (match) {
+      // Return the brand name + asset type as search term
+      if (match[1] && (match[2] || match[3])) {
+        const brandName = match[1].toLowerCase().includes('logo') ? match[3] : match[1];
+        const assetType = match[1].toLowerCase().includes('logo') ? match[1] : match[2];
+        return `${brandName} ${assetType}`.trim();
+      }
+    }
+  }
+  
+  // Then try general patterns
   for (const pattern of patterns) {
     const match = content.match(pattern);
     if (match && match[3]) {
@@ -74,6 +107,12 @@ function extractFileSearchQuery(content) {
         return searchTerm;
       }
     }
+  }
+  
+  // Fallback for direct mentions of logos, files, etc.
+  const logoMatch = content.match(/(the |)([\w\s]+) (logo|render|file|image)/i);
+  if (logoMatch && logoMatch[2] && logoMatch[2].length > 2) {
+    return `${logoMatch[2]} ${logoMatch[3]}`.trim();
   }
   
   return null;
@@ -151,6 +190,77 @@ serve(async (req) => {
     if (fileSearchQuery) {
       await logEvent(supabase, requestId, 'file_search_query_extracted', 'chat_function', 
         `Extracted file search query: ${fileSearchQuery}`, { query: fileSearchQuery });
+        
+      // If we have a file search query, directly perform a file search
+      try {
+        await logEvent(supabase, requestId, 'executing_file_search', 'chat_function', 
+          `Executing direct file search for query: ${fileSearchQuery}`, { query: fileSearchQuery });
+          
+        // Call the drive-integration function to search for files
+        const driveResponse = await supabase.functions.invoke('drive-integration', {
+          body: { 
+            operation: 'search', 
+            query: fileSearchQuery,
+            includeWebLink: true
+          },
+        });
+        
+        if (driveResponse.error) {
+          throw new Error(`File search error: ${driveResponse.error.message}`);
+        }
+        
+        const files = driveResponse.data?.files || [];
+        
+        await logEvent(supabase, requestId, 'file_search_completed', 'chat_function', 
+          `Found ${files.length} files matching query: ${fileSearchQuery}`, { 
+            fileCount: files.length,
+            fileNames: files.map(f => f.name)
+          });
+          
+        if (files.length > 0) {
+          // Format the search results for display
+          const formattedFiles = files.slice(0, 5).map((file, index) => {
+            return {
+              id: file.id,
+              name: file.name,
+              fileType: file.file_type,
+              webLink: file.webLink,
+              thumbnailLink: file.thumbnailLink
+            };
+          });
+          
+          // Prepare a response message with file links
+          const responseMessage = `I found ${files.length} file${files.length === 1 ? '' : 's'} matching "${fileSearchQuery}":\n\n` +
+            files.slice(0, 5).map((file, index) => {
+              return `${index + 1}. ${file.name} - ${file.file_type} ${file.webLink ? `[View File](${file.webLink})` : ''}`;
+            }).join('\n\n') + 
+            (files.length > 5 ? `\n\n...and ${files.length - 5} more files.` : '');
+            
+          // Return the search results directly
+          return new Response(
+            JSON.stringify({
+              message: responseMessage,
+              searchResults: formattedFiles,
+              referencedDocuments: formattedFiles,
+              model: "file-search",
+              tokensUsed: 0,
+              responseTime: new Date().getTime() - requestTime.getTime()
+            }),
+            { 
+              headers: { 
+                ...corsHeaders,
+                'Content-Type': 'application/json'
+              } 
+            }
+          );
+        }
+      } catch (searchError) {
+        console.error('Error performing file search:', searchError);
+        await logEvent(supabase, requestId, 'file_search_error', 'chat_function', 
+          `Error searching for files: ${searchError.message}`, { error: searchError.message });
+          
+        // Continue with normal OpenAI processing if file search fails
+      }
     }
     
     // Prepare messages for OpenAI
