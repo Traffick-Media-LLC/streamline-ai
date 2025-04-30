@@ -11,6 +11,7 @@ const corsHeaders = {
 const startTimer = () => performance.now();
 const calculateDuration = (startTime) => Math.round(performance.now() - startTime);
 
+// Enhanced logging function with categories and component info
 const logEvent = async (supabase, requestId, eventType, component, message, options = {}) => {
   try {
     const { 
@@ -19,20 +20,28 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
       durationMs = null, 
       metadata = null, 
       errorDetails = null,
-      severity = 'info'
+      severity = 'info',
+      category = 'generic'
     } = options;
     
-    // Log to console
-    const logPrefix = `[${requestId}][${component}][${eventType}]`;
+    // Add current context info to metadata
+    const enhancedMetadata = {
+      ...(metadata || {}),
+      component,
+      timestamp: Date.now()
+    };
+    
+    // Log to console with improved format
+    const logPrefix = `[${requestId}][${component}][${eventType}][${category}]`;
     if (severity === 'error' || severity === 'critical') {
-      console.error(`${logPrefix} ${message}`, errorDetails || metadata || {});
+      console.error(`${logPrefix} ${message}`, errorDetails || enhancedMetadata || {});
     } else if (severity === 'warning') {
-      console.warn(`${logPrefix} ${message}`, metadata || {});
+      console.warn(`${logPrefix} ${message}`, enhancedMetadata || {});
     } else {
-      console.log(`${logPrefix} ${message}`, metadata || {});
+      console.log(`${logPrefix} ${message}`, enhancedMetadata || {});
     }
     
-    // Store in database
+    // Store in database with enhanced data
     if (supabase) {
       try {
         await supabase
@@ -43,9 +52,10 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
             chat_id: chatId,
             event_type: eventType,
             component,
+            category,
             message,
             duration_ms: durationMs,
-            metadata,
+            metadata: enhancedMetadata,
             error_details: errorDetails,
             severity
           });
@@ -59,19 +69,31 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
   }
 };
 
+// Enhanced error logging with improved error categorization
 const logError = async (supabase, requestId, component, message, error, options = {}) => {
   try {
+    // Enhanced error extraction
     const errorDetails = {
       message: error?.message || 'Unknown error',
       stack: error?.stack,
       name: error?.name,
-      code: error?.code
+      code: error?.code,
+      status: error?.status || error?.statusCode,
+      statusText: error?.statusText,
+      endpoint: options.endpoint || 'unknown',
+      // Extract additional context from the error object
+      responseData: error?.response?.data,
+      errorBody: error?.body,
     };
+    
+    // Determine appropriate category
+    const category = options.category || 'generic';
     
     await logEvent(supabase, requestId, 'error', component, message, {
       ...options,
       errorDetails,
-      severity: options.severity || 'error'
+      severity: options.severity || 'error',
+      category
     });
   } catch (e) {
     console.error("Error in error logging system:", e);
@@ -99,7 +121,13 @@ serve(async (req) => {
     } catch (jsonError) {
       console.error("Failed to parse request JSON:", jsonError);
       return new Response(
-        JSON.stringify({ error: "Invalid request format: " + jsonError.message }),
+        JSON.stringify({ 
+          error: "Invalid request format: " + jsonError.message,
+          details: {
+            message: jsonError.message,
+            name: jsonError.name
+          }
+        }),
         { 
           status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -111,14 +139,38 @@ serve(async (req) => {
     
     requestId = clientRequestId || `edge-${Date.now()}`;
     
-    // Initial request log
+    // Initial request log with enhanced details
     await logEvent(supabase, requestId, 'edge_request_started', 'chat_function', 'Chat function request received', {
       metadata: { 
         messageCount: messages?.length || 0,
         documentCount: documentIds?.length || 0,
-        contentLength: content?.length || 0
+        contentLength: content?.length || 0,
+        hasDocuments: (documentIds?.length || 0) > 0,
+        hasDocumentContents: (documentContents?.length || 0) > 0,
+        contentHash: content ? hashContent(content) : null // Add hash for correlation
       }
     });
+    
+    // Validate inputs with improved error handling
+    if (!content) {
+      await logError(supabase, requestId, 'chat_function', 'Missing content in request', 
+        new Error('Content is required'), { category: 'validation' });
+      
+      return new Response(
+        JSON.stringify({ error: "Missing 'content' in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    if (!messages || !Array.isArray(messages)) {
+      await logError(supabase, requestId, 'chat_function', 'Missing or invalid messages array', 
+        new Error('Messages array is required'), { category: 'validation' });
+      
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid 'messages' array in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     // Analyze the input to determine which sources to prioritize
     const analyzeStartTime = startTimer();
@@ -129,26 +181,39 @@ serve(async (req) => {
       legalityQuery = isLegalityQuery(content);
       fileQuery = isFileQuery(content);
     } catch (analyzeError) {
-      console.error("Error analyzing query:", analyzeError);
+      await logError(supabase, requestId, 'query_analysis', 'Error analyzing query', analyzeError, 
+        { category: 'ai_processing' });
       // Default to false if analysis fails
     }
     
     await logEvent(supabase, requestId, 'query_analysis', 'chat_function', `Query analysis completed: Legality=${legalityQuery}, File=${fileQuery}`, {
       durationMs: calculateDuration(analyzeStartTime),
-      metadata: { isLegalityQuery: legalityQuery, isFileQuery: fileQuery }
+      metadata: { isLegalityQuery: legalityQuery, isFileQuery: fileQuery },
+      category: 'ai_processing'
     });
     
-    // Extract potential terms for database searches
+    // Extract potential terms for database searches with enhanced validation
     let searchTerms = [];
     try {
       searchTerms = extractSearchTerms(content);
+      
+      if (searchTerms.length === 0) {
+        await logEvent(supabase, requestId, 'search_terms_empty', 'chat_function', 
+          'No meaningful search terms extracted from query', {
+          severity: 'warning',
+          category: 'ai_processing',
+          metadata: { content: content.substring(0, 100) }
+        });
+      }
     } catch (extractError) {
-      console.error("Error extracting search terms:", extractError);
+      await logError(supabase, requestId, 'search_term_extraction', 'Error extracting search terms', 
+        extractError, { category: 'ai_processing' });
       searchTerms = [];
     }
     
     await logEvent(supabase, requestId, 'search_terms_extracted', 'chat_function', `Search terms extracted from query`, {
-      metadata: { searchTerms }
+      metadata: { searchTerms, termCount: searchTerms.length },
+      category: 'ai_processing'
     });
     
     let knowledgeContext = "";
@@ -156,60 +221,108 @@ serve(async (req) => {
     
     // 1. LEGALITY CHECK: Check Supabase state permissions for product legality questions
     if (legalityQuery) {
-      await logEvent(supabase, requestId, 'legality_check_started', 'chat_function', 'Processing legality query with state map data');
+      await logEvent(supabase, requestId, 'legality_check_started', 'chat_function', 
+        'Processing legality query with state map data', { category: 'database' });
       
       const legalityStartTime = startTimer();
-      const legalityData = await checkProductLegality(supabase, searchTerms, requestId);
       
-      if (legalityData) {
-        knowledgeContext += "State Legality Data:\n\n" + legalityData + "\n\n";
-        referencedSources.push("State Map Database");
+      try {
+        const legalityData = await checkProductLegality(supabase, searchTerms, requestId);
         
-        await logEvent(supabase, requestId, 'legality_data_found', 'chat_function', 'Found legality data in state map database', {
-          durationMs: calculateDuration(legalityStartTime),
-          metadata: { dataLength: legalityData.length }
-        });
-      } else {
-        await logEvent(supabase, requestId, 'legality_data_not_found', 'chat_function', 'No legality data found in state map database', {
-          durationMs: calculateDuration(legalityStartTime)
-        });
+        if (legalityData) {
+          knowledgeContext += "State Legality Data:\n\n" + legalityData + "\n\n";
+          referencedSources.push("State Map Database");
+          
+          await logEvent(supabase, requestId, 'legality_data_found', 'chat_function', 'Found legality data in state map database', {
+            durationMs: calculateDuration(legalityStartTime),
+            metadata: { dataLength: legalityData.length },
+            category: 'database'
+          });
+        } else {
+          await logEvent(supabase, requestId, 'legality_data_not_found', 'chat_function', 'No legality data found in state map database', {
+            durationMs: calculateDuration(legalityStartTime),
+            severity: 'warning',
+            category: 'database'
+          });
+        }
+      } catch (legalityError) {
+        await logError(supabase, requestId, 'legality_check', 'Error checking product legality', 
+          legalityError, { category: 'database' });
       }
     }
     
     // 2. KNOWLEDGE BASE: Extract brand, product, and regulatory information from Knowledge Base
-    // Extract potential brand and product names from the query
     const knowledgeStartTime = startTimer();
-    await logEvent(supabase, requestId, 'knowledge_search_started', 'chat_function', 'Querying knowledge base');
+    await logEvent(supabase, requestId, 'knowledge_search_started', 'chat_function', 'Querying knowledge base', {
+      category: 'database'
+    });
     
-    let knowledgeEntries = await getRelevantKnowledgeEntries(supabase, searchTerms, content, requestId);
-    
-    if (knowledgeEntries.length > 0) {
-      knowledgeContext += "Knowledge Base Information:\n\n" + knowledgeEntries.join("\n\n") + "\n\n";
-      referencedSources.push("Knowledge Base");
+    let knowledgeEntries = [];
+    try {
+      knowledgeEntries = await getRelevantKnowledgeEntries(supabase, searchTerms, content, requestId);
       
-      await logEvent(supabase, requestId, 'knowledge_entries_found', 'chat_function', `Found ${knowledgeEntries.length} relevant knowledge entries`, {
-        durationMs: calculateDuration(knowledgeStartTime),
-        metadata: { entryCount: knowledgeEntries.length }
-      });
-    } else {
-      await logEvent(supabase, requestId, 'knowledge_entries_not_found', 'chat_function', 'No relevant knowledge entries found', {
-        durationMs: calculateDuration(knowledgeStartTime)
-      });
+      if (knowledgeEntries.length > 0) {
+        knowledgeContext += "Knowledge Base Information:\n\n" + knowledgeEntries.join("\n\n") + "\n\n";
+        referencedSources.push("Knowledge Base");
+        
+        await logEvent(supabase, requestId, 'knowledge_entries_found', 'chat_function', `Found ${knowledgeEntries.length} relevant knowledge entries`, {
+          durationMs: calculateDuration(knowledgeStartTime),
+          metadata: { entryCount: knowledgeEntries.length },
+          category: 'database'
+        });
+      } else {
+        await logEvent(supabase, requestId, 'knowledge_entries_not_found', 'chat_function', 'No relevant knowledge entries found', {
+          durationMs: calculateDuration(knowledgeStartTime),
+          severity: 'warning',
+          category: 'database'
+        });
+      }
+    } catch (knowledgeError) {
+      await logError(supabase, requestId, 'knowledge_search', 'Error searching knowledge base', 
+        knowledgeError, { category: 'database' });
     }
     
     // 3. DOCUMENT SEARCH: Search Google Drive for documents if it's a file query
     // or if document IDs are explicitly provided
     let documentEntries = [];
     
-    // Process explicitly provided document IDs
+    // Process explicitly provided document IDs with enhanced error logging
     if (documentIds && documentIds.length > 0) {
-      await logEvent(supabase, requestId, 'process_provided_documents', 'chat_function', `Processing ${documentIds.length} provided document IDs`);
+      await logEvent(supabase, requestId, 'process_provided_documents', 'chat_function', 
+        `Processing ${documentIds.length} provided document IDs`, {
+          metadata: { documentIds },
+          category: 'document'
+      });
       
       // If document contents were passed from frontend, use them
       if (documentContents && documentContents.length > 0) {
-        await logEvent(supabase, requestId, 'using_provided_document_contents', 'chat_function', `Using ${documentContents.length} pre-fetched document contents`);
+        await logEvent(supabase, requestId, 'using_provided_document_contents', 'chat_function', 
+          `Using ${documentContents.length} pre-fetched document contents`, {
+            metadata: { 
+              documentCount: documentContents.length,
+              documentIds: documentContents.map(doc => doc.id),
+              documentNames: documentContents.map(doc => doc.name)
+            },
+            category: 'document'
+        });
         
-        documentEntries = documentContents.map(doc => ({
+        // Validate document contents format
+        const validDocuments = documentContents.filter(doc => 
+          doc && doc.id && doc.content && typeof doc.content === 'string');
+        
+        if (validDocuments.length < documentContents.length) {
+          await logEvent(supabase, requestId, 'invalid_document_contents', 'chat_function', 
+            `${documentContents.length - validDocuments.length} documents have invalid format`, {
+              severity: 'warning',
+              category: 'document',
+              metadata: { 
+                totalDocuments: documentContents.length, 
+                validDocuments: validDocuments.length
+              }
+          });
+        }
+        
+        documentEntries = validDocuments.map(doc => ({
           file_id: doc.id,
           title: `Document: ${doc.name}`,
           content: doc.content
@@ -222,62 +335,93 @@ serve(async (req) => {
       // Otherwise fetch document content
       else {
         const docStartTime = startTimer();
-        documentEntries = await getDocumentContent(supabase, documentIds, requestId);
-        
-        if (documentEntries.length > 0) {
-          referencedSources.push("Selected Documents");
+        try {
+          documentEntries = await getDocumentContent(supabase, documentIds, requestId);
           
-          await logEvent(supabase, requestId, 'document_contents_fetched', 'chat_function', `Fetched ${documentEntries.length}/${documentIds.length} document contents`, {
-            durationMs: calculateDuration(docStartTime),
-            metadata: {
-              successCount: documentEntries.length,
-              totalRequested: documentIds.length
-            }
-          });
-        } else {
-          await logEvent(supabase, requestId, 'document_contents_not_found', 'chat_function', 'Failed to fetch document contents', {
-            durationMs: calculateDuration(docStartTime),
-            severity: 'warning'
-          });
+          if (documentEntries.length > 0) {
+            referencedSources.push("Selected Documents");
+            
+            await logEvent(supabase, requestId, 'document_contents_fetched', 'chat_function', 
+              `Fetched ${documentEntries.length}/${documentIds.length} document contents`, {
+                durationMs: calculateDuration(docStartTime),
+                metadata: {
+                  successCount: documentEntries.length,
+                  totalRequested: documentIds.length,
+                  documentTitles: documentEntries.map(d => d.title.replace('Document: ', ''))
+                },
+                category: 'document'
+            });
+          } else {
+            await logEvent(supabase, requestId, 'document_contents_not_found', 'chat_function', 
+              'Failed to fetch document contents', {
+                durationMs: calculateDuration(docStartTime),
+                severity: 'warning',
+                category: 'document',
+                metadata: { requestedIds: documentIds }
+            });
+          }
+        } catch (docError) {
+          await logError(supabase, requestId, 'document_content', 'Error fetching document contents', 
+            docError, { category: 'document', metadata: { documentIds } });
         }
       }
     } 
     // Or search for documents if it's a file query
     else if (fileQuery) {
       const searchStartTime = startTimer();
-      await logEvent(supabase, requestId, 'document_search_started', 'chat_function', 'Searching for documents based on query');
+      await logEvent(supabase, requestId, 'document_search_started', 'chat_function', 
+        'Searching for documents based on query', { category: 'document' });
       
-      const documentSearchResults = await searchDocuments(supabase, searchTerms, requestId);
-      
-      if (documentSearchResults.length > 0) {
-        await logEvent(supabase, requestId, 'document_search_results', 'chat_function', `Found ${documentSearchResults.length} documents in search`, {
-          durationMs: calculateDuration(searchStartTime),
-          metadata: { resultCount: documentSearchResults.length }
-        });
+      try {
+        const documentSearchResults = await searchDocuments(supabase, searchTerms, requestId);
         
-        const contentStartTime = startTimer();
-        documentEntries = await getDocumentContent(
-          supabase, 
-          documentSearchResults.slice(0, 3).map(doc => doc.id),
-          requestId
-        );
-          
-        if (documentEntries.length > 0) {
-          referencedSources.push("Drive Search");
-          
-          await logEvent(supabase, requestId, 'document_content_fetched_from_search', 'chat_function', `Fetched content for ${documentEntries.length} documents from search results`, {
-            durationMs: calculateDuration(contentStartTime)
+        if (documentSearchResults.length > 0) {
+          await logEvent(supabase, requestId, 'document_search_results', 'chat_function', 
+            `Found ${documentSearchResults.length} documents in search`, {
+              durationMs: calculateDuration(searchStartTime),
+              metadata: { 
+                resultCount: documentSearchResults.length,
+                documentNames: documentSearchResults.map(d => d.name)
+              },
+              category: 'document'
           });
+          
+          const contentStartTime = startTimer();
+          documentEntries = await getDocumentContent(
+            supabase, 
+            documentSearchResults.slice(0, 3).map(doc => doc.id),
+            requestId
+          );
+            
+          if (documentEntries.length > 0) {
+            referencedSources.push("Drive Search");
+            
+            await logEvent(supabase, requestId, 'document_content_fetched_from_search', 'chat_function', 
+              `Fetched content for ${documentEntries.length} documents from search results`, {
+                durationMs: calculateDuration(contentStartTime),
+                category: 'document',
+                metadata: { documentTitles: documentEntries.map(d => d.title.replace('Document: ', '')) }
+            });
+          } else {
+            await logEvent(supabase, requestId, 'document_content_not_found_from_search', 'chat_function', 
+              'Failed to fetch content for search results', {
+                durationMs: calculateDuration(contentStartTime),
+                severity: 'warning',
+                category: 'document'
+            });
+          }
         } else {
-          await logEvent(supabase, requestId, 'document_content_not_found_from_search', 'chat_function', 'Failed to fetch content for search results', {
-            durationMs: calculateDuration(contentStartTime),
-            severity: 'warning'
+          await logEvent(supabase, requestId, 'document_search_no_results', 'chat_function', 
+            'No documents found matching search terms', {
+              durationMs: calculateDuration(searchStartTime),
+              severity: 'warning',
+              category: 'document',
+              metadata: { searchTerms }
           });
         }
-      } else {
-        await logEvent(supabase, requestId, 'document_search_no_results', 'chat_function', 'No documents found matching search terms', {
-          durationMs: calculateDuration(searchStartTime)
-        });
+      } catch (searchError) {
+        await logError(supabase, requestId, 'document_search', 'Error searching documents', 
+          searchError, { category: 'document', metadata: { searchTerms } });
       }
     }
     
@@ -289,15 +433,18 @@ serve(async (req) => {
         knowledgeContext += `Content Extract:\n${doc.content.substring(0, 1500)}${doc.content.length > 1500 ? '...' : ''}\n\n`;
       });
       
-      await logEvent(supabase, requestId, 'added_document_context', 'chat_function', `Added ${documentEntries.length} documents to context`, {
-        metadata: {
-          documentTitles: documentEntries.map(d => d.title.replace('Document: ', ''))
-        }
+      await logEvent(supabase, requestId, 'added_document_context', 'chat_function', 
+        `Added ${documentEntries.length} documents to context`, {
+          metadata: {
+            documentTitles: documentEntries.map(d => d.title.replace('Document: ', ''))
+          },
+          category: 'document'
       });
     }
     
     // Build the system prompt with the updated instructions
-    await logEvent(supabase, requestId, 'building_system_prompt', 'chat_function', 'Building system prompt for AI');
+    await logEvent(supabase, requestId, 'building_system_prompt', 'chat_function', 
+      'Building system prompt for AI', { category: 'ai_processing' });
     
     const baseSystemPrompt = `You are the AI assistant for Streamline Group Employees inside the Streamline Group Portal. 
 
@@ -340,94 +487,244 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
       { role: 'user', content }
     ];
 
+    // OpenAI API call with enhanced error handling
     await logEvent(supabase, requestId, 'calling_openai', 'chat_function', 'Calling OpenAI API', {
       metadata: { 
         modelName: 'gpt-4o',
-        promptLength: systemContent.length,
-        messageCount: conversationMessages.length
-      }
+        promptLength: systemContent?.length || 0,
+        messageCount: conversationMessages?.length || 0
+      },
+      category: 'ai_response'
     });
     
     const aiStartTime = startTimer();
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: conversationMessages,
-        temperature: 0.7,
-      }),
-    });
-
-    const data = await response.json();
     
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error(`OpenAI API returned invalid response: ${JSON.stringify(data)}`);
+    // Check for OpenAI API key before making the call
+    if (!openAIApiKey) {
+      await logError(supabase, requestId, 'chat_function', 'OpenAI API key not configured', 
+        new Error('Missing OPENAI_API_KEY environment variable'), 
+        { category: 'credential', severity: 'critical' });
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'OpenAI API key not configured',
+          details: {
+            message: 'The OpenAI API key is missing from environment variables',
+            fix: 'Add OPENAI_API_KEY to Supabase Edge Function secrets'
+          }
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
     
-    const aiDuration = calculateDuration(aiStartTime);
-    await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 'Received response from OpenAI API', {
-      durationMs: aiDuration,
-      metadata: { 
-        responseLength: data.choices[0].message.content.length,
-        promptTokens: data.usage?.prompt_tokens,
-        completionTokens: data.usage?.completion_tokens,
-        totalTokens: data.usage?.total_tokens
-      }
-    });
-    
-    // Extract document references from the message if any
-    let referencedDocuments = [];
-    if (documentEntries?.length > 0) {
-      // Simple heuristic to find document references
-      const assistantMessage = data.choices[0].message.content;
-      documentEntries.forEach(doc => {
-        const docName = doc.title.replace('Document: ', '');
-        if (assistantMessage.includes(docName)) {
-          referencedDocuments.push({
-            id: doc.file_id,
-            name: docName
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: conversationMessages,
+          temperature: 0.7,
+        }),
+      });
+      
+      // Handle non-200 responses with detailed logging
+      if (!response.ok) {
+        const errorBody = await response.text();
+        let parsedError;
+        
+        try {
+          parsedError = JSON.parse(errorBody);
+        } catch {
+          parsedError = { raw: errorBody };
+        }
+        
+        const openAiError = new Error(`OpenAI API returned status ${response.status}`);
+        
+        await logError(supabase, requestId, 'openai_api', 'OpenAI API error response', 
+          openAiError, { 
+            category: 'ai_response', 
+            severity: 'critical',
+            endpoint: 'chat/completions',
+            metadata: { 
+              status: response.status, 
+              statusText: response.statusText,
+              errorBody: parsedError,
+              modelRequested: 'gpt-4o'
+            }
           });
+        
+        // Determine if it's a credential issue
+        const isCredentialIssue = response.status === 401 || 
+                                 response.status === 403 ||
+                                 errorBody.includes('key') ||
+                                 errorBody.includes('auth');
+                                 
+        if (isCredentialIssue) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'OpenAI API authentication error',
+              details: {
+                message: 'There was an issue authenticating with the OpenAI API',
+                status: response.status,
+                fix: 'Verify your OpenAI API key is correct and has sufficient permissions'
+              }
+            }), {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            error: 'Error from OpenAI API',
+            details: {
+              status: response.status,
+              message: parsedError?.error?.message || 'Unknown OpenAI error'
+            }
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const data = await response.json();
+      
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        await logError(supabase, requestId, 'openai_api', 'Invalid response format from OpenAI', 
+          new Error('Missing choices in OpenAI response'), { 
+            category: 'ai_response',
+            severity: 'error',
+            metadata: { 
+              responseData: JSON.stringify(data).substring(0, 500)
+            }
+          });
+        
+        throw new Error(`OpenAI API returned invalid response format`);
+      }
+      
+      const aiDuration = calculateDuration(aiStartTime);
+      await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 'Received response from OpenAI API', {
+        durationMs: aiDuration,
+        metadata: { 
+          responseLength: data.choices[0].message.content.length,
+          promptTokens: data.usage?.prompt_tokens,
+          completionTokens: data.usage?.completion_tokens,
+          totalTokens: data.usage?.total_tokens,
+          model: data.model || 'gpt-4o'
+        },
+        category: 'ai_response'
+      });
+      
+      // Extract document references from the message if any
+      let referencedDocuments = [];
+      if (documentEntries?.length > 0) {
+        // Simple heuristic to find document references
+        const assistantMessage = data.choices[0].message.content;
+        documentEntries.forEach(doc => {
+          const docName = doc.title.replace('Document: ', '');
+          if (assistantMessage.includes(docName)) {
+            referencedDocuments.push({
+              id: doc.file_id,
+              name: docName
+            });
+          }
+        });
+        
+        await logEvent(supabase, requestId, 'document_references_extracted', 'chat_function', 
+          `Extracted ${referencedDocuments.length} document references from response`, {
+            metadata: {
+              referencedDocuments: referencedDocuments.map(d => d.name)
+            },
+            category: 'document'
+        });
+      }
+
+      await logEvent(supabase, requestId, 'request_completed', 'chat_function', 'Chat function request completed successfully', {
+        durationMs: calculateDuration(mainStartTime),
+        metadata: {
+          promptTokens: data.usage?.prompt_tokens,
+          completionTokens: data.usage?.completion_tokens,
+          totalTokens: data.usage?.total_tokens,
+          responseLength: data.choices[0].message.content.length,
+          model: data.model || 'gpt-4o',
+          referencedDocumentsCount: referencedDocuments.length
         }
       });
       
-      await logEvent(supabase, requestId, 'document_references_extracted', 'chat_function', `Extracted ${referencedDocuments.length} document references from response`, {
-        metadata: {
-          referencedDocuments: referencedDocuments.map(d => d.name)
+      return new Response(
+        JSON.stringify({ 
+          message: data.choices[0].message.content,
+          referencedDocuments,
+          usage: data.usage,
+          model: data.model || 'gpt-4o'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
-      });
+      );
+    } catch (openAiError) {
+      await logError(supabase, requestId, 'openai_api', 'Exception calling OpenAI API', 
+        openAiError, { 
+          category: 'ai_response', 
+          severity: 'critical',
+          endpoint: 'chat/completions'
+        });
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'Error processing your request',
+          details: {
+            message: openAiError.message || 'Unknown error communicating with AI service',
+            type: 'ai_service_error'
+          }
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
-
-    await logEvent(supabase, requestId, 'request_completed', 'chat_function', 'Chat function request completed successfully', {
-      durationMs: calculateDuration(mainStartTime)
-    });
-    
-    return new Response(
-      JSON.stringify({ 
-        message: data.choices[0].message.content,
-        referencedDocuments
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
   } catch (error) {
     const errorMessage = `Error in chat function: ${error.message || 'Unknown error'}`;
     await logError(supabase, requestId, 'chat_function', errorMessage, error, {
       severity: 'critical',
-      durationMs: calculateDuration(mainStartTime)
+      durationMs: calculateDuration(mainStartTime),
+      category: 'generic'
     });
     
     return new Response(
-      JSON.stringify({ error: 'Error processing your request' }), {
+      JSON.stringify({ 
+        error: 'Error processing your request',
+        details: {
+          message: error.message || 'Unknown error in chat processing',
+          type: 'server_error'
+        }
+      }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }
 });
+
+// Simple content hash function for correlation
+function hashContent(content) {
+  if (!content) return '';
+  
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash.toString(16);
+}
 
 // Helper function to determine if a query is about legality
 function isLegalityQuery(content) {
@@ -482,12 +779,14 @@ async function checkProductLegality(supabase, searchTerms, requestId) {
   try {
     // First, try to identify product names from the query
     await logEvent(supabase, requestId, 'searching_products', 'legality_check', 'Searching for products matching query terms', {
-      metadata: { searchTerms }
+      metadata: { searchTerms },
+      category: 'database'
     });
     
     if (!searchTerms || !Array.isArray(searchTerms) || searchTerms.length === 0) {
       await logEvent(supabase, requestId, 'no_search_terms', 'legality_check', 'No search terms provided for product search', {
-        severity: 'warning'
+        severity: 'warning',
+        category: 'database'
       });
       return null;
     }
@@ -521,7 +820,8 @@ async function checkProductLegality(supabase, searchTerms, requestId) {
       
       if (brands && brands.length > 0) {
         await logEvent(supabase, requestId, 'brands_found', 'legality_check', `Found ${brands.length} brands matching query`, {
-          metadata: { brandNames: brands.map(b => b.name) }
+          metadata: { brandNames: brands.map(b => b.name) },
+          category: 'database'
         });
         
         // Get products by brand
@@ -535,371 +835,4 @@ async function checkProductLegality(supabase, searchTerms, requestId) {
           await logError(supabase, requestId, 'legality_check', 'Error getting products by brand', brandProductsError);
         }
         
-        if (brandProducts && brandProducts.length > 0) {
-          products = brandProducts;
-          await logEvent(supabase, requestId, 'products_by_brand_found', 'legality_check', `Found ${brandProducts.length} products from matched brands`);
-        }
-      }
-    } else {
-      await logEvent(supabase, requestId, 'direct_product_matches', 'legality_check', `Found ${products.length} products directly matching query`, {
-        metadata: { productNames: products.map(p => p.name) }
-      });
-    }
-    
-    if (!products || products.length === 0) {
-      await logEvent(supabase, requestId, 'no_products_found', 'legality_check', 'No products found matching query terms', {
-        durationMs: calculateDuration(startTime)
-      });
-      return null; // No products found
-    }
-    
-    // Get state permissions for these products
-    await logEvent(supabase, requestId, 'fetching_state_permissions', 'legality_check', `Fetching state permissions for ${products.length} products`);
-    
-    const { data: statePermissions, error: permissionsError } = await supabase
-      .from('state_allowed_products')
-      .select('state_id, product_id')
-      .in('product_id', products.map(p => p.id));
-      
-    if (permissionsError) {
-      await logError(supabase, requestId, 'legality_check', 'Error getting state permissions', permissionsError);
-      return null;
-    }
-    
-    // Get state names
-    const { data: states, error: statesError } = await supabase
-      .from('states')
-      .select('id, name');
-      
-    if (statesError) {
-      await logError(supabase, requestId, 'legality_check', 'Error getting states', statesError);
-      return null;
-    }
-    
-    await logEvent(supabase, requestId, 'formatting_legality_data', 'legality_check', 'Formatting legality information');
-    
-    // Format the legality data
-    let legalityInfo = "";
-    
-    for (const product of products) {
-      // Get brand info
-      let brandName = "Unknown Brand";
-      if (product.brand_id) {
-        const { data: brand } = await supabase
-          .from('brands')
-          .select('name')
-          .eq('id', product.brand_id)
-          .single();
-          
-        if (brand) brandName = brand.name;
-      }
-      
-      // Find allowed states for this product
-      const allowedStateIds = statePermissions
-        .filter(sp => sp.product_id === product.id)
-        .map(sp => sp.state_id);
-        
-      const allowedStates = states
-        .filter(s => allowedStateIds.includes(s.id))
-        .map(s => s.name);
-        
-      const disallowedStates = states
-        .filter(s => !allowedStateIds.includes(s.id))
-        .map(s => s.name);
-      
-      legalityInfo += `Product: ${product.name} (${brandName})\n`;
-      legalityInfo += `Legal in ${allowedStates.length} states: ${allowedStates.join(', ')}\n`;
-      legalityInfo += `Not legal in ${disallowedStates.length} states: ${disallowedStates.length > 10 ? 
-        disallowedStates.slice(0, 10).join(', ') + '...' : 
-        disallowedStates.join(', ')}\n\n`;
-    }
-    
-    await logEvent(supabase, requestId, 'legality_check_complete', 'legality_check', 'Successfully compiled legality information', {
-      durationMs: calculateDuration(startTime),
-      metadata: { productCount: products.length }
-    });
-    
-    return legalityInfo;
-  } catch (error) {
-    await logError(supabase, requestId, 'legality_check', 'Exception in checkProductLegality', error, {
-      durationMs: calculateDuration(startTime)
-    });
-    return null;
-  }
-}
-
-// Get relevant knowledge entries
-async function getRelevantKnowledgeEntries(supabase, searchTerms, content, requestId) {
-  const startTime = startTimer();
-  try {
-    let results = [];
-    
-    // First search: Look for exact brand matches
-    await logEvent(supabase, requestId, 'searching_brand_entries', 'knowledge_search', 'Searching for brand entries');
-    
-    let { data: brandEntries, error: brandError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .filter('tags', 'cs', '{"brand"}')
-      .or(searchTerms.map(term => `title.ilike.%${term}%`).join(','));
-    
-    if (brandError) {
-      await logError(supabase, requestId, 'knowledge_search', 'Error searching for brands', brandError);
-    } else if (brandEntries?.length) {
-      await logEvent(supabase, requestId, 'brand_entries_found', 'knowledge_search', `Found ${brandEntries.length} brand entries`, {
-        metadata: { brandTitles: brandEntries.map(e => e.title) }
-      });
-      
-      results = results.concat(brandEntries.map(entry => 
-        `Brand: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
-      ));
-    }
-
-    // Second search: Look for product matches
-    await logEvent(supabase, requestId, 'searching_product_entries', 'knowledge_search', 'Searching for product entries');
-    
-    let { data: productEntries, error: productError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .filter('tags', 'cs', '{"product"}')
-      .or(searchTerms.map(term => `title.ilike.%${term}%`).join(','));
-    
-    if (productError) {
-      await logError(supabase, requestId, 'knowledge_search', 'Error searching for products', productError);
-    } else if (productEntries?.length) {
-      await logEvent(supabase, requestId, 'product_entries_found', 'knowledge_search', `Found ${productEntries.length} product entries`, {
-        metadata: { productTitles: productEntries.map(e => e.title) }
-      });
-      
-      results = results.concat(productEntries.map(entry => 
-        `Product: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
-      ));
-    }
-    
-    // Third search: General content search
-    await logEvent(supabase, requestId, 'searching_general_entries', 'knowledge_search', 'Searching for general content matches');
-    
-    let { data: regulatoryEntries, error: regulatoryError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .textSearch('content', searchTerms.join(' | '));
-    
-    if (regulatoryError) {
-      await logError(supabase, requestId, 'knowledge_search', 'Error searching regulatory content', regulatoryError);
-    } else if (regulatoryEntries?.length) {
-      // Filter out duplicates
-      const uniqueEntries = regulatoryEntries.filter(entry =>
-        !results.some(r => r.includes(entry.title))
-      );
-      
-      await logEvent(supabase, requestId, 'general_entries_found', 'knowledge_search', `Found ${uniqueEntries.length} unique general entries`, {
-        metadata: { regularTitles: uniqueEntries.map(e => e.title) }
-      });
-      
-      results = results.concat(uniqueEntries.map(entry => 
-        `Entry: ${entry.title}\n${entry.content}\nTags: ${entry.tags?.join(', ') || 'None'}`
-      ));
-    }
-    
-    // Fourth search: Find relevant JSON entries
-    await logEvent(supabase, requestId, 'searching_json_entries', 'knowledge_search', 'Searching for JSON data entries');
-    
-    let { data: jsonEntries, error: jsonError } = await supabase
-      .from('knowledge_entries')
-      .select('title, content, updated_at, tags')
-      .filter('is_active', 'eq', true)
-      .filter('tags', 'cs', '{"json"}');
-      
-    if (jsonError) {
-      await logError(supabase, requestId, 'knowledge_search', 'Error searching json entries', jsonError);
-    } else if (jsonEntries?.length) {
-      await logEvent(supabase, requestId, 'json_entries_found', 'knowledge_search', `Found ${jsonEntries.length} JSON entries`, {
-        metadata: { jsonTitles: jsonEntries.map(e => e.title) }
-      });
-      
-      // Format JSON entries to be more readable
-      jsonEntries.forEach(entry => {
-        try {
-          // Try to parse the JSON content
-          const jsonData = JSON.parse(entry.content);
-          let jsonSummary = `JSON Data: ${entry.title}\n`;
-          
-          if (typeof jsonData === 'object') {
-            if (Array.isArray(jsonData)) {
-              jsonSummary += `Data contains ${jsonData.length} items/records.\n`;
-              
-              // Sample items to give context
-              const sample = jsonData.slice(0, 3);
-              sample.forEach((item, index) => {
-                jsonSummary += `Sample ${index + 1}:\n`;
-                if (typeof item === 'object') {
-                  Object.entries(item).forEach(([key, value]) => {
-                    jsonSummary += `- ${key}: ${JSON.stringify(value)}\n`;
-                  });
-                } else {
-                  jsonSummary += `- Value: ${item}\n`;
-                }
-              });
-            } else {
-              Object.entries(jsonData).forEach(([key, value]) => {
-                if (Array.isArray(value)) {
-                  jsonSummary += `- ${key}: Array with ${value.length} items\n`;
-                } else if (typeof value === 'object' && value !== null) {
-                  jsonSummary += `- ${key}: Object with keys [${Object.keys(value).join(', ')}]\n`;
-                } else {
-                  jsonSummary += `- ${key}: ${value}\n`;
-                }
-              });
-            }
-          }
-          
-          jsonSummary += `Tags: ${entry.tags?.join(', ') || 'None'}\n`;
-          results.push(jsonSummary);
-          
-          await logEvent(supabase, requestId, 'json_entry_parsed', 'knowledge_search', `Successfully parsed JSON entry: ${entry.title}`);
-        } catch (e) {
-          // Fallback for invalid JSON
-          results.push(`JSON Data: ${entry.title} (Invalid JSON format)\nTags: ${entry.tags?.join(', ') || 'None'}`);
-          await logError(supabase, requestId, 'knowledge_search', `Error parsing JSON entry: ${entry.title}`, e);
-        }
-      });
-    }
-    
-    await logEvent(supabase, requestId, 'knowledge_search_complete', 'knowledge_search', `Knowledge search completed with ${results.length} total entries`, {
-      durationMs: calculateDuration(startTime)
-    });
-    
-    return results;
-  } catch (error) {
-    await logError(supabase, requestId, 'knowledge_search', 'Exception in getRelevantKnowledgeEntries', error, {
-      durationMs: calculateDuration(startTime)
-    });
-    return [];
-  }
-}
-
-// Search for documents in Drive
-async function searchDocuments(supabase, searchTerms, requestId) {
-  const startTime = startTimer();
-  try {
-    if (searchTerms.length === 0) {
-      await logEvent(supabase, requestId, 'search_documents_empty_terms', 'document_search', 'Empty search terms provided');
-      return [];
-    }
-    
-    // Create search query string
-    const searchQuery = searchTerms.join(' ');
-    
-    await logEvent(supabase, requestId, 'search_documents_started', 'document_search', `Searching documents for: "${searchQuery}"`);
-    
-    const { data, error } = await supabase.functions.invoke('drive-integration', {
-      body: { 
-        operation: 'search', 
-        query: searchQuery,
-        limit: 5,
-        requestId
-      },
-    });
-    
-    if (error) {
-      await logError(supabase, requestId, 'document_search', 'Error searching documents', error, {
-        durationMs: calculateDuration(startTime),
-        metadata: { searchQuery }
-      });
-      return [];
-    }
-    
-    await logEvent(supabase, requestId, 'search_documents_completed', 'document_search', `Document search found ${data?.files?.length || 0} results`, {
-      durationMs: calculateDuration(startTime),
-      metadata: { 
-        resultCount: data?.files?.length || 0,
-        fileNames: data?.files?.map(f => f.name) || [] 
-      }
-    });
-    
-    return data?.files || [];
-  } catch (error) {
-    await logError(supabase, requestId, 'document_search', 'Exception in searchDocuments', error, {
-      durationMs: calculateDuration(startTime),
-      metadata: { searchTerms }
-    });
-    return [];
-  }
-}
-
-// Get content for specific document IDs
-async function getDocumentContent(supabase, docIds, requestId) {
-  const startTime = startTimer();
-  try {
-    if (!docIds || docIds.length === 0) {
-      await logEvent(supabase, requestId, 'get_document_content_empty', 'document_content', 'No document IDs provided');
-      return [];
-    }
-    
-    await logEvent(supabase, requestId, 'get_document_content_started', 'document_content', `Fetching content for ${docIds.length} documents`);
-    
-    let documentEntries = [];
-    
-    for (const docId of docIds) {
-      try {
-        const docStartTime = startTimer();
-        const { data, error } = await supabase.functions.invoke('drive-integration', {
-          body: { 
-            operation: 'get', 
-            fileId: docId,
-            requestId 
-          },
-        });
-        
-        if (error) {
-          await logError(supabase, requestId, 'document_content', `Error invoking drive-integration for document ${docId}`, error);
-          continue;
-        }
-        
-        if (data?.content?.content) {
-          documentEntries.push({
-            title: data.file.name,
-            content: data.content.content,
-            file_id: docId,
-            file_type: data.file.file_type,
-            tags: ['document']
-          });
-          
-          await logEvent(supabase, requestId, 'document_content_fetched', 'document_content', `Successfully fetched content for document ${docId}`, {
-            durationMs: calculateDuration(docStartTime),
-            metadata: { 
-              documentName: data.file.name, 
-              contentLength: data.content.content.length 
-            }
-          });
-        } else {
-          await logEvent(supabase, requestId, 'document_content_empty', 'document_content', `Document ${docId} has no content`, {
-            durationMs: calculateDuration(docStartTime),
-            severity: 'warning',
-            metadata: { documentId: docId }
-          });
-        }
-      } catch (error) {
-        await logError(supabase, requestId, 'document_content', `Exception fetching document ${docId}`, error);
-      }
-    }
-    
-    await logEvent(supabase, requestId, 'get_document_content_completed', 'document_content', `Fetched ${documentEntries.length}/${docIds.length} document contents`, {
-      durationMs: calculateDuration(startTime),
-      metadata: { 
-        successCount: documentEntries.length,
-        totalRequested: docIds.length
-      }
-    });
-    
-    return documentEntries;
-  } catch (error) {
-    await logError(supabase, requestId, 'document_content', 'Exception in getDocumentContent', error, {
-      durationMs: calculateDuration(startTime)
-    });
-    return [];
-  }
-}
+        if (brandProducts && brandProducts.length > 0)

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
@@ -12,6 +13,7 @@ const corsHeaders = {
 const startTimer = () => performance.now();
 const calculateDuration = (startTime) => Math.round(performance.now() - startTime);
 
+// Enhanced logging with categories
 const logEvent = async (supabase, requestId, eventType, component, message, options = {}) => {
   try {
     const { 
@@ -20,20 +22,28 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
       durationMs = null, 
       metadata = null, 
       errorDetails = null,
-      severity = 'info'
+      severity = 'info',
+      category = 'document'  // Default category for drive operations
     } = options;
     
-    // Log to console
-    const logPrefix = `[${requestId}][${component}][${eventType}]`;
+    // Enhanced metadata with context information
+    const enhancedMetadata = {
+      ...(metadata || {}),
+      timestamp: Date.now(),
+      component
+    };
+    
+    // Log to console with improved format
+    const logPrefix = `[${requestId}][${component}][${eventType}][${category}]`;
     if (severity === 'error' || severity === 'critical') {
-      console.error(`${logPrefix} ${message}`, errorDetails || metadata || {});
+      console.error(`${logPrefix} ${message}`, errorDetails || enhancedMetadata || {});
     } else if (severity === 'warning') {
-      console.warn(`${logPrefix} ${message}`, metadata || {});
+      console.warn(`${logPrefix} ${message}`, enhancedMetadata || {});
     } else {
-      console.log(`${logPrefix} ${message}`, metadata || {});
+      console.log(`${logPrefix} ${message}`, enhancedMetadata || {});
     }
     
-    // Store in database
+    // Store in database with enhanced information
     if (supabase) {
       try {
         await supabase
@@ -44,9 +54,10 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
             chat_id: chatId,
             event_type: eventType,
             component,
+            category,
             message,
             duration_ms: durationMs,
-            metadata,
+            metadata: enhancedMetadata,
             error_details: errorDetails,
             severity
           });
@@ -60,19 +71,34 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
   }
 };
 
+// Enhanced error logging with more detailed error extraction
 const logError = async (supabase, requestId, component, message, error, options = {}) => {
   try {
+    // Extract detailed error information
     const errorDetails = {
       message: error?.message || 'Unknown error',
       stack: error?.stack,
       name: error?.name,
-      code: error?.code
+      code: error?.code,
+      status: error?.status,
+      statusText: error?.statusText,
+      // Additional Drive-specific information
+      operation: options.operation || 'unknown',
+      fileId: options.fileId,
+      // Extract credential-related information (without sensitive data)
+      credentialError: error.message?.includes('credential') || 
+                       error.message?.includes('authentication') ||
+                       error.message?.includes('key')
     };
+    
+    // Default to document category for drive operations
+    const category = options.category || 'document';
     
     await logEvent(supabase, requestId, 'error', component, message, {
       ...options,
       errorDetails,
-      severity: options.severity || 'error'
+      severity: options.severity || 'error',
+      category
     });
   } catch (e) {
     console.error("Error in error logging system:", e);
@@ -80,24 +106,88 @@ const logError = async (supabase, requestId, component, message, error, options 
 };
 
 // Google Drive API client - using individual credential fields instead of parsing JSON
-async function createDriveClient() {
+async function createDriveClient(requestId = 'system') {
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     // Get individual credential fields from environment
     const clientEmail = Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL");
     const privateKey = Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY");
     const projectId = Deno.env.get("GOOGLE_DRIVE_PROJECT_ID");
     
-    // Validate required fields
+    // Log credential validation start (without sensitive data)
+    await logEvent(supabase, requestId, 'drive_credential_validation', 'drive-integration', 
+      'Validating Google Drive credentials', {
+        metadata: { 
+          hasClientEmail: !!clientEmail,
+          hasPrivateKey: !!privateKey,
+          hasProjectId: !!projectId,
+          clientEmailDomain: clientEmail ? clientEmail.split('@')[1] : null
+        },
+        category: 'credential'
+    });
+    
+    // Validate required fields with more detailed logging
     if (!clientEmail) {
+      await logError(supabase, requestId, 'drive-integration', 'Missing client email credential', 
+        new Error("GOOGLE_DRIVE_CLIENT_EMAIL is not configured in environment"), 
+        { category: 'credential', severity: 'critical' });
+      
       throw new Error("GOOGLE_DRIVE_CLIENT_EMAIL is not configured in environment");
     }
     
     if (!privateKey) {
+      await logError(supabase, requestId, 'drive-integration', 'Missing private key credential', 
+        new Error("GOOGLE_DRIVE_PRIVATE_KEY is not configured in environment"), 
+        { category: 'credential', severity: 'critical' });
+      
       throw new Error("GOOGLE_DRIVE_PRIVATE_KEY is not configured in environment");
     }
     
+    // Check private key format
+    if (!privateKey.includes("-----BEGIN PRIVATE KEY-----")) {
+      await logError(supabase, requestId, 'drive-integration', 'Invalid private key format - missing BEGIN marker', 
+        new Error("GOOGLE_DRIVE_PRIVATE_KEY is missing BEGIN marker"), 
+        { 
+          category: 'credential', 
+          severity: 'critical',
+          metadata: {
+            keyLength: privateKey.length,
+            keyStartsWith: privateKey.substring(0, 20),
+            containsNewlines: privateKey.includes('\\n')
+          }
+        });
+        
+      throw new Error("GOOGLE_DRIVE_PRIVATE_KEY is improperly formatted - missing BEGIN marker");
+    }
+    
+    if (!privateKey.includes("-----END PRIVATE KEY-----")) {
+      await logError(supabase, requestId, 'drive-integration', 'Invalid private key format - missing END marker', 
+        new Error("GOOGLE_DRIVE_PRIVATE_KEY is missing END marker"), 
+        { 
+          category: 'credential', 
+          severity: 'critical',
+          metadata: {
+            keyLength: privateKey.length,
+            keyEndsWith: privateKey.substring(privateKey.length - 20),
+            containsNewlines: privateKey.includes('\\n')
+          }
+        });
+        
+      throw new Error("GOOGLE_DRIVE_PRIVATE_KEY is improperly formatted - missing END marker");
+    }
+    
     // Log successful credential loading
-    console.log("Successfully loaded Google Drive credentials for:", clientEmail);
+    await logEvent(supabase, requestId, 'drive_credentials_valid', 'drive-integration', 
+      'Successfully loaded Google Drive credentials', {
+        metadata: { 
+          clientEmail,
+          projectId
+        },
+        category: 'credential'
+    });
     
     // Create key object with required JWT fields
     const key = {
@@ -114,101 +204,239 @@ async function createDriveClient() {
       universe_domain: Deno.env.get("GOOGLE_DRIVE_UNIVERSE_DOMAIN") || "googleapis.com"
     };
     
-    // Use the JWT client from Google Auth library for Deno
-    const token = await generateJWT(key);
+    // Generate JWT token with detailed error logging
+    await logEvent(supabase, requestId, 'jwt_generation_started', 'drive-integration', 
+      'Generating JWT for Google Drive authentication', {
+        category: 'credential'
+    });
     
-    return {
-      token,
-      clientEmail
-    };
+    try {
+      const token = await generateJWT(key, requestId, supabase);
+      
+      await logEvent(supabase, requestId, 'jwt_generation_success', 'drive-integration', 
+        'JWT successfully generated', {
+          category: 'credential'
+      });
+      
+      return {
+        token,
+        clientEmail
+      };
+    } catch (jwtError) {
+      await logError(supabase, requestId, 'drive-integration', 'JWT generation failed', 
+        jwtError, { category: 'credential', severity: 'critical' });
+      throw jwtError;
+    }
   } catch (e) {
+    // This will be caught by the outer try-catch and logged there
     console.error("Error creating Drive client:", e);
     throw new Error(`Failed to initialize Google Drive client: ${e.message}`);
   }
 }
 
-// Generate JWT for Google Drive API authentication
-async function generateJWT(key) {
-  const header = {
-    alg: "RS256",
-    typ: "JWT"
-  };
-  
-  const now = Math.floor(Date.now() / 1000);
-  const claim = {
-    iss: key.client_email,
-    scope: "https://www.googleapis.com/auth/drive.readonly",
-    aud: "https://oauth2.googleapis.com/token",
-    exp: now + 3600,
-    iat: now
-  };
-  
-  // Create the JWT
-  const encoder = new TextEncoder();
-  const headerBase64 = btoa(JSON.stringify(header)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  const claimBase64 = btoa(JSON.stringify(claim)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  
-  const signatureInput = `${headerBase64}.${claimBase64}`;
-  
+// Generate JWT for Google Drive API authentication with enhanced error logging
+async function generateJWT(key, requestId, supabase) {
+  const jwtStartTime = startTimer();
   try {
-    // Check for valid private key
-    if (!key.private_key || typeof key.private_key !== 'string') {
-      throw new Error(`Invalid private key: ${typeof key.private_key}`);
-    }
+    await logEvent(supabase, requestId, 'jwt_header_creation', 'drive-integration', 
+      'Creating JWT header', { category: 'credential' });
+      
+    const header = {
+      alg: "RS256",
+      typ: "JWT"
+    };
     
-    // Import private key
-    const privateKey = await crypto.subtle.importKey(
-      "pkcs8",
-      pemToArrayBuffer(key.private_key),
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-256"
-      },
-      false,
-      ["sign"]
-    );
+    const now = Math.floor(Date.now() / 1000);
+    const claim = {
+      iss: key.client_email,
+      scope: "https://www.googleapis.com/auth/drive.readonly",
+      aud: "https://oauth2.googleapis.com/token",
+      exp: now + 3600,
+      iat: now
+    };
     
-    // Sign the JWT
-    const signature = await crypto.subtle.sign(
-      { name: "RSASSA-PKCS1-v1_5" },
-      privateKey,
-      encoder.encode(signatureInput)
-    );
-    
-    // Convert signature to base64url
-    const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-    
-    const jwt = `${signatureInput}.${signatureBase64}`;
-    
-    // Exchange JWT for access token
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion: jwt
-      })
+    // Log JWT claim creation (without private data)
+    await logEvent(supabase, requestId, 'jwt_claim_created', 'drive-integration', 
+      'JWT claim created', { 
+        metadata: { 
+          issuer: key.client_email,
+          audience: claim.aud,
+          expiresIn: 3600
+        },
+        category: 'credential'
     });
     
-    const tokenData = await tokenResponse.json();
+    // Create the JWT
+    const encoder = new TextEncoder();
+    const headerBase64 = btoa(JSON.stringify(header)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    const claimBase64 = btoa(JSON.stringify(claim)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     
-    if (!tokenData.access_token) {
-      throw new Error(`Failed to obtain access token: ${JSON.stringify(tokenData)}`);
+    const signatureInput = `${headerBase64}.${claimBase64}`;
+    
+    try {
+      // Check for valid private key
+      if (!key.private_key || typeof key.private_key !== 'string') {
+        await logError(supabase, requestId, 'jwt_generation', 'Invalid private key format', 
+          new Error(`Invalid private key type: ${typeof key.private_key}`), 
+          { category: 'credential', severity: 'critical' });
+          
+        throw new Error(`Invalid private key: ${typeof key.private_key}`);
+      }
+      
+      // Validate private key format
+      if (!key.private_key.includes("-----BEGIN PRIVATE KEY-----")) {
+        await logError(supabase, requestId, 'jwt_generation', 'Private key missing BEGIN marker', 
+          new Error('Private key is missing BEGIN marker'), 
+          { category: 'credential', severity: 'critical' });
+          
+        throw new Error("Private key is missing BEGIN marker");
+      }
+      
+      if (!key.private_key.includes("-----END PRIVATE KEY-----")) {
+        await logError(supabase, requestId, 'jwt_generation', 'Private key missing END marker', 
+          new Error('Private key is missing END marker'), 
+          { category: 'credential', severity: 'critical' });
+          
+        throw new Error("Private key is missing END marker");
+      }
+      
+      await logEvent(supabase, requestId, 'key_import_started', 'drive-integration', 
+        'Importing private key', { category: 'credential' });
+      
+      // Import private key
+      try {
+        const privateKey = await crypto.subtle.importKey(
+          "pkcs8",
+          pemToArrayBuffer(key.private_key),
+          {
+            name: "RSASSA-PKCS1-v1_5",
+            hash: "SHA-256"
+          },
+          false,
+          ["sign"]
+        );
+        
+        await logEvent(supabase, requestId, 'key_import_success', 'drive-integration', 
+          'Private key successfully imported', { category: 'credential' });
+        
+        // Sign the JWT
+        await logEvent(supabase, requestId, 'jwt_signing_started', 'drive-integration', 
+          'Signing JWT', { category: 'credential' });
+          
+        const signature = await crypto.subtle.sign(
+          { name: "RSASSA-PKCS1-v1_5" },
+          privateKey,
+          encoder.encode(signatureInput)
+        );
+        
+        await logEvent(supabase, requestId, 'jwt_signing_success', 'drive-integration', 
+          'JWT successfully signed', { category: 'credential' });
+        
+        // Convert signature to base64url
+        const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, '');
+        
+        const jwt = `${signatureInput}.${signatureBase64}`;
+        
+        // Exchange JWT for access token
+        await logEvent(supabase, requestId, 'token_exchange_started', 'drive-integration', 
+          'Exchanging JWT for access token', { category: 'credential' });
+          
+        const tokenStartTime = startTimer();
+        
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: new URLSearchParams({
+            grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            assertion: jwt
+          })
+        });
+        
+        if (!tokenResponse.ok) {
+          const errorText = await tokenResponse.text();
+          let errorJson;
+          
+          try {
+            errorJson = JSON.parse(errorText);
+          } catch {
+            errorJson = { text: errorText };
+          }
+          
+          await logError(supabase, requestId, 'token_exchange', 'Error exchanging JWT for token', 
+            new Error(`Token exchange failed with status ${tokenResponse.status}`), { 
+              category: 'credential', 
+              severity: 'critical',
+              metadata: {
+                status: tokenResponse.status,
+                statusText: tokenResponse.statusText,
+                errorResponse: errorJson
+              }
+          });
+          
+          throw new Error(`Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+        }
+        
+        const tokenData = await tokenResponse.json();
+        
+        if (!tokenData.access_token) {
+          await logError(supabase, requestId, 'token_exchange', 'No access token in response', 
+            new Error('No access_token in token response'), { 
+              category: 'credential', 
+              severity: 'critical',
+              metadata: {
+                responseKeys: Object.keys(tokenData),
+                hasError: !!tokenData.error,
+                errorDescription: tokenData.error_description
+              }
+          });
+          
+          throw new Error(`Failed to obtain access token: ${JSON.stringify(tokenData)}`);
+        }
+        
+        await logEvent(supabase, requestId, 'token_exchange_success', 'drive-integration', 
+          'Successfully obtained access token', { 
+            durationMs: calculateDuration(tokenStartTime),
+            category: 'credential',
+            metadata: {
+              tokenType: tokenData.token_type,
+              expiresIn: tokenData.expires_in
+            }
+        });
+        
+        await logEvent(supabase, requestId, 'jwt_process_complete', 'drive-integration', 
+          'JWT authentication process completed', { 
+            durationMs: calculateDuration(jwtStartTime),
+            category: 'credential'
+        });
+        
+        return tokenData.access_token;
+      } catch (keyImportError) {
+        await logError(supabase, requestId, 'key_import', 'Error importing private key', 
+          keyImportError, { category: 'credential', severity: 'critical' });
+        throw keyImportError;
+      }
+    } catch (e) {
+      await logError(supabase, requestId, 'jwt_generation', 'Error generating JWT', 
+        e, { category: 'credential', severity: 'critical' });
+      throw new Error(`JWT generation failed: ${e.message}`);
     }
-    
-    return tokenData.access_token;
   } catch (e) {
-    console.error("Error generating JWT:", e);
-    throw new Error(`JWT generation failed: ${e.message}`);
+    await logError(supabase, requestId, 'jwt_generation', 'Outer error in generateJWT', 
+      e, { 
+        category: 'credential', 
+        severity: 'critical',
+        durationMs: calculateDuration(jwtStartTime)
+      });
+    throw e;
   }
 }
 
-// Helper function to convert PEM to ArrayBuffer
+// Helper function to convert PEM to ArrayBuffer with detailed validation
 function pemToArrayBuffer(pem) {
   try {
     if (!pem || typeof pem !== 'string') {
@@ -253,174 +481,32 @@ function pemToArrayBuffer(pem) {
   }
 }
 
-// List files from Google Drive
-async function listDriveFiles(token, limit = 10) {
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files?pageSize=${limit}&fields=files(id,name,mimeType,createdTime,modifiedTime,description)`, {
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Failed to list files: ${error.error?.message || response.statusText}`);
-  }
-  
-  const data = await response.json();
-  return data.files.map(file => ({
-    id: file.id,
-    name: file.name,
-    file_type: file.mimeType,
-    description: file.description || "",
-    created_at: file.createdTime,
-    updated_at: file.modifiedTime,
-    last_accessed: new Date().toISOString()
-  }));
-}
-
-// Search files in Google Drive
-async function searchDriveFiles(token, query, limit = 10) {
-  const q = `name contains '${query}' or fullText contains '${query}'`;
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&pageSize=${limit}&fields=files(id,name,mimeType,createdTime,modifiedTime,description)`, {
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Failed to search files: ${error.error?.message || response.statusText}`);
-  }
-  
-  const data = await response.json();
-  return data.files.map(file => ({
-    id: file.id,
-    name: file.name,
-    file_type: file.mimeType,
-    description: file.description || "",
-    created_at: file.createdTime,
-    updated_at: file.modifiedTime,
-    last_accessed: new Date().toISOString()
-  }));
-}
-
-// Get file content from Google Drive
-async function getDriveFileContent(token, fileId) {
-  // First get file metadata
-  const metaResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,description`, {
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
-  });
-  
-  if (!metaResponse.ok) {
-    const error = await metaResponse.json();
-    throw new Error(`Failed to get file metadata: ${error.error?.message || metaResponse.statusText}`);
-  }
-  
-  const file = await metaResponse.json();
-  
-  // Get content based on mimeType
-  let content = "";
-  let contentFormat = "text";
-  
-  if (file.mimeType === 'application/vnd.google-apps.document') {
-    // Export Google Docs as plain text
-    const contentResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, {
-      headers: {
-        "Authorization": `Bearer ${token}`
-      }
-    });
-    
-    if (contentResponse.ok) {
-      content = await contentResponse.text();
-    } else {
-      console.warn(`Could not export Google Doc as text: ${fileId}`);
-      content = "This document could not be exported as text.";
-    }
-  } 
-  else if (file.mimeType.startsWith('text/') || 
-           file.mimeType === 'application/json' || 
-           file.mimeType === 'application/xml') {
-    // Download text files directly
-    const contentResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: {
-        "Authorization": `Bearer ${token}`
-      }
-    });
-    
-    if (contentResponse.ok) {
-      content = await contentResponse.text();
-    }
-  } 
-  else if (file.mimeType === 'application/pdf') {
-    // For PDFs, just indicate it's a PDF
-    contentFormat = "pdf";
-    content = "PDF document. Text extraction not supported in this version.";
-  }
-  else {
-    // For other types, provide a placeholder
-    content = `File type ${file.mimeType} not supported for direct content extraction.`;
-  }
-  
-  return {
-    file,
-    content: {
-      file_id: fileId,
-      content,
-      content_format: contentFormat,
-      content_status: "complete",
-      processed_at: new Date().toISOString()
-    }
-  };
-}
-
+// More detailed serve implementation with better error handling
 serve(async (req) => {
-  // Handle CORS preflight request
-  if (req.method === "OPTIONS") {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  let requestId = 'system';
+  const requestStartTime = startTimer();
+  
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  
-  // Check for required credentials
-  const clientEmail = Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL");
-  const privateKey = Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY");
-
-  if (!clientEmail || !privateKey) {
-    console.error("Google Drive credentials not configured properly");
-    const missingFields = [];
-    if (!clientEmail) missingFields.push("GOOGLE_DRIVE_CLIENT_EMAIL");
-    if (!privateKey) missingFields.push("GOOGLE_DRIVE_PRIVATE_KEY");
-    
-    return new Response(
-      JSON.stringify({ 
-        error: "Google Drive credentials not configured properly", 
-        details: `Missing required secret(s): ${missingFields.join(", ")}`
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      }
-    );
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  let requestId = '';
-  const mainStartTime = startTimer();
-
   try {
-    // Parse request body
-    let requestBody;
+    // Parse the request body with error handling
+    let body;
     try {
-      requestBody = await req.json();
-    } catch (jsonParseError) {
-      console.error("Invalid JSON in request:", jsonParseError);
+      body = await req.json();
+      requestId = body.requestId || `drive-${Date.now()}`;
+    } catch (parseError) {
+      await logError(supabase, requestId, 'drive-integration', 'Failed to parse request JSON', 
+        parseError, { category: 'validation' });
+        
       return new Response(
         JSON.stringify({ 
-          error: "Invalid JSON in request body",
-          details: jsonParseError.message
+          error: `Invalid JSON in request: ${parseError.message}` 
         }),
         { 
           status: 400, 
@@ -429,251 +515,791 @@ serve(async (req) => {
       );
     }
     
-    const { operation, fileId, query, limit = 10, requestId: clientRequestId } = requestBody;
-    requestId = clientRequestId || `drive-${Date.now()}`;
-    
-    await logEvent(supabase, requestId, 'function_invoked', 'drive_integration', `Drive integration invoked with operation: ${operation}`, {
-      metadata: { operation, fileId, query, limit }
+    // Log the incoming request
+    await logEvent(supabase, requestId, 'drive_request_started', 'drive-integration', 
+      `Drive integration request: ${body.operation || 'unknown'}`, {
+        metadata: {
+          operation: body.operation,
+          fileId: body.fileId,
+          query: body.query,
+          limit: body.limit
+        },
+        category: 'document'
     });
 
-    // Initialize Google Drive client
-    const startAuthTime = startTimer(); 
-    await logEvent(supabase, requestId, 'drive_auth_started', 'drive_integration', 'Initializing Google Drive client');
-    
-    let driveClient;
-    try {
-      driveClient = await createDriveClient();
-      
-      await logEvent(supabase, requestId, 'drive_auth_completed', 'drive_integration', 'Google Drive client initialized', {
-        durationMs: calculateDuration(startAuthTime)
-      });
-    } catch (authError) {
-      await logError(supabase, requestId, 'drive_integration', 'Failed to initialize Google Drive client', authError, {
-        severity: 'critical'
-      });
-      
+    // Validate operation parameter
+    const operation = body.operation;
+    if (!operation) {
+      await logError(supabase, requestId, 'drive-integration', 'Missing operation in request', 
+        new Error('Operation parameter is required'), { category: 'validation' });
+        
       return new Response(
-        JSON.stringify({ 
-          error: "Google Drive authentication failed", 
-          details: authError.message
-        }),
+        JSON.stringify({ error: "Missing 'operation' parameter" }),
         { 
-          status: 500, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
         }
       );
     }
 
-    if (operation === "list") {
-      await logEvent(supabase, requestId, 'list_files_started', 'drive_integration', 'Listing files from Google Drive');
+    try {
+      // Create the Drive client with the current request ID
+      const clientCreationTime = startTimer();
       
-      const startTime = startTimer();
-      const files = await listDriveFiles(driveClient.token, limit || 50);
-
-      await logEvent(supabase, requestId, 'list_files_completed', 'drive_integration', `Listed ${files.length} files from Google Drive`, {
-        durationMs: calculateDuration(startTime),
-        metadata: { fileCount: files.length }
-      });
-      
-      return new Response(
-        JSON.stringify({ files }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } 
-    else if (operation === "search") {
-      if (!query) {
-        await logEvent(supabase, requestId, 'search_missing_query', 'drive_integration', 'Search operation missing query parameter', {
-          severity: 'warning'
-        });
+      await logEvent(supabase, requestId, 'drive_client_creation_started', 'drive-integration', 
+        'Creating Google Drive client', { category: 'credential' });
         
+      const { token } = await createDriveClient(requestId);
+      
+      await logEvent(supabase, requestId, 'drive_client_creation_complete', 'drive-integration', 
+        'Google Drive client created successfully', { 
+          durationMs: calculateDuration(clientCreationTime),
+          category: 'credential'
+      });
+
+      // Handle different operations with detailed logging
+      switch (operation) {
+        case 'list': {
+          const limit = body.limit || 10;
+          
+          await logEvent(supabase, requestId, 'list_files_started', 'drive-integration', 
+            `Listing up to ${limit} files`, { 
+              category: 'document',
+              metadata: { limit }
+          });
+          
+          const operationStartTime = startTimer();
+          
+          try {
+            const files = await listDriveFiles(token, limit, requestId, supabase);
+            
+            await logEvent(supabase, requestId, 'list_files_success', 'drive-integration', 
+              `Successfully listed ${files.length} files`, { 
+                durationMs: calculateDuration(operationStartTime),
+                category: 'document',
+                metadata: { fileCount: files.length }
+            });
+            
+            return new Response(
+              JSON.stringify({ files }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } catch (listError) {
+            await logError(supabase, requestId, 'list_files', 'Error listing Drive files', 
+              listError, {
+                category: 'document',
+                severity: 'error',
+                durationMs: calculateDuration(operationStartTime)
+            });
+            
+            return new Response(
+              JSON.stringify({ error: `Failed to list files: ${listError.message}` }),
+              { 
+                status: 500, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+              }
+            );
+          }
+        }
+
+        case 'search': {
+          const query = body.query;
+          const limit = body.limit || 10;
+          
+          if (!query) {
+            await logError(supabase, requestId, 'drive-integration', 'Missing search query', 
+              new Error('Search query is required'), { category: 'validation' });
+              
+            return new Response(
+              JSON.stringify({ error: "Missing 'query' parameter for search operation" }),
+              { 
+                status: 400, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+              }
+            );
+          }
+          
+          await logEvent(supabase, requestId, 'search_files_started', 'drive-integration', 
+            `Searching for "${query}" with limit ${limit}`, { 
+              category: 'document',
+              metadata: { query, limit }
+          });
+          
+          const operationStartTime = startTimer();
+          
+          try {
+            const files = await searchDriveFiles(token, query, limit, requestId, supabase);
+            
+            await logEvent(supabase, requestId, 'search_files_success', 'drive-integration', 
+              `Search returned ${files.length} results for "${query}"`, { 
+                durationMs: calculateDuration(operationStartTime),
+                category: 'document',
+                metadata: { 
+                  resultCount: files.length,
+                  query
+                }
+            });
+            
+            return new Response(
+              JSON.stringify({ files }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } catch (searchError) {
+            await logError(supabase, requestId, 'search_files', 'Error searching Drive files', 
+              searchError, {
+                category: 'document',
+                severity: 'error',
+                durationMs: calculateDuration(operationStartTime),
+                metadata: { query }
+            });
+            
+            return new Response(
+              JSON.stringify({ error: `Failed to search files: ${searchError.message}` }),
+              { 
+                status: 500, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+              }
+            );
+          }
+        }
+
+        case 'get': {
+          const fileId = body.fileId;
+          
+          if (!fileId) {
+            await logError(supabase, requestId, 'drive-integration', 'Missing file ID', 
+              new Error('File ID is required'), { category: 'validation' });
+              
+            return new Response(
+              JSON.stringify({ error: "Missing 'fileId' parameter for get operation" }),
+              { 
+                status: 400, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+              }
+            );
+          }
+          
+          await logEvent(supabase, requestId, 'get_file_started', 'drive-integration', 
+            `Getting file metadata and content for ID: ${fileId}`, { 
+              category: 'document',
+              metadata: { fileId }
+          });
+          
+          const operationStartTime = startTimer();
+          
+          try {
+            // First get file metadata
+            const fileMetadataTime = startTimer();
+            
+            await logEvent(supabase, requestId, 'get_file_metadata_started', 'drive-integration', 
+              `Fetching metadata for file ${fileId}`, { 
+                category: 'document',
+                metadata: { fileId }
+            });
+            
+            const fileMetadata = await getFileMetadata(token, fileId, requestId, supabase);
+            
+            await logEvent(supabase, requestId, 'get_file_metadata_success', 'drive-integration', 
+              `Successfully fetched metadata for ${fileMetadata.name}`, { 
+                durationMs: calculateDuration(fileMetadataTime),
+                category: 'document',
+                metadata: { 
+                  fileId,
+                  fileName: fileMetadata.name,
+                  mimeType: fileMetadata.mimeType
+                }
+            });
+            
+            // Then get file content
+            const fileContentTime = startTimer();
+            
+            await logEvent(supabase, requestId, 'get_file_content_started', 'drive-integration', 
+              `Fetching content for file ${fileId} (${fileMetadata.name})`, { 
+                category: 'document',
+                metadata: { 
+                  fileId,
+                  fileName: fileMetadata.name,
+                  mimeType: fileMetadata.mimeType
+                }
+            });
+            
+            const fileContent = await getFileContent(token, fileId, fileMetadata.mimeType, requestId, supabase);
+            
+            await logEvent(supabase, requestId, 'get_file_content_success', 'drive-integration', 
+              `Successfully fetched content for ${fileMetadata.name}`, { 
+                durationMs: calculateDuration(fileContentTime),
+                category: 'document',
+                metadata: { 
+                  fileId,
+                  fileName: fileMetadata.name,
+                  contentLength: fileContent.content ? fileContent.content.length : 0
+                }
+            });
+            
+            // Format file data
+            const file = {
+              id: fileId,
+              name: fileMetadata.name,
+              file_type: fileMetadata.mimeType,
+              created_at: fileMetadata.createdTime,
+              updated_at: fileMetadata.modifiedTime,
+              description: fileMetadata.description || "",
+              size: fileMetadata.size || 0
+            };
+            
+            await logEvent(supabase, requestId, 'get_file_complete', 'drive-integration', 
+              `Successfully retrieved file metadata and content for ${fileMetadata.name}`, { 
+                durationMs: calculateDuration(operationStartTime),
+                category: 'document'
+            });
+            
+            // Return combined file metadata and content
+            return new Response(
+              JSON.stringify({ file, content: fileContent }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } catch (getError) {
+            await logError(supabase, requestId, 'get_file', 'Error getting Drive file', 
+              getError, {
+                category: 'document',
+                severity: 'error',
+                durationMs: calculateDuration(operationStartTime),
+                metadata: { fileId }
+            });
+            
+            return new Response(
+              JSON.stringify({ error: `Failed to get file: ${getError.message}` }),
+              { 
+                status: 500, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" } 
+              }
+            );
+          }
+        }
+
+        default:
+          await logError(supabase, requestId, 'drive-integration', 'Invalid operation', 
+            new Error(`Unknown operation: ${operation}`), { category: 'validation' });
+            
+          return new Response(
+            JSON.stringify({ error: `Unknown operation: ${operation}` }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" } 
+            }
+          );
+      }
+    } catch (error) {
+      // Handle credential-specific errors with detailed diagnostics
+      if (error.message?.includes('credential') || 
+          error.message?.includes('key') || 
+          error.message?.includes('authentication')) {
+        
+        await logError(supabase, requestId, 'drive-integration', 'Google Drive credentials error', 
+          error, { 
+            category: 'credential',
+            severity: 'critical'
+          });
+          
         return new Response(
-          JSON.stringify({ error: "Query parameter is required for search" }),
+          JSON.stringify({ 
+            error: "Google Drive credentials error",
+            details: {
+              message: error.message,
+              type: 'credential_error',
+              fixInstructions: "Verify that all Google Drive credential environment variables are correctly configured"
+            }
+          }),
           { 
-            status: 400, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
+            status: 500, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
           }
         );
       }
-
-      await logEvent(supabase, requestId, 'search_files_started', 'drive_integration', `Searching files with query: "${query}"`);
       
-      const startTime = startTimer();
-      const files = await searchDriveFiles(driveClient.token, query, limit || 10);
-
-      await logEvent(supabase, requestId, 'search_files_completed', 'drive_integration', `Search returned ${files.length} files`, {
-        durationMs: calculateDuration(startTime),
-        metadata: { query, resultCount: files.length }
-      });
-      
+      // General operation error
+      await logError(supabase, requestId, 'drive-integration', 'Error in operation', 
+        error, { 
+          category: 'document',
+          severity: 'error'
+        });
+        
       return new Response(
-        JSON.stringify({ files }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: `Operation failed: ${error.message}` }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
       );
     }
-    else if (operation === "get" && fileId) {
-      await logEvent(supabase, requestId, 'get_file_started', 'drive_integration', `Getting file content with ID: ${fileId}`);
-      
-      const startTime = startTimer();
-      const fileData = await getDriveFileContent(driveClient.token, fileId);
-
-      await logEvent(supabase, requestId, 'get_file_completed', 'drive_integration', `Retrieved file content for ${fileId}`, {
-        durationMs: calculateDuration(startTime),
-        metadata: { 
-          fileName: fileData.file.name, 
-          fileType: fileData.file.mimeType,
-          contentLength: fileData.content.content?.length || 0
-        }
-      });
-      
-      // Track access in the database but don't rely on it for retrieval
-      try {
-        const existingFile = await supabase
-          .from("drive_files")
-          .select("id")
-          .eq("id", fileId)
-          .maybeSingle();
-        
-        if (existingFile.data) {
-          // Update last accessed timestamp
-          await supabase
-            .from("drive_files")
-            .update({ last_accessed: new Date().toISOString() })
-            .eq("id", fileId);
-        } else {
-          // Store file metadata for future reference
-          await supabase
-            .from("drive_files")
-            .insert({
-              id: fileData.file.id,
-              name: fileData.file.name, 
-              file_type: fileData.file.mimeType,
-              description: fileData.file.description || null
-            });
-        }
-        
-        // Store content for caching if needed later
-        const existingContent = await supabase
-          .from("file_content")
-          .select("id")
-          .eq("file_id", fileId)
-          .maybeSingle();
-        
-        if (existingContent.data) {
-          await supabase
-            .from("file_content")
-            .update({
-              content: fileData.content.content,
-              content_format: fileData.content.content_format,
-              processed_at: new Date().toISOString()
-            })
-            .eq("file_id", fileId);
-        } else {
-          await supabase
-            .from("file_content")
-            .insert({
-              file_id: fileId,
-              content: fileData.content.content,
-              content_format: fileData.content.content_format
-            });
-        }
-      } catch (dbError) {
-        // Don't fail if database logging fails
-        await logError(supabase, requestId, 'drive_integration', 'Failed to update file access records', dbError, { severity: 'warning' });
-      }
-      
-      return new Response(
-        JSON.stringify({ file: fileData.file, content: fileData.content }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    else if (operation === "sync") {
-      // This would be a full sync operation to keep the database in sync with Google Drive
-      // For now, we'll implement a basic version that gets the latest files from Drive
-      await logEvent(supabase, requestId, 'sync_started', 'drive_integration', 'Starting Google Drive sync operation');
-      
-      const syncStartTime = startTimer();
-      const files = await listDriveFiles(driveClient.token, 20); // Get top 20 files
-      
-      // Update or insert files in the database
-      const processed = [];
-      
-      for (const file of files) {
-        try {
-          const { data: existingFile } = await supabase
-            .from("drive_files")
-            .select("id, updated_at")
-            .eq("id", file.id)
-            .maybeSingle();
-          
-          if (existingFile) {
-            // Update existing record
-            await supabase
-              .from("drive_files")
-              .update({
-                name: file.name,
-                file_type: file.file_type,
-                description: file.description,
-                updated_at: file.updated_at
-              })
-              .eq("id", file.id);
-          } else {
-            // Insert new record
-            await supabase
-              .from("drive_files")
-              .insert(file);
-          }
-          
-          processed.push({ id: file.id, name: file.name, action: existingFile ? 'updated' : 'added' });
-        } catch (dbError) {
-          await logError(supabase, requestId, 'drive_integration', `Error syncing file ${file.id}`, dbError);
-        }
-      }
-      
-      await logEvent(supabase, requestId, 'sync_completed', 'drive_integration', `Drive sync operation completed: processed ${processed.length} files`, {
-        durationMs: calculateDuration(syncStartTime),
-        metadata: { processed }
-      });
-      
-      return new Response(
-        JSON.stringify({ success: true, processed }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Unknown operation
-    await logEvent(supabase, requestId, 'invalid_operation', 'drive_integration', `Invalid operation: ${operation}`, {
-      severity: 'warning'
-    });
-    
-    return new Response(
-      JSON.stringify({ error: "Invalid operation" }),
-      { 
-        status: 400, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      }
-    );
   } catch (error) {
-    let errorMessage = "An error occurred";
-    let statusCode = 500;
-    
-    if (error instanceof SyntaxError && error.message.includes("JSON")) {
-      errorMessage = "Invalid JSON in request body";
-      statusCode = 400;
-    } else {
-      errorMessage = error.message || "An unknown error occurred";
-    }
-    
-    await logError(supabase, requestId, 'drive_integration', 'Exception in drive integration function', error, {
-      severity: 'critical',
-      durationMs: calculateDuration(mainStartTime)
-    });
-    
+    // Top-level error handler
+    await logError(supabase, requestId, 'drive-integration', 'Critical error in function', 
+      error, { 
+        category: 'generic',
+        severity: 'critical',
+        durationMs: calculateDuration(requestStartTime)
+      });
+      
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: "Internal server error",
+        details: error.message
+      }),
       { 
-        status: statusCode, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        status: 500, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
       }
     );
+  } finally {
+    // Log overall request completion regardless of outcome
+    await logEvent(supabase, requestId, 'drive_request_complete', 'drive-integration', 
+      'Drive integration request completed', {
+        durationMs: calculateDuration(requestStartTime),
+        category: 'document'
+    });
   }
 });
+
+// Enhanced function implementation with better error tracking
+async function listDriveFiles(token, limit = 10, requestId, supabase) {
+  await logEvent(supabase, requestId, 'list_files_api_call', 'drive_api', 
+    `Calling Drive API to list ${limit} files`, {
+      category: 'document',
+      metadata: { limit }
+  });
+  
+  try {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files?pageSize=${limit}&fields=files(id,name,mimeType,createdTime,modifiedTime,description,size)`, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      let parsedError;
+      
+      try {
+        parsedError = JSON.parse(errorData);
+      } catch {
+        parsedError = { text: errorData };
+      }
+      
+      await logError(supabase, requestId, 'drive_api', 'Drive API error listing files', 
+        new Error(`Status ${response.status}: ${response.statusText}`), {
+          category: 'document',
+          severity: 'error',
+          metadata: {
+            status: response.status,
+            statusText: response.statusText,
+            errorData: parsedError
+          }
+      });
+      
+      throw new Error(`Failed to list files: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.files) {
+      await logEvent(supabase, requestId, 'list_files_invalid_response', 'drive_api', 
+        'Drive API returned invalid response without files array', {
+          category: 'document',
+          severity: 'warning',
+          metadata: { responseKeys: Object.keys(data) }
+      });
+      
+      return [];
+    }
+    
+    await logEvent(supabase, requestId, 'list_files_api_success', 'drive_api', 
+      `Drive API returned ${data.files.length} files`, {
+        category: 'document',
+        metadata: { fileCount: data.files.length }
+    });
+    
+    return data.files.map(file => ({
+      id: file.id,
+      name: file.name,
+      file_type: file.mimeType,
+      description: file.description || "",
+      created_at: file.createdTime,
+      updated_at: file.modifiedTime,
+      size: file.size || 0,
+      last_accessed: new Date().toISOString()
+    }));
+  } catch (error) {
+    // Handle network errors
+    if (error.message?.includes('fetch') || error.name === 'TypeError') {
+      await logError(supabase, requestId, 'drive_api', 'Network error listing files', 
+        error, {
+          category: 'network',
+          severity: 'error'
+      });
+    } else {
+      await logError(supabase, requestId, 'drive_api', 'Error listing files', 
+        error, {
+          category: 'document',
+          severity: 'error'
+      });
+    }
+    
+    throw error;
+  }
+}
+
+// Search files in Google Drive with improved error handling
+async function searchDriveFiles(token, query, limit = 10, requestId, supabase) {
+  // Sanitize the query for API safety
+  const sanitizedQuery = query.replace(/'/g, "\\'").trim();
+  const q = `name contains '${sanitizedQuery}' or fullText contains '${sanitizedQuery}'`;
+  
+  await logEvent(supabase, requestId, 'search_files_api_call', 'drive_api', 
+    `Calling Drive API to search for "${sanitizedQuery}" with limit ${limit}`, {
+      category: 'document',
+      metadata: { query: sanitizedQuery, limit }
+  });
+  
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&pageSize=${limit}&fields=files(id,name,mimeType,createdTime,modifiedTime,description,size)`, 
+      {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      let parsedError;
+      
+      try {
+        parsedError = JSON.parse(errorData);
+      } catch {
+        parsedError = { text: errorData };
+      }
+      
+      await logError(supabase, requestId, 'drive_api', 'Drive API error searching files', 
+        new Error(`Status ${response.status}: ${response.statusText}`), {
+          category: 'document',
+          severity: 'error',
+          metadata: {
+            status: response.status,
+            statusText: response.statusText,
+            errorData: parsedError,
+            query: sanitizedQuery
+          }
+      });
+      
+      throw new Error(`Failed to search files: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.files) {
+      await logEvent(supabase, requestId, 'search_files_invalid_response', 'drive_api', 
+        'Drive API returned invalid response without files array', {
+          category: 'document',
+          severity: 'warning',
+          metadata: { responseKeys: Object.keys(data), query: sanitizedQuery }
+      });
+      
+      return [];
+    }
+    
+    await logEvent(supabase, requestId, 'search_files_api_success', 'drive_api', 
+      `Drive API search returned ${data.files.length} files for "${sanitizedQuery}"`, {
+        category: 'document',
+        metadata: { 
+          fileCount: data.files.length,
+          query: sanitizedQuery
+        }
+    });
+    
+    return data.files.map(file => ({
+      id: file.id,
+      name: file.name,
+      file_type: file.mimeType,
+      description: file.description || "",
+      created_at: file.createdTime,
+      updated_at: file.modifiedTime,
+      size: file.size || 0,
+      last_accessed: new Date().toISOString()
+    }));
+  } catch (error) {
+    // Handle network errors
+    if (error.message?.includes('fetch') || error.name === 'TypeError') {
+      await logError(supabase, requestId, 'drive_api', 'Network error searching files', 
+        error, {
+          category: 'network',
+          severity: 'error',
+          metadata: { query: sanitizedQuery }
+      });
+    } else {
+      await logError(supabase, requestId, 'drive_api', 'Error searching files', 
+        error, {
+          category: 'document',
+          severity: 'error',
+          metadata: { query: sanitizedQuery }
+      });
+    }
+    
+    throw error;
+  }
+}
+
+// Get file metadata from Google Drive
+async function getFileMetadata(token, fileId, requestId, supabase) {
+  await logEvent(supabase, requestId, 'file_metadata_api_call', 'drive_api', 
+    `Calling Drive API to get metadata for file ${fileId}`, {
+      category: 'document',
+      metadata: { fileId }
+  });
+  
+  try {
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,createdTime,modifiedTime,description,size`, 
+      {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      let parsedError;
+      
+      try {
+        parsedError = JSON.parse(errorData);
+      } catch {
+        parsedError = { text: errorData };
+      }
+      
+      // Handle 404 specifically
+      if (response.status === 404) {
+        await logError(supabase, requestId, 'drive_api', `File not found: ${fileId}`, 
+          new Error(`File not found: ${fileId}`), {
+            category: 'document',
+            severity: 'warning',
+            metadata: { fileId }
+        });
+        
+        throw new Error(`File not found: ${fileId}`);
+      }
+      
+      await logError(supabase, requestId, 'drive_api', 'Drive API error getting file metadata', 
+        new Error(`Status ${response.status}: ${response.statusText}`), {
+          category: 'document',
+          severity: 'error',
+          metadata: {
+            status: response.status,
+            statusText: response.statusText,
+            errorData: parsedError,
+            fileId
+          }
+      });
+      
+      throw new Error(`Failed to get file metadata: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.id || !data.name) {
+      await logEvent(supabase, requestId, 'file_metadata_invalid_response', 'drive_api', 
+        'Drive API returned invalid metadata response', {
+          category: 'document',
+          severity: 'warning',
+          metadata: { 
+            responseKeys: Object.keys(data),
+            fileId 
+          }
+      });
+      
+      throw new Error(`Invalid metadata response for file: ${fileId}`);
+    }
+    
+    await logEvent(supabase, requestId, 'file_metadata_api_success', 'drive_api', 
+      `Successfully retrieved metadata for file: ${data.name}`, {
+        category: 'document',
+        metadata: { 
+          fileId,
+          fileName: data.name,
+          mimeType: data.mimeType
+        }
+    });
+    
+    return data;
+  } catch (error) {
+    // Handle network errors
+    if (error.message?.includes('fetch') || error.name === 'TypeError') {
+      await logError(supabase, requestId, 'drive_api', 'Network error getting file metadata', 
+        error, {
+          category: 'network',
+          severity: 'error',
+          metadata: { fileId }
+      });
+    } else {
+      await logError(supabase, requestId, 'drive_api', 'Error getting file metadata', 
+        error, {
+          category: 'document',
+          severity: 'error',
+          metadata: { fileId }
+      });
+    }
+    
+    throw error;
+  }
+}
+
+// Get file content from Google Drive
+async function getFileContent(token, fileId, mimeType, requestId, supabase) {
+  await logEvent(supabase, requestId, 'file_content_api_call', 'drive_api', 
+    `Calling Drive API to get content for file ${fileId}`, {
+      category: 'document',
+      metadata: { 
+        fileId,
+        mimeType 
+      }
+  });
+  
+  try {
+    // Determine export format based on mimeType
+    const isGoogleDoc = mimeType?.includes('application/vnd.google-apps');
+    
+    let url;
+    let exportFormat;
+    
+    if (isGoogleDoc) {
+      // Export Google Documents as plain text
+      if (mimeType === 'application/vnd.google-apps.document') {
+        exportFormat = 'text/plain';
+        url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(exportFormat)}`;
+      } 
+      // Export Google Spreadsheets as CSV
+      else if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+        exportFormat = 'text/csv';
+        url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(exportFormat)}`;
+      }
+      // Export Google Slides as plain text
+      else if (mimeType === 'application/vnd.google-apps.presentation') {
+        exportFormat = 'text/plain';
+        url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(exportFormat)}`;
+      }
+      // For other Google formats, try text export
+      else {
+        exportFormat = 'text/plain';
+        url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(exportFormat)}`;
+      }
+      
+      await logEvent(supabase, requestId, 'file_export_format', 'drive_api', 
+        `Exporting Google file as ${exportFormat}`, {
+          category: 'document',
+          metadata: { 
+            fileId,
+            originalMimeType: mimeType,
+            exportFormat
+          }
+      });
+    } else {
+      // Direct download for non-Google docs
+      url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;
+      
+      await logEvent(supabase, requestId, 'file_download_direct', 'drive_api', 
+        `Downloading non-Google file directly`, {
+          category: 'document',
+          metadata: { 
+            fileId,
+            mimeType
+          }
+      });
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      let parsedError;
+      
+      try {
+        parsedError = JSON.parse(errorData);
+      } catch {
+        parsedError = { text: errorData };
+      }
+      
+      await logError(supabase, requestId, 'drive_api', 'Drive API error getting file content', 
+        new Error(`Status ${response.status}: ${response.statusText}`), {
+          category: 'document',
+          severity: 'error',
+          metadata: {
+            status: response.status,
+            statusText: response.statusText,
+            errorData: parsedError,
+            fileId,
+            isGoogleDoc,
+            exportFormat: exportFormat || 'none'
+          }
+      });
+      
+      throw new Error(`Failed to get file content: ${response.status} ${response.statusText}`);
+    }
+    
+    // Get content as text
+    const content = await response.text();
+    
+    // Handle empty content
+    if (!content) {
+      await logEvent(supabase, requestId, 'file_content_empty', 'drive_api', 
+        'Drive API returned empty file content', {
+          category: 'document',
+          severity: 'warning',
+          metadata: { 
+            fileId,
+            mimeType,
+            isGoogleDoc
+          }
+      });
+    }
+    
+    await logEvent(supabase, requestId, 'file_content_api_success', 'drive_api', 
+      `Successfully retrieved content for file: ${fileId}`, {
+        category: 'document',
+        metadata: { 
+          fileId,
+          contentLength: content.length,
+          isGoogleDoc,
+          exportFormat: exportFormat || 'none'
+        }
+    });
+    
+    return {
+      content,
+      exportFormat: exportFormat || null
+    };
+  } catch (error) {
+    // Handle network errors
+    if (error.message?.includes('fetch') || error.name === 'TypeError') {
+      await logError(supabase, requestId, 'drive_api', 'Network error getting file content', 
+        error, {
+          category: 'network',
+          severity: 'error',
+          metadata: { fileId, mimeType }
+      });
+    } else {
+      await logError(supabase, requestId, 'drive_api', 'Error getting file content', 
+        error, {
+          category: 'document',
+          severity: 'error',
+          metadata: { fileId, mimeType }
+      });
+    }
+    
+    throw error;
+  }
+}

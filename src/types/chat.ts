@@ -1,4 +1,3 @@
-
 export interface ChatContextType {
   currentChatId: string | null;
   isLoadingResponse: boolean;
@@ -37,6 +36,7 @@ export interface DocumentReference {
   processed_at?: string;
 }
 
+// Enhanced chat log interface with categorization
 export interface ChatLog {
   requestId: string;
   userId?: string;
@@ -47,6 +47,7 @@ export interface ChatLog {
   durationMs?: number;
   metadata?: Record<string, any>;
   errorDetails?: Record<string, any>;
-  severity?: 'info' | 'warning' | 'error' | 'critical';
+  severity?: 'debug' | 'info' | 'warning' | 'error' | 'critical';
   timestamp?: number;
+  category?: 'auth' | 'network' | 'document' | 'ai_response' | 'database' | 'credential' | 'generic';
 }

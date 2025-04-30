@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 import { Database, FileText, X } from "lucide-react";
@@ -10,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { useChatContext } from "../contexts/ChatContext";
 import { supabase } from "@/integrations/supabase/client";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Panel showing active documents
 const DocumentPanel = () => {
@@ -134,8 +136,12 @@ const ChatPageContent = () => {
         {/* Chat content with max-width container */}
         <div className="flex-1 overflow-hidden flex flex-col items-center">
           <div className="w-full max-w-3xl flex-1 flex flex-col overflow-hidden">
-            <ChatWindow />
-            <ChatInput />
+            <ErrorBoundary component="ChatWindow">
+              <ChatWindow />
+            </ErrorBoundary>
+            <ErrorBoundary component="ChatInput">
+              <ChatInput />
+            </ErrorBoundary>
           </div>
         </div>
       </div>
@@ -146,9 +152,11 @@ const ChatPageContent = () => {
 
 const ChatPage = () => {
   return (
-    <ChatProvider>
-      <ChatPageContent />
-    </ChatProvider>
+    <ErrorBoundary component="ChatPage">
+      <ChatProvider>
+        <ChatPageContent />
+      </ChatProvider>
+    </ErrorBoundary>
   );
 };
 

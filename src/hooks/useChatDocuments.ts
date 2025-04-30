@@ -1,6 +1,12 @@
 
 import { useState } from "react";
-import { logChatEvent } from "../utils/chatLogging";
+import { 
+  logChatEvent, 
+  logChatError, 
+  generateRequestId, 
+  createErrorEventName,
+  formatErrorForLogging
+} from "../utils/chatLogging";
 import { toast } from "@/components/ui/sonner";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -22,11 +28,15 @@ export const useChatDocuments = () => {
     
     setIsFetching(true);
     
+    // Generate a request ID if not provided
+    const fetchRequestId = requestId || generateRequestId();
+    const startTime = performance.now();
+    
     try {
       const { supabase } = await import("@/integrations/supabase/client");
       
       // Use UUID for request ID to ensure it's compatible with UUID columns in the database
-      const formattedRequestId = requestId || uuidv4();
+      const formattedRequestId = fetchRequestId;
       
       // Format chatId to ensure UUID compatibility
       let formattedChatId = chatId;
@@ -39,11 +49,21 @@ export const useChatDocuments = () => {
           console.log(`Converting guest chat ID ${chatId} to UUID ${formattedChatId} for database compatibility`);
         }
       } catch (chatIdError) {
-        console.error("Error formatting chatId:", chatIdError);
+        await logChatError(
+          formattedRequestId,
+          'useChatDocuments',
+          'Error formatting chatId',
+          chatIdError,
+          { originalChatId: chatId },
+          undefined,
+          userId,
+          'warning',
+          'document'
+        );
         // Continue with original chatId if formatting fails
       }
       
-      // Log the document fetch attempt
+      // Log the document fetch attempt with enhanced metadata
       try {
         await logChatEvent({
           requestId: formattedRequestId,
@@ -52,7 +72,12 @@ export const useChatDocuments = () => {
           eventType: 'fetch_document_contents',
           component: 'useChatDocuments',
           message: `Fetching contents for ${documentIds.length} documents`,
-          metadata: { documentIds }
+          metadata: { 
+            documentIds,
+            isAuthenticated: !!userId,
+            isGuest: !userId && chatId?.startsWith('guest-')
+          },
+          category: 'document'
         });
       } catch (logError) {
         console.error("Failed to log chat event:", logError);
@@ -60,138 +85,175 @@ export const useChatDocuments = () => {
       }
 
       const documents = [];
+      const processedIds: Record<string, boolean> = {};
+      const errors: Record<string, any> = {};
       
       for (const id of documentIds) {
         try {
+          // Skip duplicate IDs
+          if (processedIds[id]) {
+            await logChatEvent({
+              requestId: formattedRequestId,
+              userId,
+              chatId: formattedChatId,
+              eventType: 'document_duplicate_id',
+              component: 'useChatDocuments',
+              message: `Skipping duplicate document ID: ${id}`,
+              severity: 'warning',
+              category: 'document'
+            });
+            continue;
+          }
+          
+          processedIds[id] = true;
+          
           // Add validation to ensure documentId is properly formatted
           if (!id || typeof id !== 'string') {
-            console.warn(`Invalid document ID: ${id}, skipping`);
+            await logChatEvent({
+              requestId: formattedRequestId,
+              userId,
+              chatId: formattedChatId,
+              eventType: 'document_invalid_id',
+              component: 'useChatDocuments',
+              message: `Invalid document ID: ${id}, skipping`,
+              severity: 'warning',
+              category: 'document',
+              metadata: { invalidId: id, type: typeof id }
+            });
             continue;
           }
 
-          console.log(`Fetching document content for ID: ${id}`);
-          
-          const response = await supabase.functions.invoke('drive-integration', {
-            body: { 
-              operation: 'get', 
-              fileId: id, 
-              requestId: formattedRequestId 
-            }
+          await logChatEvent({
+            requestId: formattedRequestId,
+            userId,
+            chatId: formattedChatId,
+            eventType: 'document_fetch_started',
+            component: 'useChatDocuments',
+            message: `Fetching document content for ID: ${id}`,
+            category: 'document'
           });
           
-          // Check for response.error first (API-level error)
-          if (response.error) {
-            console.error("Drive function error:", response.error);
-            
-            // Determine if this is a credentials error
-            const errorMsg = response.error.message || "";
-            const isCredentialsError = 
-              errorMsg.includes("credentials") || 
-              errorMsg.includes("authentication") ||
-              errorMsg.includes("parse") ||
-              errorMsg.includes("JSON");
-                                      
-            // Provide a user-friendly error message based on error type
-            if (isCredentialsError) {
-              toast.error("Google Drive credentials are invalid or malformed. Please check your configuration.");
-              console.error("Google Drive credentials error details:", errorMsg);
-            } else {
-              toast.error(`Error fetching document: ${errorMsg || "Unknown error"}`);
-            }
-            
-            try {
-              await logChatEvent({
-                requestId: formattedRequestId,
-                userId,
-                chatId: formattedChatId,
-                eventType: 'fetch_document_error',
-                component: 'useChatDocuments',
-                message: `Drive function error: ${errorMsg || "Unknown error"}`,
-                severity: 'error',
-                errorDetails: response.error
-              });
-            } catch (logErr) {
-              console.error("Failed to log document fetch error:", logErr);
-            }
-            
-            continue;
-          }
+          const documentStartTime = performance.now();
           
-          // Check for application-level error in the data object
-          const data = response.data;
-          if (data?.error) {
-            try {
-              await logChatEvent({
-                requestId: formattedRequestId,
-                userId,
-                chatId: formattedChatId,
-                eventType: 'fetch_document_error',
-                component: 'useChatDocuments',
-                message: `Error fetching document ${id}: ${data.error || "Unknown error"}`,
-                severity: 'error',
-                errorDetails: data.error
-              });
-            } catch (logErr) {
-              console.error("Failed to log document fetch error:", logErr);
-            }
-            
-            // Show user-friendly error message
-            if (data.error?.includes("Google Drive credentials not configured")) {
-              toast.error("Document access is unavailable. Google Drive credentials are not configured.");
-            } else if (data.error?.includes("credentials") || data.error?.includes("parse")) {
-              toast.error("Invalid Google Drive credentials format. Please check your configuration.");
-              console.error("Invalid Google Drive credentials format details:", data.error);
-            } else {
-              toast.error(`Error fetching document: ${data.error}`);
-            }
-            
-            continue;
-          }
-          
-          if (!data) {
-            try {
-              await logChatEvent({
-                requestId: formattedRequestId,
-                userId,
-                chatId: formattedChatId,
-                eventType: 'fetch_document_empty',
-                component: 'useChatDocuments',
-                message: `Empty response fetching document ${id}`,
-                severity: 'warning'
-              });
-            } catch (logErr) {
-              console.error("Failed to log empty document response:", logErr);
-            }
-            continue;
-          }
-          
-          if (data?.file && data?.content) {
-            documents.push({
-              id,
-              name: data.file.name,
-              content: data.content.content || "No content available",
-              type: data.file.file_type
+          // Track edge function network error separately
+          try {
+            const response = await supabase.functions.invoke('drive-integration', {
+              body: { 
+                operation: 'get', 
+                fileId: id, 
+                requestId: formattedRequestId 
+              }
             });
             
-            try {
+            // Check for response.error first (API-level error)
+            if (response.error) {
+              errors[id] = response.error;
+              
+              // Categorize the error for better diagnostics
+              const errorMsg = response.error.message || "";
+              const isCredentialsError = 
+                errorMsg.includes("credentials") || 
+                errorMsg.includes("authentication") ||
+                errorMsg.includes("parse") ||
+                errorMsg.includes("JSON") ||
+                errorMsg.includes("key");
+              
+              const isNetworkError = 
+                errorMsg.includes("network") ||
+                errorMsg.includes("timeout") ||
+                errorMsg.includes("connection") ||
+                errorMsg.includes("ENOTFOUND");
+              
+              const errorCategory = isCredentialsError ? 'credential' : 
+                                  isNetworkError ? 'network' : 'document';
+                                      
+              // Log with appropriate category
+              await logChatError(
+                formattedRequestId,
+                'useChatDocuments',
+                `Drive function error: ${errorMsg || "Unknown error"}`,
+                response.error,
+                { 
+                  documentId: id,
+                  endpoint: 'drive-integration',
+                  operation: 'get'
+                },
+                formattedChatId,
+                userId,
+                'error',
+                errorCategory
+              );
+                                      
+              // Provide a user-friendly error message based on error type
+              if (isCredentialsError) {
+                toast.error("Google Drive credentials are invalid or malformed. Please check your configuration.");
+                console.error("Google Drive credentials error details:", errorMsg);
+              } else if (isNetworkError) {
+                toast.error("Network error when connecting to Google Drive. Please check your internet connection.");
+              } else {
+                toast.error(`Error fetching document: ${errorMsg || "Unknown error"}`);
+              }
+              
+              continue;
+            }
+            
+            // Check for application-level error in the data object
+            const data = response.data;
+            if (!data) {
               await logChatEvent({
                 requestId: formattedRequestId,
                 userId,
                 chatId: formattedChatId,
-                eventType: 'document_content_fetched',
+                eventType: 'document_empty_response',
                 component: 'useChatDocuments',
-                message: `Successfully fetched document: ${data.file.name}`,
-                metadata: {
-                  documentId: id,
-                  documentName: data.file.name,
-                  contentLength: data.content.content?.length || 0
-                }
+                message: `Empty data response fetching document ${id}`,
+                severity: 'warning',
+                category: 'document'
               });
-            } catch (logErr) {
-              console.error("Failed to log successful document fetch:", logErr);
+              continue;
             }
-          } else {
-            try {
+            
+            if (data.error) {
+              errors[id] = data.error;
+              
+              // Determine appropriate error category
+              const errorMsg = data.error || "";
+              const errorCategory = 
+                errorMsg.includes("credentials") ? 'credential' : 
+                errorMsg.includes("permission") ? 'auth' :
+                errorMsg.includes("not found") ? 'document' : 'generic';
+              
+              await logChatError(
+                formattedRequestId,
+                'useChatDocuments',
+                `Error fetching document ${id}: ${data.error || "Unknown error"}`,
+                { message: data.error },
+                { documentId: id },
+                formattedChatId,
+                userId,
+                'error',
+                errorCategory
+              );
+              
+              // Show user-friendly error message
+              if (data.error?.includes("Google Drive credentials not configured")) {
+                toast.error("Document access is unavailable. Google Drive credentials are not configured.");
+              } else if (data.error?.includes("credentials") || data.error?.includes("parse")) {
+                toast.error("Invalid Google Drive credentials format. Please check your configuration.");
+                console.error("Invalid Google Drive credentials format details:", data.error);
+              } else if (data.error?.includes("permission")) {
+                toast.error("Permission denied accessing document. Check service account permissions.");
+              } else if (data.error?.includes("not found")) {
+                toast.error(`Document not found: ${id}`);
+              } else {
+                toast.error(`Error fetching document: ${data.error}`);
+              }
+              
+              continue;
+            }
+            
+            // Validate response structure
+            if (!data.file || !data.content) {
               await logChatEvent({
                 requestId: formattedRequestId,
                 userId,
@@ -200,51 +262,121 @@ export const useChatDocuments = () => {
                 component: 'useChatDocuments',
                 message: `Invalid document structure for ${id}`,
                 severity: 'warning',
+                category: 'document',
                 metadata: { 
-                  hasFile: !!data?.file, 
-                  hasContent: !!data?.content 
+                  hasFile: !!data.file, 
+                  hasContent: !!data.content,
+                  responseKeys: Object.keys(data)
                 }
               });
-            } catch (logErr) {
-              console.error("Failed to log invalid document structure:", logErr);
+              continue;
             }
+            
+            // Process valid document
+            if (data.file && data.content) {
+              documents.push({
+                id,
+                name: data.file.name,
+                content: data.content.content || "No content available",
+                type: data.file.file_type
+              });
+              
+              await logChatEvent({
+                requestId: formattedRequestId,
+                userId,
+                chatId: formattedChatId,
+                eventType: 'document_content_fetched',
+                component: 'useChatDocuments',
+                message: `Successfully fetched document: ${data.file.name}`,
+                durationMs: Math.round(performance.now() - documentStartTime),
+                metadata: {
+                  documentId: id,
+                  documentName: data.file.name,
+                  contentLength: data.content.content?.length || 0,
+                  fileType: data.file.file_type
+                },
+                category: 'document'
+              });
+            }
+          } catch (networkErr) {
+            errors[id] = networkErr;
+            
+            await logChatError(
+              formattedRequestId,
+              'useChatDocuments',
+              `Network error fetching document ${id}`,
+              networkErr,
+              { documentId: id },
+              formattedChatId,
+              userId,
+              'error',
+              'network'
+            );
+            
+            toast.error(`Network error fetching document: ${networkErr.message || "Unknown error"}`);
           }
         } catch (err) {
-          console.error("Exception in document fetch loop:", err);
-          try {
-            await logChatEvent({
-              requestId: formattedRequestId,
-              userId,
-              chatId: formattedChatId,
-              eventType: 'document_fetch_exception',
-              component: 'useChatDocuments',
-              message: `Exception fetching document ${id}: ${err instanceof Error ? err.message : "Unknown error"}`,
-              severity: 'error',
-              errorDetails: err
-            });
-          } catch (logErr) {
-            console.error("Failed to log document fetch exception:", logErr);
-          }
+          errors[id] = err;
+          
+          await logChatError(
+            formattedRequestId,
+            'useChatDocuments',
+            `Exception in document fetch loop for ${id}`,
+            err,
+            { documentId: id },
+            formattedChatId,
+            userId,
+            'error',
+            'document'
+          );
         }
       }
       
-      try {
+      // Consolidate error information
+      const errorCount = Object.keys(errors).length;
+      if (errorCount > 0) {
         await logChatEvent({
           requestId: formattedRequestId,
           userId,
           chatId: formattedChatId,
-          eventType: 'document_fetch_complete',
+          eventType: 'document_fetch_errors',
           component: 'useChatDocuments',
-          message: `Fetched ${documents.length}/${documentIds.length} documents successfully`,
+          message: `Encountered ${errorCount} errors while fetching documents`,
+          severity: 'warning',
           metadata: { 
-            success: documents.length, 
-            total: documentIds.length,
-            documentNames: documents.map(d => d.name)
-          }
+            errorCount,
+            errorDocumentIds: Object.keys(errors),
+            successCount: documents.length,
+            totalAttempted: documentIds.length
+          },
+          category: 'document'
         });
-      } catch (logErr) {
-        console.error("Failed to log document fetch completion:", logErr);
+        
+        // If all documents failed, show a more specific error toast
+        if (documents.length === 0 && documentIds.length > 0) {
+          toast.error(`Failed to retrieve any document contents. Please check the document permissions.`);
+        } 
+        // If some succeeded, show a warning toast
+        else if (documents.length < documentIds.length) {
+          toast.warning(`Retrieved ${documents.length} of ${documentIds.length} documents. Some documents couldn't be accessed.`);
+        }
       }
+      
+      await logChatEvent({
+        requestId: formattedRequestId,
+        userId,
+        chatId: formattedChatId,
+        eventType: 'document_fetch_complete',
+        component: 'useChatDocuments',
+        message: `Fetched ${documents.length}/${documentIds.length} documents successfully`,
+        durationMs: Math.round(performance.now() - startTime),
+        metadata: { 
+          success: documents.length, 
+          total: documentIds.length,
+          documentNames: documents.map(d => d.name)
+        },
+        category: 'document'
+      });
       
       return documents;
     } catch (err) {
@@ -257,15 +389,20 @@ export const useChatDocuments = () => {
       
       // Safely log the error without referencing potentially invalid chatId
       try {
-        await logChatEvent({
-          requestId: fallbackRequestId,
+        await logChatError(
+          fetchRequestId || fallbackRequestId,
+          'useChatDocuments',
+          `Failed to fetch document contents: ${errorMessage}`,
+          err,
+          {
+            documentCount: documentIds?.length || 0,
+            elapsedTime: Math.round(performance.now() - startTime)
+          },
+          undefined,
           userId,
-          eventType: 'document_fetch_failed',
-          component: 'useChatDocuments',
-          message: `Failed to fetch document contents: ${errorMessage}`,
-          severity: 'error',
-          errorDetails: err
-        });
+          'error',
+          'document'
+        );
       } catch (logErr) {
         // If even logging fails, just console log
         console.error("Error in document fetching and logging:", logErr);
