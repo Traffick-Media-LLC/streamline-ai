@@ -57,7 +57,7 @@ export const useChatDocuments = () => {
           { originalChatId: chatId },
           undefined,
           userId,
-          'error', // Changed from 'warning' to 'error'
+          'error',
           'document'
         );
         // Continue with original chatId if formatting fails
@@ -68,7 +68,7 @@ export const useChatDocuments = () => {
         await logChatEvent({
           requestId: formattedRequestId,
           userId,
-          chatId: formattedChatId, // Use the UUID-compatible chat ID for database
+          chatId: formattedChatId,
           eventType: 'fetch_document_contents',
           component: 'useChatDocuments',
           message: `Fetching contents for ${documentIds.length} documents`,
@@ -141,7 +141,8 @@ export const useChatDocuments = () => {
               body: { 
                 operation: 'get', 
                 fileId: id, 
-                requestId: formattedRequestId 
+                requestId: formattedRequestId,
+                includeWebLink: true // Request web link in response
               }
             });
             
@@ -278,7 +279,9 @@ export const useChatDocuments = () => {
                 id,
                 name: data.file.name,
                 content: data.content.content || "No content available",
-                type: data.file.file_type
+                type: data.file.file_type,
+                webLink: data.file.webLink || null, // Include web link if available
+                thumbnailLink: data.file.thumbnailLink || null // Include thumbnail if available
               });
               
               await logChatEvent({
@@ -293,7 +296,8 @@ export const useChatDocuments = () => {
                   documentId: id,
                   documentName: data.file.name,
                   contentLength: data.content.content?.length || 0,
-                  fileType: data.file.file_type
+                  fileType: data.file.file_type,
+                  hasWebLink: !!data.file.webLink
                 },
                 category: 'document'
               });
@@ -416,11 +420,140 @@ export const useChatDocuments = () => {
     }
   };
 
+  // New function to search for documents
+  const searchDocuments = async (
+    query: string,
+    userId?: string,
+    chatId?: string,
+    requestId?: string
+  ) => {
+    if (!query || query.trim() === '') {
+      toast.error("Please enter a search term");
+      return [];
+    }
+    
+    setIsFetching(true);
+    
+    // Generate a request ID if not provided
+    const searchRequestId = requestId || generateRequestId();
+    const startTime = performance.now();
+    
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      
+      // Format chatId for database compatibility
+      let formattedChatId = chatId;
+      
+      try {
+        if (chatId && chatId.startsWith('guest-')) {
+          formattedChatId = uuidv4();
+        }
+      } catch (error) {
+        console.error("Error formatting chat ID:", error);
+      }
+      
+      await logChatEvent({
+        requestId: searchRequestId,
+        userId,
+        chatId: formattedChatId,
+        eventType: 'document_search_started',
+        component: 'useChatDocuments',
+        message: `Searching for documents with query: "${query}"`,
+        metadata: { searchQuery: query },
+        category: 'document'
+      });
+      
+      // Call the drive-integration edge function with search operation
+      const response = await supabase.functions.invoke('drive-integration', {
+        body: { 
+          operation: 'search', 
+          query,
+          requestId: searchRequestId,
+          includeWebLinks: true // Request web links in search results
+        }
+      });
+      
+      if (response.error) {
+        await logChatError(
+          searchRequestId,
+          'useChatDocuments',
+          `Error searching documents: ${response.error.message || "Unknown error"}`,
+          response.error,
+          { searchQuery: query },
+          formattedChatId,
+          userId,
+          'error',
+          'document'
+        );
+        
+        toast.error(`Error searching documents: ${response.error.message || "Unknown error"}`);
+        return [];
+      }
+      
+      const data = response.data;
+      
+      if (!data || !data.files || !Array.isArray(data.files)) {
+        await logChatEvent({
+          requestId: searchRequestId,
+          userId,
+          chatId: formattedChatId,
+          eventType: 'document_search_invalid_response',
+          component: 'useChatDocuments',
+          message: 'Invalid response format from search',
+          severity: 'warning',
+          category: 'document'
+        });
+        
+        toast.error("Invalid response from document search");
+        return [];
+      }
+      
+      await logChatEvent({
+        requestId: searchRequestId,
+        userId,
+        chatId: formattedChatId,
+        eventType: 'document_search_completed',
+        component: 'useChatDocuments',
+        message: `Found ${data.files.length} documents for query "${query}"`,
+        durationMs: Math.round(performance.now() - startTime),
+        metadata: { 
+          resultCount: data.files.length,
+          fileNames: data.files.slice(0, 5).map(f => f.name) // First 5 for brevity
+        },
+        category: 'document'
+      });
+      
+      return data.files;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      
+      console.error("Document search error:", errorMessage);
+      
+      await logChatError(
+        searchRequestId,
+        'useChatDocuments',
+        `Exception searching documents: ${errorMessage}`,
+        err,
+        { searchQuery: query },
+        formattedChatId,
+        userId,
+        'error',
+        'document'
+      );
+      
+      toast.error("Failed to search documents. Please try again.");
+      return [];
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
   return {
     documentContext,
     setDocumentContext,
     getDocumentContext,
     fetchDocumentContents,
+    searchDocuments, // Add the new function
     isFetching
   };
 };

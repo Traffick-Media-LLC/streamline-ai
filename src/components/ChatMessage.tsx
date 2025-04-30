@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Message } from "../types/chat";
 import { formatTimestamp } from "../utils/chatUtils";
 import { renderTextWithLinks } from "../utils/textUtils";
-import { Copy, Edit, FileText } from "lucide-react";
+import { Copy, Edit, FileText, ExternalLink } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useChatContext } from "../contexts/ChatContext";
@@ -90,7 +90,19 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
                         className="bg-muted/50 text-xs px-2 py-1 rounded flex items-center gap-1"
                       >
                         <FileText size={12} className="text-blue-500" />
-                        <span>{doc.name}</span>
+                        {doc.webLink ? (
+                          <a 
+                            href={doc.webLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-blue-600 hover:underline"
+                          >
+                            <span>{doc.name}</span>
+                            <ExternalLink size={10} className="inline-block" />
+                          </a>
+                        ) : (
+                          <span>{doc.name}</span>
+                        )}
                       </div>
                     ))}
                   </div>

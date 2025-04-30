@@ -1,3 +1,4 @@
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatState } from "./useChatState";
 import { useChatCreation } from "./useChatCreation";
@@ -8,6 +9,7 @@ import { useChatSending } from "./useChatSending";
 import { useChatDocuments } from "./useChatDocuments";
 import { toast } from "@/components/ui/sonner";
 import { useState } from "react";
+import { generateRequestId } from "../utils/chatLogging";
 
 export const useChatOperations = () => {
   const { user, isGuest } = useAuth();
@@ -36,6 +38,7 @@ export const useChatOperations = () => {
     setDocumentContext, 
     getDocumentContext, 
     fetchDocumentContents,
+    searchDocuments,
     isFetching 
   } = useChatDocuments();
   
@@ -79,6 +82,45 @@ export const useChatOperations = () => {
     
     // Update the context
     setDocumentContext(validIds);
+  };
+
+  // New function to handle direct file searches
+  const searchDriveFiles = async (query: string) => {
+    if (!query || query.trim() === '') {
+      toast.error("Please enter a search term");
+      return;
+    }
+    
+    // Generate a unique request ID for this search operation
+    const requestId = generateRequestId();
+    
+    try {
+      // Show loading toast
+      toast.loading(`Searching for "${query}"...`, { id: requestId });
+      
+      // Perform the search
+      const results = await searchDocuments(query, user?.id, currentChatId || undefined, requestId);
+      
+      toast.dismiss(requestId);
+      
+      if (results.length === 0) {
+        toast.info(`No files found for "${query}"`);
+        return;
+      }
+      
+      // Create a message that contains the file search results
+      const filesMessage = `I found ${results.length} file${results.length > 1 ? 's' : ''} matching "${query}":\n\n` +
+        results.slice(0, 5).map((file, index) => {
+          return `${index + 1}. ${file.name} - ${file.webLink || 'No link available'}`;
+        }).join('\n\n');
+      
+      // Send the search results as a message in the chat
+      await sendMessage(filesMessage, results.map(file => file.id));
+      
+    } catch (error) {
+      toast.dismiss(requestId);
+      toast.error(`Error searching for files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   // Helper function to show appropriate Google Drive setup instructions
@@ -132,6 +174,6 @@ export const useChatOperations = () => {
     isFetchingDocuments: isFetching,
     showDriveSetupInstructions,
     sharedDriveId,
-    setSharedDriveId
+    searchDriveFiles // Add the search function to the return object
   };
 };

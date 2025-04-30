@@ -1,3 +1,4 @@
+
 export interface ChatContextType {
   currentChatId: string | null;
   isLoadingResponse: boolean;
@@ -12,6 +13,7 @@ export interface ChatContextType {
   showDriveSetupInstructions: () => void;
   isFetchingDocuments?: boolean;
   sharedDriveId?: string; // Added this property
+  searchDriveFiles?: (query: string) => Promise<void>; // Added search files function
 }
 
 export interface Chat {
@@ -37,6 +39,8 @@ export interface DocumentReference {
   name: string;
   content?: string;
   processed_at?: string;
+  webLink?: string; // Added web link to document references
+  thumbnailLink?: string; // Added thumbnail link
 }
 
 // Enhanced chat log interface with categorization

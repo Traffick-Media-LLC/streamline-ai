@@ -27,7 +27,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     getDocumentContext,
     showDriveSetupInstructions,
     isFetchingDocuments,
-    sharedDriveId
+    sharedDriveId,
+    searchDriveFiles
   } = useChatOperations();
 
   const value: ChatContextType = {
@@ -43,7 +44,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     getDocumentContext,
     showDriveSetupInstructions,
     isFetchingDocuments,
-    sharedDriveId
+    sharedDriveId,
+    searchDriveFiles
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
