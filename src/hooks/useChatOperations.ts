@@ -8,6 +8,7 @@ import { useChatSelection } from "./useChatSelection";
 import { useChatSending } from "./useChatSending";
 import { useChatDocuments } from "./useChatDocuments";
 import { toast } from "@/components/ui/sonner";
+import { useState } from "react";
 
 export const useChatOperations = () => {
   const { user, isGuest } = useAuth();
@@ -22,6 +23,11 @@ export const useChatOperations = () => {
     setIsInitializing,
     getCurrentChat
   } = useChatState();
+  
+  // Add state for shared drive ID
+  const [sharedDriveId, setSharedDriveId] = useState<string | undefined>(
+    () => Deno.env.get("GOOGLE_SHARED_DRIVE_ID") || undefined
+  );
   
   const { createNewChat } = useChatCreation(user, isGuest, setChats, setCurrentChatId);
   const { handleMessageUpdate } = useMessageOperations(user, isGuest, setChats);
@@ -124,6 +130,8 @@ export const useChatOperations = () => {
     setDocumentContext: updateDocumentContext,
     getDocumentContext,
     isFetchingDocuments: isFetching,
-    showDriveSetupInstructions
+    showDriveSetupInstructions,
+    sharedDriveId,
+    setSharedDriveId
   };
 };

@@ -540,8 +540,15 @@ async function createDriveClient(requestId: string | undefined) {
         
         try {
           // First try with a more specific request to check permissions
+          let aboutUrl = `https://www.googleapis.com/drive/v3/about?fields=user`;
+          
+          // If using shared drive, add the parameters
+          if (sharedDriveId) {
+            aboutUrl += `&supportsAllDrives=true`;
+          }
+          
           const testResponse = await fetch(
-            `https://www.googleapis.com/drive/v3/about?fields=user`,
+            aboutUrl,
             {
               headers: {
                 'Authorization': `Bearer ${accessToken}`
@@ -868,9 +875,18 @@ serve(async (req) => {
             // Try the about endpoint which requires less permissions
             const accessToken = await generateJWT(requestId);
             
+            // Get shared drive ID from environment or request
+            const sharedDriveId = Deno.env.get("GOOGLE_SHARED_DRIVE_ID");
+            
             // First test the about endpoint (requires less permissions)
+            // Include shared drive parameters if we're using a shared drive
+            let aboutUrl = `https://www.googleapis.com/drive/v3/about?fields=user,storageQuota`;
+            if (sharedDriveId) {
+              aboutUrl += `&supportsAllDrives=true`;
+            }
+            
             const aboutResponse = await fetch(
-              `https://www.googleapis.com/drive/v3/about?fields=user,storageQuota`,
+              aboutUrl,
               {
                 headers: {
                   'Authorization': `Bearer ${accessToken}`
@@ -897,7 +913,6 @@ serve(async (req) => {
             // Now test the files.list endpoint (requires more permissions)
             // Include shared drive parameters if we have a shared drive ID
             let testUrl = `https://www.googleapis.com/drive/v3/files?pageSize=1`;
-            const sharedDriveId = Deno.env.get("GOOGLE_SHARED_DRIVE_ID");
             
             if (sharedDriveId) {
               testUrl += `&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=drive&driveId=${sharedDriveId}`;
