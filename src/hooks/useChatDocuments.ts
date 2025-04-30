@@ -1,8 +1,6 @@
 
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { logChatEvent, logChatError, generateRequestId } from "../utils/chatLogging";
-import { DocumentReference } from "../types/chat";
+import { logChatEvent } from "../utils/chatLogging";
 
 export const useChatDocuments = () => {
   const [documentContext, setDocumentContext] = useState<string[]>([]);
@@ -11,133 +9,120 @@ export const useChatDocuments = () => {
     return documentContext;
   };
 
-  const handleSetDocumentContext = (docIds: string[]) => {
-    const requestId = generateRequestId();
-    
-    logChatEvent({
-      requestId,
-      eventType: 'set_document_context',
-      component: 'useChatDocuments',
-      message: `Setting document context: ${docIds.length} documents`,
-      metadata: { documentIds: docIds, previousDocumentIds: documentContext }
-    });
-    
-    setDocumentContext(docIds);
-  };
-  
   const fetchDocumentContents = async (
     documentIds: string[], 
-    userId?: string | null,
+    userId?: string, 
     chatId?: string,
-    requestId: string = generateRequestId()
-  ): Promise<DocumentReference[]> => {
-    let documentContents: DocumentReference[] = [];
+    requestId?: string
+  ) => {
+    if (!documentIds || documentIds.length === 0) return [];
     
-    if (documentIds.length > 0) {
-      logChatEvent({
-        requestId,
-        userId: userId,
-        chatId,
-        eventType: 'fetch_document_contents_started',
-        component: 'useChatDocuments',
-        message: `Fetching content for ${documentIds.length} documents`
-      });
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
       
-      for (const docId of documentIds) {
+      // Log the document fetch attempt
+      logChatEvent({
+        requestId: requestId || 'unknown',
+        userId,
+        chatId,
+        eventType: 'fetch_document_contents',
+        component: 'useChatDocuments',
+        message: `Fetching contents for ${documentIds.length} documents`,
+        metadata: { documentIds }
+      });
+
+      const documents = [];
+      
+      for (const id of documentIds) {
         try {
-          logChatEvent({
-            requestId,
-            userId: userId,
-            chatId,
-            eventType: 'fetch_document_content',
-            component: 'useChatDocuments',
-            message: `Fetching document ${docId}`,
-            metadata: { documentId: docId }
-          });
-          
           const { data, error } = await supabase.functions.invoke('drive-integration', {
-            body: { operation: 'get', fileId: docId },
+            body: { operation: 'get', fileId: id }
           });
           
           if (error) {
-            await logChatError(
-              requestId,
-              'useChatDocuments',
-              `Error fetching document ${docId}`,
-              error,
-              { documentId: docId },
+            logChatEvent({
+              requestId: requestId || 'unknown',
+              userId,
               chatId,
-              userId
-            );
+              eventType: 'fetch_document_error',
+              component: 'useChatDocuments',
+              message: `Error fetching document ${id}`,
+              severity: 'error',
+              errorDetails: error
+            });
             continue;
           }
           
-          if (data?.content?.content) {
-            documentContents.push({
-              id: docId,
+          if (data && data.file && data.content) {
+            documents.push({
+              id,
               name: data.file.name,
               content: data.content.content,
-              processed_at: data.content.processed_at
+              type: data.file.file_type
             });
             
             logChatEvent({
-              requestId,
-              userId: userId,
+              requestId: requestId || 'unknown',
+              userId,
               chatId,
               eventType: 'document_content_fetched',
               component: 'useChatDocuments',
-              message: `Document ${docId} fetched successfully`,
-              metadata: { 
-                documentId: docId,
+              message: `Successfully fetched document: ${data.file.name}`,
+              metadata: {
+                documentId: id,
                 documentName: data.file.name,
-                contentSize: data.content.content.length
+                contentLength: data.content.content.length
               }
             });
-          } else {
-            logChatEvent({
-              requestId,
-              userId: userId,
-              chatId,
-              eventType: 'document_content_empty',
-              component: 'useChatDocuments',
-              message: `Document ${docId} has no content`,
-              severity: 'warning',
-              metadata: { documentId: docId }
-            });
           }
-        } catch (error) {
-          await logChatError(
-            requestId,
-            'useChatDocuments',
-            `Exception fetching document ${docId}`,
-            error,
-            { documentId: docId },
+        } catch (err) {
+          logChatEvent({
+            requestId: requestId || 'unknown',
+            userId,
             chatId,
-            userId
-          );
+            eventType: 'document_fetch_exception',
+            component: 'useChatDocuments',
+            message: `Exception fetching document ${id}`,
+            severity: 'error',
+            errorDetails: err
+          });
         }
       }
       
       logChatEvent({
-        requestId,
-        userId: userId,
+        requestId: requestId || 'unknown',
+        userId,
         chatId,
-        eventType: 'fetch_document_contents_completed',
+        eventType: 'document_fetch_complete',
         component: 'useChatDocuments',
-        message: `Fetched ${documentContents.length}/${documentIds.length} documents successfully`,
+        message: `Fetched ${documents.length}/${documentIds.length} documents successfully`,
         metadata: { 
-          successCount: documentContents.length,
-          totalCount: documentIds.length
+          success: documents.length, 
+          total: documentIds.length,
+          documentNames: documents.map(d => d.name)
         }
       });
+      
+      return documents;
+    } catch (err) {
+      logChatEvent({
+        requestId: requestId || 'unknown',
+        userId,
+        chatId,
+        eventType: 'document_fetch_failed',
+        component: 'useChatDocuments',
+        message: 'Failed to fetch document contents',
+        severity: 'error',
+        errorDetails: err
+      });
+      
+      return [];
     }
-
-    return documentContents;
   };
 
   return {
     documentContext,
-    setDocumentContext: handleSetDocumentContext,
+    setDocumentContext,
     getDocumentContext,
     fetchDocumentContents
   };
