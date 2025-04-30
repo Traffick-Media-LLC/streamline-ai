@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -331,6 +332,10 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
     });
 
     const data = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error(`OpenAI API returned invalid response: ${JSON.stringify(data)}`);
+    }
     
     const aiDuration = calculateDuration(aiStartTime);
     await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 'Received response from OpenAI API', {
