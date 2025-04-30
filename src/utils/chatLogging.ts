@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ChatLog } from "../types/chat";
 import { v4 as uuidv4 } from "uuid";
@@ -21,22 +22,6 @@ export const calculateDuration = (startTime: number): number => {
 // Enhanced log category types for better error classification
 export type LogSeverity = 'debug' | 'info' | 'warning' | 'error' | 'critical';
 export type LogCategory = 'auth' | 'network' | 'document' | 'ai_response' | 'database' | 'credential' | 'generic';
-
-// Enhanced chat log interface with categorization
-export interface ChatLog {
-  requestId: string;
-  userId?: string;
-  chatId?: string;
-  eventType: string;
-  component: string;
-  message: string;
-  durationMs?: number;
-  metadata?: Record<string, any>;
-  errorDetails?: Record<string, any>;
-  severity?: 'debug' | 'info' | 'warning' | 'error' | 'critical';
-  timestamp?: number;
-  category?: 'auth' | 'network' | 'document' | 'ai_response' | 'database' | 'credential' | 'generic';
-}
 
 // Log a chat event to the database and console with enhanced details
 export const logChatEvent = async (log: ChatLog): Promise<void> => {
@@ -280,6 +265,11 @@ export class ErrorTracker {
       severity,
       category
     );
+  }
+  
+  // Getter method for chatId to fix TypeScript error in useChatSending.ts
+  getChatId(): string | undefined {
+    return this.chatId;
   }
 }
 
