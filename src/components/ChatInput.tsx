@@ -21,7 +21,8 @@ const ChatInput = () => {
     isLoadingResponse, 
     setDocumentContext, 
     getDocumentContext,
-    sharedDriveId
+    sharedDriveId,
+    showDriveSetupInstructions
   } = useChatContext();
 
   const selectedDocuments = getDocumentContext();
@@ -82,6 +83,16 @@ const ChatInput = () => {
     // Close doc selector if opening file search
     if (!showFileSearch) {
       setShowDocSelector(false);
+    }
+    
+    // Show Google Drive setup instructions if the search is being opened
+    // This helps users understand why search might not be working
+    if (!showFileSearch && !sharedDriveId) {
+      setTimeout(() => {
+        if (showDriveSetupInstructions) {
+          showDriveSetupInstructions();
+        }
+      }, 500);
     }
   };
 
