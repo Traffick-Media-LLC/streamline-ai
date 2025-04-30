@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { 
   logChatEvent, 
@@ -311,7 +310,7 @@ export const useChatDocuments = () => {
               `Network error fetching document ${id}`,
               networkErr,
               { documentId: id },
-              formattedChatId,
+              formattedChatId, // This could be the issue
               userId,
               'error',
               'network'
@@ -328,7 +327,7 @@ export const useChatDocuments = () => {
             `Exception in document fetch loop for ${id}`,
             err,
             { documentId: id },
-            formattedChatId,
+            formattedChatId, // Make sure formattedChatId is in scope here
             userId,
             'error',
             'document'
@@ -529,13 +528,16 @@ export const useChatDocuments = () => {
       
       console.error("Document search error:", errorMessage);
       
+      // Make sure formattedChatId is defined here
+      const localFormattedChatId = chatId && chatId.startsWith('guest-') ? uuidv4() : chatId;
+      
       await logChatError(
         searchRequestId,
         'useChatDocuments',
         `Exception searching documents: ${errorMessage}`,
         err,
         { searchQuery: query },
-        formattedChatId, // This is now properly defined
+        localFormattedChatId, // This is now properly defined
         userId,
         'error',
         'document'
