@@ -27,39 +27,66 @@ export const useChatDocuments = () => {
       
       // Use UUID for request ID to ensure it's compatible with UUID columns in the database
       const formattedRequestId = requestId || uuidv4();
-      // Ensure chatId is UUID compatible for database logging
-      const formattedChatId = chatId && chatId.startsWith('guest-') ? null : chatId;
+      
+      // Format chatId to ensure UUID compatibility
+      // For guest chats, we'll generate a UUID to use as a reference in the database
+      // but we'll use the original chatId for client-side operations
+      let formattedChatId = chatId;
+      if (chatId && chatId.startsWith('guest-')) {
+        // Create a UUID derived from the guest chat ID for database compatibility
+        formattedChatId = uuidv4();
+      }
       
       // Log the document fetch attempt
-      logChatEvent({
-        requestId: formattedRequestId,
-        userId,
-        chatId: formattedChatId,
-        eventType: 'fetch_document_contents',
-        component: 'useChatDocuments',
-        message: `Fetching contents for ${documentIds.length} documents directly from Google Drive`,
-        metadata: { documentIds }
-      });
+      try {
+        logChatEvent({
+          requestId: formattedRequestId,
+          userId,
+          chatId: formattedChatId, // Use the UUID-compatible chat ID
+          eventType: 'fetch_document_contents',
+          component: 'useChatDocuments',
+          message: `Fetching contents for ${documentIds.length} documents`,
+          metadata: { documentIds }
+        });
+      } catch (logError) {
+        console.error("Failed to log chat event:", logError);
+        // Continue execution even if logging fails
+      }
 
       const documents = [];
       
       for (const id of documentIds) {
         try {
+          // Add validation to ensure documentId is properly formatted
+          if (!id || typeof id !== 'string') {
+            console.warn(`Invalid document ID: ${id}, skipping`);
+            continue;
+          }
+
           const { data, error } = await supabase.functions.invoke('drive-integration', {
-            body: { operation: 'get', fileId: id, requestId: formattedRequestId }
+            body: { 
+              operation: 'get', 
+              fileId: id, 
+              requestId: formattedRequestId 
+            }
           });
           
           if (error) {
-            logChatEvent({
-              requestId: formattedRequestId,
-              userId,
-              chatId: formattedChatId,
-              eventType: 'fetch_document_error',
-              component: 'useChatDocuments',
-              message: `Error fetching document ${id}: ${error.message || "Unknown error"}`,
-              severity: 'error',
-              errorDetails: error
-            });
+            // Log error but continue with other documents
+            try {
+              logChatEvent({
+                requestId: formattedRequestId,
+                userId,
+                chatId: formattedChatId,
+                eventType: 'fetch_document_error',
+                component: 'useChatDocuments',
+                message: `Error fetching document ${id}: ${error.message || "Unknown error"}`,
+                severity: 'error',
+                errorDetails: error
+              });
+            } catch (logErr) {
+              console.error("Failed to log document fetch error:", logErr);
+            }
             
             // Show user-friendly error message
             if (error.message?.includes("Google Drive credentials not configured")) {
@@ -72,15 +99,19 @@ export const useChatDocuments = () => {
           }
           
           if (!data) {
-            logChatEvent({
-              requestId: formattedRequestId,
-              userId,
-              chatId: formattedChatId,
-              eventType: 'fetch_document_empty',
-              component: 'useChatDocuments',
-              message: `Empty response fetching document ${id}`,
-              severity: 'warning'
-            });
+            try {
+              logChatEvent({
+                requestId: formattedRequestId,
+                userId,
+                chatId: formattedChatId,
+                eventType: 'fetch_document_empty',
+                component: 'useChatDocuments',
+                message: `Empty response fetching document ${id}`,
+                severity: 'warning'
+              });
+            } catch (logErr) {
+              console.error("Failed to log empty document response:", logErr);
+            }
             continue;
           }
           
@@ -92,61 +123,78 @@ export const useChatDocuments = () => {
               type: data.file.file_type
             });
             
-            logChatEvent({
-              requestId: formattedRequestId,
-              userId,
-              chatId: formattedChatId,
-              eventType: 'document_content_fetched',
-              component: 'useChatDocuments',
-              message: `Successfully fetched document: ${data.file.name}`,
-              metadata: {
-                documentId: id,
-                documentName: data.file.name,
-                contentLength: data.content.content?.length || 0
-              }
-            });
+            try {
+              logChatEvent({
+                requestId: formattedRequestId,
+                userId,
+                chatId: formattedChatId,
+                eventType: 'document_content_fetched',
+                component: 'useChatDocuments',
+                message: `Successfully fetched document: ${data.file.name}`,
+                metadata: {
+                  documentId: id,
+                  documentName: data.file.name,
+                  contentLength: data.content.content?.length || 0
+                }
+              });
+            } catch (logErr) {
+              console.error("Failed to log successful document fetch:", logErr);
+            }
           } else {
-            logChatEvent({
-              requestId: formattedRequestId,
-              userId,
-              chatId: formattedChatId,
-              eventType: 'document_invalid_structure',
-              component: 'useChatDocuments',
-              message: `Invalid document structure for ${id}`,
-              severity: 'warning',
-              metadata: { 
-                hasFile: !!data?.file, 
-                hasContent: !!data?.content 
-              }
-            });
+            try {
+              logChatEvent({
+                requestId: formattedRequestId,
+                userId,
+                chatId: formattedChatId,
+                eventType: 'document_invalid_structure',
+                component: 'useChatDocuments',
+                message: `Invalid document structure for ${id}`,
+                severity: 'warning',
+                metadata: { 
+                  hasFile: !!data?.file, 
+                  hasContent: !!data?.content 
+                }
+              });
+            } catch (logErr) {
+              console.error("Failed to log invalid document structure:", logErr);
+            }
           }
         } catch (err) {
-          logChatEvent({
-            requestId: formattedRequestId,
-            userId,
-            chatId: formattedChatId,
-            eventType: 'document_fetch_exception',
-            component: 'useChatDocuments',
-            message: `Exception fetching document ${id}: ${err instanceof Error ? err.message : "Unknown error"}`,
-            severity: 'error',
-            errorDetails: err
-          });
+          console.error("Exception in document fetch loop:", err);
+          try {
+            logChatEvent({
+              requestId: formattedRequestId,
+              userId,
+              chatId: formattedChatId,
+              eventType: 'document_fetch_exception',
+              component: 'useChatDocuments',
+              message: `Exception fetching document ${id}: ${err instanceof Error ? err.message : "Unknown error"}`,
+              severity: 'error',
+              errorDetails: err
+            });
+          } catch (logErr) {
+            console.error("Failed to log document fetch exception:", logErr);
+          }
         }
       }
       
-      logChatEvent({
-        requestId: formattedRequestId,
-        userId,
-        chatId: formattedChatId,
-        eventType: 'document_fetch_complete',
-        component: 'useChatDocuments',
-        message: `Fetched ${documents.length}/${documentIds.length} documents successfully`,
-        metadata: { 
-          success: documents.length, 
-          total: documentIds.length,
-          documentNames: documents.map(d => d.name)
-        }
-      });
+      try {
+        logChatEvent({
+          requestId: formattedRequestId,
+          userId,
+          chatId: formattedChatId,
+          eventType: 'document_fetch_complete',
+          component: 'useChatDocuments',
+          message: `Fetched ${documents.length}/${documentIds.length} documents successfully`,
+          metadata: { 
+            success: documents.length, 
+            total: documentIds.length,
+            documentNames: documents.map(d => d.name)
+          }
+        });
+      } catch (logErr) {
+        console.error("Failed to log document fetch completion:", logErr);
+      }
       
       return documents;
     } catch (err) {
