@@ -75,6 +75,35 @@ export const useChatOperations = () => {
     setDocumentContext(validIds);
   };
 
+  // Helper function to show appropriate Google Drive setup instructions
+  const showDriveSetupInstructions = () => {
+    toast.info(
+      "To use Google Drive documents with this chat, you need to:",
+      { duration: 8000 }
+    );
+    
+    setTimeout(() => {
+      toast.info(
+        "1. Make sure the Google Drive API is enabled for your project",
+        { duration: 8000 }
+      );
+    }, 500);
+    
+    setTimeout(() => {
+      toast.info(
+        "2. Share files directly with the service account email address",
+        { duration: 8000 }
+      );
+    }, 1000);
+    
+    setTimeout(() => {
+      toast.info(
+        "3. Verify the service account has the necessary Drive permissions",
+        { duration: 8000 }
+      );
+    }, 1500);
+  };
+
   return {
     currentChatId,
     isLoadingResponse,
@@ -86,6 +115,7 @@ export const useChatOperations = () => {
     isInitializing,
     setDocumentContext: updateDocumentContext,
     getDocumentContext,
-    isFetchingDocuments: isFetching
+    isFetchingDocuments: isFetching,
+    showDriveSetupInstructions
   };
 };

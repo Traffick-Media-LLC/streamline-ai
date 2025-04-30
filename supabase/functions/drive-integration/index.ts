@@ -558,6 +558,14 @@ async function createDriveClient(requestId: string | undefined) {
               errorJson = { error: errorText };
             }
             
+            // Check specifically for permission issues
+            const isPermissionIssue = errorText.includes('permission') || 
+                                     errorText.includes('access') || 
+                                     errorText.includes('403') || 
+                                     response.status === 403;
+                                     
+            const errorCategory = isPermissionIssue ? 'permission' : 'document';
+            
             await logError(
               requestId,
               'drive-integration',
@@ -569,13 +577,36 @@ async function createDriveClient(requestId: string | undefined) {
               },
               { endpoint: 'files', limit },
               'error',
-              'document'
+              errorCategory
             );
+            
+            if (isPermissionIssue) {
+              throw new Error(`Permission denied: The service account doesn't have sufficient access rights. Make sure to share documents with the service account and enable the Google Drive API.`);
+            }
             
             throw new Error(`Failed to list files: ${response.status} ${response.statusText} - ${JSON.stringify(errorJson)}`);
           }
 
           const data = await response.json();
+          
+          // Check if no files were found - this is often a sign that no files are shared
+          if (!data.files || data.files.length === 0) {
+            await logEvent(
+              requestId,
+              'drive-integration',
+              'drive_no_files_found',
+              `No files found in Drive for this service account`,
+              { },
+              'warning',
+              'document'
+            );
+            
+            // Return empty array but with a special flag
+            return {
+              files: [],
+              warning: "No files found. Make sure you've shared at least one file with the service account."
+            };
+          }
           
           await logEvent(
             requestId,
@@ -768,7 +799,9 @@ serve(async (req) => {
           try {
             // Try the about endpoint which requires less permissions
             const accessToken = await generateJWT(requestId);
-            const testResponse = await fetch(
+            
+            // First test the about endpoint (requires less permissions)
+            const aboutResponse = await fetch(
               `https://www.googleapis.com/drive/v3/about?fields=user,storageQuota`,
               {
                 headers: {
@@ -777,20 +810,100 @@ serve(async (req) => {
               }
             );
             
-            if (!testResponse.ok) {
-              throw new Error(`About API failed: ${testResponse.status} ${testResponse.statusText}`);
+            if (!aboutResponse.ok) {
+              const errorText = await aboutResponse.text();
+              await logError(
+                requestId,
+                'drive-integration',
+                'About API failed',
+                { status: aboutResponse.status, error: errorText },
+                {},
+                'error',
+                'permission'
+              );
+              throw new Error(`About API failed: ${aboutResponse.status} ${aboutResponse.statusText}`);
             }
             
-            const aboutData = await testResponse.json();
+            const aboutData = await aboutResponse.json();
             
+            // Now test the files.list endpoint (requires more permissions)
+            const filesResponse = await fetch(
+              `https://www.googleapis.com/drive/v3/files?pageSize=1`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`
+                }
+              }
+            );
+            
+            // Check if the files.list endpoint call was successful
+            if (!filesResponse.ok) {
+              const errorText = await filesResponse.text();
+              await logError(
+                requestId,
+                'drive-integration',
+                'Files API failed',
+                { status: filesResponse.status, error: errorText },
+                {},
+                'error',
+                'permission'
+              );
+              
+              // Since about worked but files failed, this is likely a permission issue
+              return new Response(
+                JSON.stringify({
+                  status: 'warning',
+                  message: 'API connection works but file access failed',
+                  serviceAccount: aboutData.user,
+                  error: `Files API returned ${filesResponse.status}: ${errorText}`,
+                  detail: 'The service account is authenticated but cannot access files. Make sure to share files with it.'
+                }),
+                { status: 203, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+            
+            const filesData = await filesResponse.json();
+            const fileCount = filesData.files?.length || 0;
+            
+            // Check if no files were found
+            if (fileCount === 0) {
+              return new Response(
+                JSON.stringify({
+                  status: 'warning',
+                  message: 'No accessible files found',
+                  serviceAccount: aboutData.user,
+                  detail: 'The service account is authenticated but no files are shared with it. Share files directly with the service account email.'
+                }),
+                { status: 203, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+            
+            // All tests passed successfully
             result = { 
               status: 'ok', 
               message: 'Google Drive permissions test passed',
               user: aboutData.user,
-              quota: aboutData.storageQuota
+              quota: aboutData.storageQuota,
+              fileCount: fileCount
             };
           } catch (error) {
-            throw new Error(`Permissions test failed: ${error.message}`);
+            // Check if this is a specific API-related error
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            const isApiError = errorMessage.includes('API');
+            
+            if (isApiError) {
+              return new Response(
+                JSON.stringify({
+                  status: 'error',
+                  message: 'Google Drive API error',
+                  error: errorMessage,
+                  detail: 'Make sure the Google Drive API is enabled in your Google Cloud Console project.'
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+            
+            throw new Error(`Permissions test failed: ${errorMessage}`);
           }
           break;
           
@@ -812,12 +925,15 @@ serve(async (req) => {
       const enhancedError = {
         error: error.message,
         operation: operation,
-        details: null
+        details: null,
+        status: 'error'
       };
       
-      // For list operation errors, add more context
+      // Add more context for specific operations
       if (operation === 'list') {
         enhancedError.details = 'This may be due to permission issues or the service account not having access to any files.';
+      } else if (operation === 'test_permissions') {
+        enhancedError.details = 'Make sure the Google Drive API is enabled and the service account has proper permissions.';
       }
       
       return new Response(

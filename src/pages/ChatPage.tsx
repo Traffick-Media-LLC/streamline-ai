@@ -92,7 +92,7 @@ const DocumentPanel = () => {
 
 const ChatPageContent = () => {
   const { user } = useAuth();
-  const { getDocumentContext } = useChatContext();
+  const { getDocumentContext, showDriveSetupInstructions } = useChatContext();
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
   const [driveStatus, setDriveStatus] = useState<{status: string, message?: string}>({status: 'unknown'});
@@ -199,6 +199,10 @@ const ChatPageContent = () => {
         // Show more detailed error information
         if (listResponse.error.message.includes('permission')) {
           toast.error("Permission denied: The service account doesn't have access to any files. Share files explicitly with the service account email.");
+          // Show drive setup instructions
+          if (showDriveSetupInstructions) {
+            showDriveSetupInstructions();
+          }
         } else {
           toast.error(`Failed to list files: ${listResponse.error.message}`);
         }
@@ -209,6 +213,10 @@ const ChatPageContent = () => {
         
         if (fileCount === 0) {
           toast.warning("No files found. Make sure you've shared at least one file with the service account.");
+          // Show drive setup instructions
+          if (showDriveSetupInstructions) {
+            showDriveSetupInstructions();
+          }
         } else {
           toast.success(`Successfully found ${fileCount} files in Google Drive.`);
         }
@@ -271,26 +279,64 @@ const ChatPageContent = () => {
       if (error) {
         setDebugInfo(`Permission test failed: ${error.message}`);
         setDriveStatus({status: 'error', message: 'Permission test failed'});
-        toast.error("Service account doesn't have proper permissions. Check Google Cloud Console.");
+        
+        // Provide more specific error messages based on error content
+        if (error.message.includes("API")) {
+          toast.error("The Google Drive API might not be enabled. Enable it in the Google Cloud Console.", { duration: 6000 });
+        } else if (error.message.includes("permission") || error.message.includes("access")) {
+          toast.error("Service account doesn't have proper permissions. Check sharing settings on your files.", { duration: 6000 });
+          // Show drive setup instructions
+          if (showDriveSetupInstructions) {
+            showDriveSetupInstructions();
+          }
+        } else {
+          toast.error("Service account doesn't have proper permissions. Check Google Cloud Console.");
+        }
+        
         console.error("Permission test error:", error);
+      } else if (data.status === 'warning') {
+        // Handle warning status (e.g., no files found)
+        setDebugInfo(data.message || 'Permission test warning');
+        setDriveStatus({status: 'warning', message: data.detail || 'Warning'});
+        toast.warning(data.detail || 'Warning with Drive permissions test', { duration: 6000 });
+        
+        // Show guide for sharing files
+        toast.info(
+          "To share files with this service account, right-click a file in Google Drive, click 'Share', and add the service account email as a viewer.",
+          { duration: 8000 }
+        );
+        
+        // Show drive setup instructions
+        if (showDriveSetupInstructions) {
+          showDriveSetupInstructions();
+        }
       } else {
         const userEmail = data?.user?.emailAddress;
         const displayName = data?.user?.displayName;
+        const fileCount = data?.fileCount || 0;
         
         setDebugInfo(`Permissions OK! Connected as: ${userEmail || displayName || 'unknown'}`);
         setDriveStatus({status: 'success', message: `Permissions verified for: ${userEmail || 'service account'}`});
-        toast.success(`Drive API access confirmed as: ${userEmail || displayName || 'service account'}`);
         
-        // Show sharing instructions
-        toast.info(
-          "To share files with this service account, right-click a file in Google Drive, click 'Share', and add the service account email as a viewer.",
-          { duration: 6000 }
-        );
+        if (fileCount > 0) {
+          toast.success(`Drive API access confirmed as: ${userEmail || displayName || 'service account'} with access to ${fileCount} files`);
+        } else {
+          toast.success(`Drive API access confirmed as: ${userEmail || displayName || 'service account'}`);
+          
+          // Show sharing instructions
+          toast.info(
+            "To share files with this service account, right-click a file in Google Drive, click 'Share', and add the service account email as a viewer.",
+            { duration: 6000 }
+          );
+        }
       }
     } catch (err) {
       setDebugInfo(`Permission test error: ${err.message || 'Unknown error'}`);
       setDriveStatus({status: 'error', message: 'API error during permission test'});
       console.error("Permission test error:", err);
+      
+      // Show a toast with the error message
+      toast.error(`Permission test error: ${err.message || 'Unknown error'}`);
     }
   };
   
