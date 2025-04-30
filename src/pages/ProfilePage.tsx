@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "../contexts/AuthContext";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/components/ui/sonner";
 import { useNavigate } from 'react-router-dom';
 
 const ProfilePage: React.FC = () => {
@@ -32,11 +32,7 @@ const ProfilePage: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching profile:', error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load profile",
-        });
+        toast.error("Failed to load profile");
       }
     };
 
@@ -47,11 +43,7 @@ const ProfilePage: React.FC = () => {
     e.preventDefault();
 
     if (!user?.id) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "User not found",
-      });
+      toast.error("User not found");
       return;
     }
 
@@ -66,18 +58,11 @@ const ProfilePage: React.FC = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Success",
-        description: "Profile updated successfully",
-      });
+      toast.success("Profile updated successfully");
       navigate('/');
     } catch (error) {
       console.error('Profile update error:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to update profile",
-      });
+      toast.error("Failed to update profile");
     }
   };
 
