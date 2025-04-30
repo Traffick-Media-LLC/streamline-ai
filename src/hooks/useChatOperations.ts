@@ -1,4 +1,3 @@
-
 import { useAuth } from "@/contexts/AuthContext";
 import { useChatState } from "./useChatState";
 import { useChatCreation } from "./useChatCreation";
@@ -24,9 +23,10 @@ export const useChatOperations = () => {
     getCurrentChat
   } = useChatState();
   
-  // Add state for shared drive ID
+  // Add state for shared drive ID using environment variable
+  // Use import.meta.env instead of Deno.env
   const [sharedDriveId, setSharedDriveId] = useState<string | undefined>(
-    () => Deno.env.get("GOOGLE_SHARED_DRIVE_ID") || undefined
+    () => import.meta.env.VITE_GOOGLE_SHARED_DRIVE_ID || undefined
   );
   
   const { createNewChat } = useChatCreation(user, isGuest, setChats, setCurrentChatId);

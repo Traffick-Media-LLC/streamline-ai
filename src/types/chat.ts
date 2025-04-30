@@ -11,6 +11,7 @@ export interface ChatContextType {
   getDocumentContext: () => string[];
   showDriveSetupInstructions: () => void;
   isFetchingDocuments?: boolean;
+  sharedDriveId?: string; // Added this property
 }
 
 export interface Chat {
