@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -835,4 +836,347 @@ async function checkProductLegality(supabase, searchTerms, requestId) {
           await logError(supabase, requestId, 'legality_check', 'Error getting products by brand', brandProductsError);
         }
         
-        if (brandProducts && brandProducts.length > 0)
+        if (brandProducts && brandProducts.length > 0) {
+          products = brandProducts;
+        }
+      }
+    }
+
+    // If we found products, get state legality data
+    if (products && products.length > 0) {
+      await logEvent(supabase, requestId, 'products_found', 'legality_check', `Found ${products.length} products matching query`, {
+        metadata: { productNames: products.map(p => p.name) },
+        category: 'database'
+      });
+      
+      // Get state data for these products
+      const { data: stateData, error: stateError } = await supabase
+        .from('product_state_status')
+        .select(`
+          product_id,
+          state,
+          status,
+          products(name)
+        `)
+        .in('product_id', products.map(p => p.id))
+        .limit(100);
+      
+      if (stateError) {
+        await logError(supabase, requestId, 'legality_check', 'Error fetching state data', stateError);
+        return null;
+      }
+      
+      if (!stateData || stateData.length === 0) {
+        await logEvent(supabase, requestId, 'no_state_data', 'legality_check', 'No state data found for matched products', {
+          severity: 'warning',
+          category: 'database'
+        });
+        return null;
+      }
+      
+      // Format state data in a readable format
+      let formattedData = [];
+      
+      // Group by product
+      const productGroups = {};
+      
+      stateData.forEach(entry => {
+        const productName = entry.products?.name || 'Unknown Product';
+        if (!productGroups[productName]) {
+          productGroups[productName] = {};
+        }
+        
+        productGroups[productName][entry.state] = entry.status;
+      });
+      
+      // Format each product's state data
+      for (const [product, states] of Object.entries(productGroups)) {
+        let productInfo = `Product: ${product}\nState Status:\n`;
+        
+        for (const [state, status] of Object.entries(states)) {
+          productInfo += `- ${state}: ${status}\n`;
+        }
+        
+        formattedData.push(productInfo);
+      }
+      
+      await logEvent(supabase, requestId, 'state_data_formatted', 'legality_check', `Formatted state data for ${Object.keys(productGroups).length} products`, {
+        durationMs: calculateDuration(startTime),
+        category: 'database'
+      });
+      
+      return formattedData.join("\n\n");
+    }
+    
+    await logEvent(supabase, requestId, 'no_matching_products', 'legality_check', 'No matching products found for legality check', {
+      durationMs: calculateDuration(startTime),
+      severity: 'warning',
+      category: 'database'
+    });
+    
+    return null;
+  } catch (error) {
+    await logError(supabase, requestId, 'legality_check', 'Exception checking product legality', error);
+    return null;
+  }
+}
+
+// Function to get relevant knowledge entries
+async function getRelevantKnowledgeEntries(supabase, searchTerms, query, requestId) {
+  try {
+    const startTime = startTimer();
+    
+    if (!searchTerms || searchTerms.length === 0) {
+      await logEvent(supabase, requestId, 'knowledge_search_no_terms', 'knowledge_search', 'No search terms for knowledge search', {
+        severity: 'warning',
+        category: 'database'
+      });
+      return [];
+    }
+    
+    // First attempt: Direct search with search terms
+    const searchCondition = searchTerms.map(term => `content.ilike.%${term}%`).join(',');
+    
+    let { data: entries, error } = await supabase
+      .from('knowledge_entries')
+      .select('*')
+      .or(searchCondition)
+      .filter('is_active', 'eq', true)
+      .limit(10);
+    
+    if (error) {
+      await logError(supabase, requestId, 'knowledge_search', 'Error searching knowledge entries', error, {
+        category: 'database'
+      });
+      return [];
+    }
+    
+    if (!entries || entries.length === 0) {
+      await logEvent(supabase, requestId, 'knowledge_search_fallback', 'knowledge_search', 'No direct matches, trying title search', {
+        category: 'database'
+      });
+      
+      // Fallback: Search in titles
+      const titleCondition = searchTerms.map(term => `title.ilike.%${term}%`).join(',');
+      
+      const { data: titleEntries, error: titleError } = await supabase
+        .from('knowledge_entries')
+        .select('*')
+        .or(titleCondition)
+        .filter('is_active', 'eq', true)
+        .limit(10);
+      
+      if (titleError) {
+        await logError(supabase, requestId, 'knowledge_search', 'Error in fallback title search', titleError, {
+          category: 'database'
+        });
+        return [];
+      }
+      
+      if (titleEntries && titleEntries.length > 0) {
+        entries = titleEntries;
+      } else {
+        // Final fallback: Try tag search
+        await logEvent(supabase, requestId, 'knowledge_search_tag_fallback', 'knowledge_search', 'No title matches, trying tag search', {
+          category: 'database'
+        });
+        
+        // Get entries by tags (more complex)
+        const { data: tagEntries, error: tagError } = await supabase.rpc(
+          'search_knowledge_by_tags',
+          { search_terms: searchTerms }
+        );
+        
+        if (tagError) {
+          await logError(supabase, requestId, 'knowledge_search', 'Error in tag search', tagError, {
+            category: 'database'
+          });
+        } else if (tagEntries && tagEntries.length > 0) {
+          entries = tagEntries;
+        }
+      }
+    }
+    
+    if (!entries || entries.length === 0) {
+      await logEvent(supabase, requestId, 'knowledge_search_no_results', 'knowledge_search', 'No knowledge entries found with any search method', {
+        durationMs: calculateDuration(startTime),
+        severity: 'warning',
+        category: 'database'
+      });
+      return [];
+    }
+    
+    await logEvent(supabase, requestId, 'knowledge_entries_found', 'knowledge_search', `Found ${entries.length} knowledge entries`, {
+      durationMs: calculateDuration(startTime),
+      metadata: {
+        entryTitles: entries.map(e => e.title),
+        searchTerms
+      },
+      category: 'database'
+    });
+    
+    // Format the entries
+    return entries.map(entry => {
+      return `Title: ${entry.title}\n${entry.content}\n${entry.tags ? 'Tags: ' + entry.tags.join(', ') : ''}`;
+    });
+  } catch (error) {
+    await logError(supabase, requestId, 'knowledge_search', 'Exception in knowledge search', error, {
+      category: 'database'
+    });
+    return [];
+  }
+}
+
+// Function to search documents
+async function searchDocuments(supabase, searchTerms, requestId) {
+  try {
+    if (!searchTerms || searchTerms.length === 0) {
+      await logEvent(supabase, requestId, 'document_search_no_terms', 'document_search', 'No search terms for document search', {
+        severity: 'warning',
+        category: 'document'
+      });
+      return [];
+    }
+    
+    await logEvent(supabase, requestId, 'document_search_started', 'document_search', 'Searching for documents', {
+      metadata: { searchTerms },
+      category: 'document'
+    });
+    
+    // Call the drive-integration Edge Function to search for documents
+    const { data, error } = await supabase.functions.invoke('drive-integration', {
+      body: { 
+        operation: 'search',
+        query: searchTerms.join(' '),
+        requestId
+      },
+    });
+    
+    if (error) {
+      await logError(supabase, requestId, 'document_search', 'Error calling drive search function', error, {
+        category: 'document',
+        metadata: { searchTerms }
+      });
+      return [];
+    }
+    
+    if (!data || !data.files || !Array.isArray(data.files)) {
+      await logEvent(supabase, requestId, 'document_search_invalid_response', 'document_search', 'Invalid response format from drive search', {
+        severity: 'warning',
+        category: 'document',
+        metadata: { 
+          responseType: typeof data,
+          hasFiles: data && 'files' in data,
+          filesType: data && data.files ? typeof data.files : 'undefined'
+        }
+      });
+      return [];
+    }
+    
+    await logEvent(supabase, requestId, 'document_search_results_received', 'document_search', `Received ${data.files.length} search results from drive`, {
+      metadata: { 
+        resultCount: data.files.length,
+        fileNames: data.files.slice(0, 5).map(f => f.name) // First 5 for brevity
+      },
+      category: 'document'
+    });
+    
+    return data.files;
+  } catch (error) {
+    await logError(supabase, requestId, 'document_search', 'Exception searching documents', error, {
+      category: 'document'
+    });
+    return [];
+  }
+}
+
+// Function to get document content
+async function getDocumentContent(supabase, documentIds, requestId) {
+  try {
+    if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+      await logEvent(supabase, requestId, 'document_content_no_ids', 'document_content', 'No document IDs provided', {
+        severity: 'warning',
+        category: 'document'
+      });
+      return [];
+    }
+    
+    await logEvent(supabase, requestId, 'document_content_fetch_started', 'document_content', `Fetching content for ${documentIds.length} documents`, {
+      metadata: { documentIds },
+      category: 'document'
+    });
+    
+    const documentContents = [];
+    
+    // Process each document ID (in sequence to avoid rate limits)
+    for (const docId of documentIds) {
+      try {
+        const { data, error } = await supabase.functions.invoke('drive-integration', {
+          body: { 
+            operation: 'get',
+            fileId: docId,
+            requestId
+          },
+        });
+        
+        if (error) {
+          await logError(supabase, requestId, 'document_content', `Error fetching document ${docId}`, error, {
+            category: 'document',
+            metadata: { documentId: docId }
+          });
+          continue;
+        }
+        
+        if (!data || !data.file || !data.content) {
+          await logEvent(supabase, requestId, 'document_content_invalid_response', 'document_content', `Invalid response format for document ${docId}`, {
+            severity: 'warning',
+            category: 'document',
+            metadata: { 
+              documentId: docId,
+              responseType: typeof data,
+              hasFile: data && 'file' in data,
+              hasContent: data && 'content' in data
+            }
+          });
+          continue;
+        }
+        
+        documentContents.push({
+          file_id: docId,
+          title: `Document: ${data.file.name}`,
+          content: data.content.content || "No content available"
+        });
+        
+        await logEvent(supabase, requestId, 'document_content_fetched', 'document_content', `Successfully fetched content for ${data.file.name}`, {
+          metadata: { 
+            documentId: docId,
+            fileName: data.file.name,
+            contentLength: data.content.content?.length || 0
+          },
+          category: 'document'
+        });
+      } catch (docError) {
+        await logError(supabase, requestId, 'document_content', `Exception fetching document ${docId}`, docError, {
+          category: 'document',
+          metadata: { documentId: docId }
+        });
+      }
+    }
+    
+    await logEvent(supabase, requestId, 'document_content_fetch_completed', 'document_content', `Fetched ${documentContents.length}/${documentIds.length} document contents`, {
+      metadata: {
+        successCount: documentContents.length,
+        totalRequested: documentIds.length,
+        documentTitles: documentContents.map(doc => doc.title)
+      },
+      category: 'document'
+    });
+    
+    return documentContents;
+  } catch (error) {
+    await logError(supabase, requestId, 'document_content', 'Exception fetching document contents', error, {
+      category: 'document'
+    });
+    return [];
+  }
+}

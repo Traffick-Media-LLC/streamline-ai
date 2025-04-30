@@ -57,7 +57,7 @@ export const useChatDocuments = () => {
           { originalChatId: chatId },
           undefined,
           userId,
-          'warning',
+          'error', // Changed from 'warning' to 'error'
           'document'
         );
         // Continue with original chatId if formatting fails

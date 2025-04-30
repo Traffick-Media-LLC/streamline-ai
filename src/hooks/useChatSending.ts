@@ -114,7 +114,7 @@ export const useChatSending = (
           });
           
           // Update the tracker with the new chat ID
-          errorTracker.chatId = chatId;
+          await errorTracker.logStage('chat_id_updated', 'complete', { chatId });
         } catch (createChatError) {
           await errorTracker.logError(
             'Exception creating new chat',
@@ -346,25 +346,25 @@ export const useChatSending = (
           
           // Determine specific error category based on error details
           let errorCategory = 'network';
-          let errorMessage = 'Error getting AI response';
+          let userErrorMessage = 'Error getting AI response';
           
           if (errorInfo.message?.includes('document')) {
             errorCategory = 'document';
-            errorMessage = 'Error processing document content';
+            userErrorMessage = 'Error processing document content';
           } else if (errorInfo.message?.includes('credential') || 
                      errorInfo.message?.includes('auth') || 
                      errorInfo.message?.includes('key')) {
             errorCategory = 'credential';
-            errorMessage = 'Error with AI service authentication';
+            userErrorMessage = 'Error with AI service authentication';
           } else if (errorInfo.message?.includes('model') || 
                      errorInfo.message?.includes('prompt') || 
                      errorInfo.message?.includes('token')) {
             errorCategory = 'ai_response';
-            errorMessage = 'Error with AI model processing';
+            userErrorMessage = 'Error with AI model processing';
           }
           
           await errorTracker.logError(
-            errorMessage,
+            userErrorMessage,
             aiError,
             { 
               chatId,
@@ -375,7 +375,7 @@ export const useChatSending = (
             errorCategory as 'network' | 'document' | 'credential' | 'ai_response' | 'database' | 'generic'
           );
           
-          const errorMessage: Message = {
+          const errorResponse: Message = {
             id: `error-${Date.now()}`,
             role: "assistant",
             content: "I'm sorry, there was an error processing your request. Please try again.",
@@ -389,18 +389,18 @@ export const useChatSending = (
             eventType: 'save_error_message',
             component: 'useChatSending',
             message: `Saving error message to chat`,
-            metadata: { messageId: errorMessage.id }
+            metadata: { messageId: errorResponse.id }
           });
           
           try {
-            await handleMessageUpdate(chatId, errorMessage, requestId);
+            await handleMessageUpdate(chatId, errorResponse, requestId);
           } catch (saveErrorMessageError) {
             await logChatError(
               requestId,
               'useChatSending',
               'Failed to save error message',
               saveErrorMessageError,
-              { chatId, messageId: errorMessage.id },
+              { chatId, messageId: errorResponse.id },
               chatId,
               user?.id,
               'error',
