@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Send, FileText, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import DocumentSelector from "./DocumentSelector";
 import { toast } from "@/components/ui/sonner";
 import FileSearchBar from "./FilesearchBar";
+import { Badge } from "@/components/ui/badge";
 
 const ChatInput = () => {
   const [message, setMessage] = useState("");
