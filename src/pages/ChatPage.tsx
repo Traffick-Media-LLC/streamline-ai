@@ -95,6 +95,7 @@ const ChatPageContent = () => {
   const { getDocumentContext } = useChatContext();
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
+  const [driveStatus, setDriveStatus] = useState<{status: string, message?: string}>({status: 'unknown'});
   const documentIds = getDocumentContext();
   
   // Check connection to Edge Function
@@ -129,25 +130,82 @@ const ChatPageContent = () => {
   
   const checkDriveConnection = async () => {
     setDebugInfo("Testing Google Drive connection...");
+    setDriveStatus({status: 'testing'});
+    
     try {
       const { data, error } = await supabase.functions.invoke('drive-integration', {
         body: { 
-          operation: 'list',
-          limit: 1,
+          operation: 'health_check',
           debug: true // Request detailed debugging info
         },
       });
       
       if (error) {
         setDebugInfo(`Drive Error: ${error.message || 'Unknown error'}`);
+        setDriveStatus({status: 'error', message: error.message});
         console.error("Drive connection error:", error);
       } else {
-        setDebugInfo(`Drive connected successfully! Found ${data?.files?.length || 0} files.`);
+        setDebugInfo(`Drive connected successfully!`);
+        setDriveStatus({status: 'success', message: 'Connection successful'});
         console.log("Drive connection successful:", data);
+        
+        // Now try to list some files as a further test
+        const listResponse = await supabase.functions.invoke('drive-integration', {
+          body: { 
+            operation: 'list',
+            limit: 3,
+            debug: true
+          },
+        });
+        
+        if (listResponse.error) {
+          setDebugInfo(`Drive connected but list failed: ${listResponse.error.message}`);
+          setDriveStatus({status: 'warning', message: 'Connected but listing failed'});
+        } else {
+          const fileCount = listResponse.data?.files?.length || 0;
+          setDebugInfo(`Drive connected successfully! Found ${fileCount} files.`);
+          setDriveStatus({status: 'success', message: `Found ${fileCount} files`});
+        }
       }
     } catch (err) {
       setDebugInfo(`Drive API Error: ${err.message || 'Unknown error'}`);
+      setDriveStatus({status: 'error', message: err.message});
       console.error("Drive connection error:", err);
+    }
+  };
+  
+  // Check Drive credentials
+  const checkDriveCredentials = async () => {
+    setDebugInfo("Checking Google Drive credentials...");
+    
+    try {
+      const credentialTest = await supabase.functions.invoke('drive-integration', {
+        body: { 
+          operation: 'health_check',
+          debug: true, // Request detailed debugging info
+          test_credentials: true
+        },
+      });
+      
+      if (credentialTest.error) {
+        const errorMessage = credentialTest.error.message || 'Unknown error';
+        setDebugInfo(`Credential Error: ${errorMessage}`);
+        
+        // Show a toast with more actionable information
+        if (errorMessage.includes("account not found")) {
+          toast.error("Google service account not found. Please verify the email address is correct and the account exists.");
+        } else if (errorMessage.includes("invalid_grant")) {
+          toast.error("Invalid credentials. Check if the service account is enabled and has the right permissions.");
+        } else {
+          toast.error(`Drive credential error: ${errorMessage}`);
+        }
+      } else {
+        setDebugInfo(`Credentials validated successfully!`);
+        toast.success("Google Drive credentials are valid.");
+      }
+    } catch (err) {
+      setDebugInfo(`Credential check error: ${err.message || 'Unknown error'}`);
+      toast.error(`Failed to check credentials: ${err.message}`);
     }
   };
   
@@ -156,13 +214,28 @@ const ChatPageContent = () => {
     if (process.env.NODE_ENV !== 'development' && !showDebugPanel) return null;
     
     return (
-      <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50">
+      <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50 max-w-[350px]">
         <h4 className="font-medium text-sm">Chat Debug</h4>
         <p className="text-xs text-muted-foreground">Status: {debugInfo || "Ready"}</p>
+        
         {documentIds.length > 0 && (
           <p className="text-xs text-muted-foreground">{documentIds.length} active documents</p>
         )}
-        <div className="flex gap-2 mt-2">
+        
+        {driveStatus.status !== 'unknown' && (
+          <div className="mt-1 p-1 text-xs rounded bg-muted">
+            <span className={`font-medium ${
+              driveStatus.status === 'success' ? 'text-green-600' : 
+              driveStatus.status === 'error' ? 'text-red-600' : 
+              driveStatus.status === 'testing' ? 'text-blue-600' : 'text-amber-600'
+            }`}>
+              Drive Status: {driveStatus.status}
+            </span>
+            {driveStatus.message && <p className="text-muted-foreground mt-0.5">{driveStatus.message}</p>}
+          </div>
+        )}
+        
+        <div className="flex flex-wrap gap-2 mt-2">
           <Button 
             variant="outline" 
             size="sm" 
@@ -170,6 +243,15 @@ const ChatPageContent = () => {
             className="text-xs h-7"
           >
             Test Drive API
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={checkDriveCredentials}
+            className="text-xs h-7"
+          >
+            Check Credentials
           </Button>
         </div>
       </div>
