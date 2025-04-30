@@ -96,6 +96,36 @@ const ChatPageContent = () => {
   const [debugInfo, setDebugInfo] = useState<string>("");
   const documentIds = getDocumentContext();
   
+  // Check connection to Edge Function
+  useEffect(() => {
+    const checkEdgeFunctionConnection = async () => {
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          // Simple health check for the Edge Function
+          const startTime = performance.now();
+          const { data, error } = await supabase.functions.invoke('chat', {
+            body: { mode: "health_check" },
+          });
+          
+          const duration = Math.round(performance.now() - startTime);
+          
+          if (error) {
+            console.error("Edge Function health check failed:", error);
+            setDebugInfo(`Edge Function Error: ${error.message || 'Unknown error'}`);
+          } else {
+            console.log("Edge Function health check passed:", data);
+            setDebugInfo(`Edge Function OK (${duration}ms)`);
+          }
+        } catch (err) {
+          console.error("Failed to connect to Edge Function:", err);
+          setDebugInfo(`Connection Error: ${err.message || 'Unknown error'}`);
+        }
+      }
+    };
+    
+    checkEdgeFunctionConnection();
+  }, []);
+  
   // Render debugging panel (development only)
   const renderDebugPanel = () => {
     if (process.env.NODE_ENV !== 'development') return null;
@@ -103,8 +133,7 @@ const ChatPageContent = () => {
     return (
       <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50">
         <h4 className="font-medium text-sm">Chat Debug</h4>
-        <p className="text-xs text-muted-foreground">Status: Ready</p>
-        <p className="text-xs text-muted-foreground">{debugInfo}</p>
+        <p className="text-xs text-muted-foreground">Status: {debugInfo || "Ready"}</p>
         {documentIds.length > 0 && (
           <p className="text-xs text-muted-foreground">{documentIds.length} active documents</p>
         )}

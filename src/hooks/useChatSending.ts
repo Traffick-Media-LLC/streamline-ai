@@ -243,6 +243,15 @@ export const useChatSending = (
           
           await errorTracker.logStage('ai_call', 'start', aiRequestMetadata);
           
+          // Add detailed debug logging here to diagnose edge function issues
+          console.log("Making Edge Function call to 'chat' with payload:", {
+            content,
+            messagesCount: chatMessages.length,
+            documentIds: documentIds.length,
+            documentContents: documentContents.length,
+            requestId
+          });
+          
           // Make the actual API call with detailed error handling
           const { data, error } = await supabase.functions.invoke('chat', {
             body: { 
@@ -253,12 +262,27 @@ export const useChatSending = (
               requestId  // Pass request ID to the edge function for logging
             },
           });
+          
+          console.log("Edge Function response received:", { 
+            hasData: !!data, 
+            hasError: !!error, 
+            errorDetails: error ? { message: error.message, name: error.name, status: error.status } : null 
+          });
 
           if (error) {
             // Enhanced error categorization
             const errorCategory = error.message?.includes('credentials') ? 'credential' : 
                                   error.message?.includes('document') ? 'document' : 
                                   error.message?.includes('parse') ? 'ai_response' : 'network';
+            
+            console.error("Edge Function error details:", {
+              message: error.message,
+              name: error.name,
+              status: error.status,
+              statusText: error.statusText,
+              cause: error.cause,
+              stack: error.stack
+            });
             
             await errorTracker.logError(
               'Error from chat function',
@@ -341,6 +365,19 @@ export const useChatSending = (
             }
           });
         } catch (aiError) {
+          // Add detailed console logging for Edge Function errors
+          console.error("Error calling Edge Function:", aiError);
+          console.error("Error details:", {
+            message: aiError?.message,
+            name: aiError?.name,
+            status: aiError?.status,
+            statusText: aiError?.statusText,
+            response: aiError?.response ? {
+              data: aiError.response.data,
+              status: aiError.response.status
+            } : "No response data"
+          });
+          
           // Process specific AI error types with enhanced diagnostics
           const errorInfo = formatErrorForLogging(aiError);
           
@@ -375,10 +412,23 @@ export const useChatSending = (
             errorCategory as 'network' | 'document' | 'credential' | 'ai_response' | 'database' | 'generic'
           );
           
+          // Create a more detailed error message for the user
+          let detailedErrorMessage = "I'm sorry, there was an error processing your request. ";
+          
+          if (errorCategory === 'network') {
+            detailedErrorMessage += "There seems to be a connection issue with the AI service. Please try again later.";
+          } else if (errorCategory === 'credential') {
+            detailedErrorMessage += "There appears to be an issue with the AI service authentication. Please contact support.";
+          } else if (errorCategory === 'ai_response') {
+            detailedErrorMessage += "The AI model encountered an issue processing your request. Try simplifying your question.";
+          } else {
+            detailedErrorMessage += "Please try again or contact support if the issue persists.";
+          }
+          
           const errorResponse: Message = {
             id: `error-${Date.now()}`,
             role: "assistant",
-            content: "I'm sorry, there was an error processing your request. Please try again.",
+            content: detailedErrorMessage,
             timestamp: Date.now(),
           };
           
@@ -426,6 +476,8 @@ export const useChatSending = (
       }
     } catch (topLevelError) {
       // Catch any errors at the top level to ensure we always log them
+      console.error("Top level error in sendMessage:", topLevelError);
+      
       await logChatError(
         requestId,
         'useChatSending',
