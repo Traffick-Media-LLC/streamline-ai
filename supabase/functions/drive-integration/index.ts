@@ -59,7 +59,7 @@ async function generateJWT(requestId: string | undefined) {
     const cleanClientEmail = clientEmail?.replace(/^["']|["']$/g, "");
     const cleanProjectId = projectId?.replace(/^["']|["']$/g, "");
 
-    // Validate credentials
+    // Validate credentials and print more detailed debug info
     await logEvent(
       requestId, 
       'drive-integration', 
@@ -69,7 +69,11 @@ async function generateJWT(requestId: string | undefined) {
         hasClientEmail: !!cleanClientEmail, 
         hasPrivateKey: !!privateKey, 
         hasProjectId: !!cleanProjectId, 
-        clientEmailDomain: cleanClientEmail?.split('@')[1] || 'missing'
+        clientEmailDomain: cleanClientEmail?.split('@')[1] || 'missing',
+        privateKeyLength: privateKey?.length || 0,
+        privateKeyStart: privateKey?.substring(0, 20) || 'missing',
+        clientEmailValue: cleanClientEmail || 'missing',
+        projectIdValue: cleanProjectId || 'missing'
       }, 
       'log', 
       'credential'
@@ -128,94 +132,139 @@ async function generateJWT(requestId: string | undefined) {
     // Import the private key for signing
     await logEvent(requestId, 'drive-integration', 'key_import_started', 'Importing private key', { timestamp: Date.now() }, 'log', 'credential');
     
-    // Clean private key - ensure it's in the correct format
-    let cleanPrivateKey = privateKey;
+    // Fix and clean private key - ensure it's in the correct format
+    let cleanPrivateKey = privateKey || "";
     
-    // Ensure the private key has the proper PEM format
-    if (!cleanPrivateKey.includes("-----BEGIN PRIVATE KEY-----")) {
-      cleanPrivateKey = "-----BEGIN PRIVATE KEY-----\n" + cleanPrivateKey + "\n-----END PRIVATE KEY-----";
-    }
+    // Log the private key format for debugging
+    await logEvent(
+      requestId,
+      'drive-integration',
+      'private_key_format',
+      'Checking private key format',
+      {
+        containsBeginMarker: cleanPrivateKey.includes("-----BEGIN PRIVATE KEY-----"),
+        containsEndMarker: cleanPrivateKey.includes("-----END PRIVATE KEY-----"),
+        containsEscapedNewlines: cleanPrivateKey.includes("\\n"),
+        length: cleanPrivateKey.length,
+        firstChars: cleanPrivateKey.substring(0, 20).replace(/\n/g, "\\n")
+      },
+      'log',
+      'credential'
+    );
+    
+    // Remove any extra quotes from the beginning and end
+    cleanPrivateKey = cleanPrivateKey.replace(/^["']|["']$/g, "");
     
     // Replace escaped newlines with actual newlines if needed
     cleanPrivateKey = cleanPrivateKey.replace(/\\n/g, "\n");
     
-    const key = await crypto.subtle.importKey(
-      'pkcs8',
-      new TextEncoder().encode(cleanPrivateKey),
-      {
-        name: 'RSASSA-PKCS1-v1_5',
-        hash: 'SHA-256'
-      },
-      false,
-      ['sign']
-    );
+    // Ensure the private key has the proper PEM format
+    if (!cleanPrivateKey.includes("-----BEGIN PRIVATE KEY-----")) {
+      cleanPrivateKey = "-----BEGIN PRIVATE KEY-----\n" + cleanPrivateKey;
+    }
     
-    await logEvent(requestId, 'drive-integration', 'key_import_success', 'Private key successfully imported', { timestamp: Date.now() }, 'log', 'credential');
-
-    // Sign the JWT
-    await logEvent(requestId, 'drive-integration', 'jwt_signing_started', 'Signing JWT', { timestamp: Date.now() }, 'log', 'credential');
+    if (!cleanPrivateKey.includes("-----END PRIVATE KEY-----")) {
+      cleanPrivateKey = cleanPrivateKey + "\n-----END PRIVATE KEY-----";
+    }
     
-    const signature = await crypto.subtle.sign(
-      { name: 'RSASSA-PKCS1-v1_5' },
-      key,
-      new TextEncoder().encode(encodedHeader + '.' + encodedClaim)
-    );
-    
-    const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=/g, '');
-    
-    await logEvent(requestId, 'drive-integration', 'jwt_signing_success', 'JWT successfully signed', { timestamp: Date.now() }, 'log', 'credential');
-
-    // Create the complete JWT
-    const jwt = encodedHeader + '.' + encodedClaim + '.' + encodedSignature;
-
-    // Exchange JWT for access token
-    await logEvent(requestId, 'drive-integration', 'token_exchange_started', 'Exchanging JWT for access token', { timestamp: Date.now() }, 'log', 'credential');
-    
-    const tokenEndpoint = 'https://oauth2.googleapis.com/token';
-    const response = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        assertion: jwt
-      })
-    });
-
-    // Check if token exchange was successful
-    if (!response.ok) {
-      const errorResponse = await response.json().catch(() => ({}));
+    try {
+      const key = await crypto.subtle.importKey(
+        'pkcs8',
+        new TextEncoder().encode(cleanPrivateKey),
+        {
+          name: 'RSASSA-PKCS1-v1_5',
+          hash: 'SHA-256'
+        },
+        false,
+        ['sign']
+      );
       
-      // Log detailed error for debugging
-      console.error("TOKEN EXCHANGE DETAILED ERROR:", {
-        status: response.status,
-        statusText: response.statusText,
-        errorResponse,
-        jwt_header: header,
-        jwt_claims: claim,
-        serviceAccountEmail: cleanClientEmail,
-        projectId: cleanProjectId,
+      await logEvent(requestId, 'drive-integration', 'key_import_success', 'Private key successfully imported', { timestamp: Date.now() }, 'log', 'credential');
+
+      // Sign the JWT
+      await logEvent(requestId, 'drive-integration', 'jwt_signing_started', 'Signing JWT', { timestamp: Date.now() }, 'log', 'credential');
+      
+      const signature = await crypto.subtle.sign(
+        { name: 'RSASSA-PKCS1-v1_5' },
+        key,
+        new TextEncoder().encode(encodedHeader + '.' + encodedClaim)
+      );
+      
+      const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+      
+      await logEvent(requestId, 'drive-integration', 'jwt_signing_success', 'JWT successfully signed', { timestamp: Date.now() }, 'log', 'credential');
+
+      // Create the complete JWT
+      const jwt = encodedHeader + '.' + encodedClaim + '.' + encodedSignature;
+
+      // Exchange JWT for access token
+      await logEvent(requestId, 'drive-integration', 'token_exchange_started', 'Exchanging JWT for access token', { timestamp: Date.now() }, 'log', 'credential');
+      
+      const tokenEndpoint = 'https://oauth2.googleapis.com/token';
+      const response = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          assertion: jwt
+        })
       });
-      
+
+      // Check if token exchange was successful
+      if (!response.ok) {
+        const errorResponse = await response.json().catch(() => ({}));
+        
+        // Log detailed error for debugging
+        console.error("TOKEN EXCHANGE DETAILED ERROR:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorResponse,
+          jwt_header: header,
+          jwt_claims: claim,
+          serviceAccountEmail: cleanClientEmail,
+          projectId: cleanProjectId,
+        });
+        
+        await logError(
+          requestId,
+          'token_exchange',
+          'Error exchanging JWT for token',
+          { message: `Token exchange failed with status ${response.status}` },
+          {},
+          'error',
+          'credential'
+        );
+        
+        throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorResponse)}`);
+      }
+
+      const tokenData = await response.json();
+      return tokenData.access_token;
+    } catch (keyImportError) {
       await logError(
         requestId,
-        'token_exchange',
-        'Error exchanging JWT for token',
-        { message: `Token exchange failed with status ${response.status}` },
-        {},
+        'jwt_generation',
+        'Error importing private key',
+        keyImportError,
+        {
+          keyFormat: {
+            length: cleanPrivateKey.length,
+            beginsWith: cleanPrivateKey.substring(0, 30),
+            hasBeginMarker: cleanPrivateKey.includes("-----BEGIN PRIVATE KEY-----"),
+            hasEndMarker: cleanPrivateKey.includes("-----END PRIVATE KEY-----")
+          }
+        },
         'error',
         'credential'
       );
       
-      throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorResponse)}`);
+      throw new Error(`Private key import failed: ${keyImportError.message}`);
     }
-
-    const tokenData = await response.json();
-    return tokenData.access_token;
   } catch (error) {
     await logError(
       requestId,
@@ -386,7 +435,7 @@ serve(async (req) => {
       );
     }
     
-    const { operation, fileId, query, limit, debug } = body;
+    const { operation, fileId, query, limit, debug, test_credentials } = body;
     
     // Log the request details
     await logEvent(
@@ -399,9 +448,46 @@ serve(async (req) => {
       'document'
     );
     
+    if (operation === 'health_check' && debug) {
+      // Detailed health check that returns credential status info
+      const credentialStatus = {
+        clientEmailExists: !!Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL"),
+        privateKeyExists: !!Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY"),
+        projectIdExists: !!Deno.env.get("GOOGLE_DRIVE_PROJECT_ID"),
+        clientEmail: Deno.env.get("GOOGLE_DRIVE_CLIENT_EMAIL")?.replace(/^["']|["']$/g, "") || 'missing',
+        projectId: Deno.env.get("GOOGLE_DRIVE_PROJECT_ID")?.replace(/^["']|["']$/g, "") || 'missing',
+        privateKeyLength: Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY")?.length || 0,
+        privateKeyHasBeginMarker: Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY")?.includes("-----BEGIN PRIVATE KEY-----") || false,
+        privateKeyHasEndMarker: Deno.env.get("GOOGLE_DRIVE_PRIVATE_KEY")?.includes("-----END PRIVATE KEY-----") || false
+      };
+      
+      return new Response(
+        JSON.stringify({
+          status: 'ok',
+          message: 'Drive integration is configured',
+          detail: 'Detailed credential check completed',
+          credentialStatus: credentialStatus
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     // Create Drive client
     let driveClient;
     try {
+      if (test_credentials) {
+        // Just try to generate a JWT to test credentials
+        await generateJWT(requestId);
+        
+        return new Response(
+          JSON.stringify({ 
+            status: 'ok', 
+            message: 'Credentials validated successfully' 
+          }), 
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       driveClient = await createDriveClient(requestId);
     } catch (error) {
       // Return a more user-friendly error with debugging info
