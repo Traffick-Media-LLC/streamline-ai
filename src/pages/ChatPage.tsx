@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
-import { Database, FileText, X } from "lucide-react";
+import { Database, FileText, X, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import ChatWindow from "../components/ChatWindow";
@@ -94,6 +94,7 @@ const ChatPageContent = () => {
   const { user } = useAuth();
   const { getDocumentContext } = useChatContext();
   const [debugInfo, setDebugInfo] = useState<string>("");
+  const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
   const documentIds = getDocumentContext();
   
   // Check connection to Edge Function
@@ -126,9 +127,33 @@ const ChatPageContent = () => {
     checkEdgeFunctionConnection();
   }, []);
   
-  // Render debugging panel (development only)
+  const checkDriveConnection = async () => {
+    setDebugInfo("Testing Google Drive connection...");
+    try {
+      const { data, error } = await supabase.functions.invoke('drive-integration', {
+        body: { 
+          operation: 'list',
+          limit: 1,
+          debug: true // Request detailed debugging info
+        },
+      });
+      
+      if (error) {
+        setDebugInfo(`Drive Error: ${error.message || 'Unknown error'}`);
+        console.error("Drive connection error:", error);
+      } else {
+        setDebugInfo(`Drive connected successfully! Found ${data?.files?.length || 0} files.`);
+        console.log("Drive connection successful:", data);
+      }
+    } catch (err) {
+      setDebugInfo(`Drive API Error: ${err.message || 'Unknown error'}`);
+      console.error("Drive connection error:", err);
+    }
+  };
+  
+  // Render debugging panel (development or when toggled)
   const renderDebugPanel = () => {
-    if (process.env.NODE_ENV !== 'development') return null;
+    if (process.env.NODE_ENV !== 'development' && !showDebugPanel) return null;
     
     return (
       <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50">
@@ -137,6 +162,16 @@ const ChatPageContent = () => {
         {documentIds.length > 0 && (
           <p className="text-xs text-muted-foreground">{documentIds.length} active documents</p>
         )}
+        <div className="flex gap-2 mt-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={checkDriveConnection}
+            className="text-xs h-7"
+          >
+            Test Drive API
+          </Button>
+        </div>
       </div>
     );
   };
@@ -148,7 +183,16 @@ const ChatPageContent = () => {
         {/* Header */}
         <header className="h-14 border-b flex items-center px-4">
           {user && (
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Toggle Debug Panel"
+                className="h-8 w-8"
+                onClick={() => setShowDebugPanel(!showDebugPanel)}
+              >
+                <Settings size={16} />
+              </Button>
               <Link to="/knowledge">
                 <Button variant="outline" size="sm" className="flex items-center gap-2">
                   <Database size={16} />

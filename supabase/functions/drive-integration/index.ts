@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
@@ -357,6 +356,7 @@ async function generateJWT(key, requestId, supabase) {
           })
         });
         
+        // Enhanced error logging - capture and log the response body
         if (!tokenResponse.ok) {
           const errorText = await tokenResponse.text();
           let errorJson;
@@ -367,6 +367,23 @@ async function generateJWT(key, requestId, supabase) {
             errorJson = { text: errorText };
           }
           
+          // Log much more detailed information about the error
+          console.error("TOKEN EXCHANGE DETAILED ERROR:", {
+            status: tokenResponse.status,
+            statusText: tokenResponse.statusText,
+            errorResponse: errorJson,
+            jwt_header: header,
+            jwt_claims: {
+              iss: claim.iss,
+              scope: claim.scope,
+              aud: claim.aud,
+              exp: claim.exp,
+              iat: claim.iat
+            },
+            serviceAccountEmail: key.client_email,
+            projectId: key.project_id
+          });
+          
           await logError(supabase, requestId, 'token_exchange', 'Error exchanging JWT for token', 
             new Error(`Token exchange failed with status ${tokenResponse.status}`), { 
               category: 'credential', 
@@ -374,11 +391,14 @@ async function generateJWT(key, requestId, supabase) {
               metadata: {
                 status: tokenResponse.status,
                 statusText: tokenResponse.statusText,
-                errorResponse: errorJson
+                errorResponse: errorJson,
+                serviceAccountEmail: key.client_email,
+                projectId: key.project_id,
+                requestTime: new Date().toISOString()
               }
           });
           
-          throw new Error(`Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+          throw new Error(`Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText} - ${JSON.stringify(errorJson)}`);
         }
         
         const tokenData = await tokenResponse.json();
