@@ -149,28 +149,74 @@ const ChatPageContent = () => {
         setDriveStatus({status: 'success', message: 'Connection successful'});
         console.log("Drive connection successful:", data);
         
-        // Now try to list some files as a further test
-        const listResponse = await supabase.functions.invoke('drive-integration', {
+        // Now try the test_permissions endpoint as a more direct approach
+        const permissionResponse = await supabase.functions.invoke('drive-integration', {
           body: { 
-            operation: 'list',
-            limit: 3,
+            operation: 'test_permissions',
             debug: true
           },
         });
         
-        if (listResponse.error) {
-          setDebugInfo(`Drive connected but list failed: ${listResponse.error.message}`);
-          setDriveStatus({status: 'warning', message: 'Connected but listing failed'});
+        if (permissionResponse.error) {
+          setDebugInfo(`Drive permissions test failed: ${permissionResponse.error.message}`);
+          setDriveStatus({status: 'warning', message: 'Connection OK but permission test failed'});
+          console.error("Drive permissions test error:", permissionResponse.error);
         } else {
-          const fileCount = listResponse.data?.files?.length || 0;
-          setDebugInfo(`Drive connected successfully! Found ${fileCount} files.`);
-          setDriveStatus({status: 'success', message: `Found ${fileCount} files`});
+          const userEmail = permissionResponse.data?.user?.emailAddress;
+          setDebugInfo(`Drive permissions verified! Connected as: ${userEmail || 'unknown'}`);
+          setDriveStatus({
+            status: 'success', 
+            message: `Connected as: ${userEmail || 'unknown'}`
+          });
+          
+          // Now try to list files as a final test
+          await testListFiles();
         }
       }
     } catch (err) {
       setDebugInfo(`Drive API Error: ${err.message || 'Unknown error'}`);
       setDriveStatus({status: 'error', message: err.message});
       console.error("Drive connection error:", err);
+    }
+  };
+  
+  // Separate function to test listing files
+  const testListFiles = async () => {
+    try {
+      const listResponse = await supabase.functions.invoke('drive-integration', {
+        body: { 
+          operation: 'list',
+          limit: 3,
+          debug: true
+        },
+      });
+      
+      if (listResponse.error) {
+        setDebugInfo(`Drive connected but list failed: ${listResponse.error.message}`);
+        setDriveStatus({status: 'warning', message: 'Connected but listing failed'});
+        console.error("List files error:", listResponse.error);
+        
+        // Show more detailed error information
+        if (listResponse.error.message.includes('permission')) {
+          toast.error("Permission denied: The service account doesn't have access to any files. Share files explicitly with the service account email.");
+        } else {
+          toast.error(`Failed to list files: ${listResponse.error.message}`);
+        }
+      } else {
+        const fileCount = listResponse.data?.files?.length || 0;
+        setDebugInfo(`Drive connected successfully! Found ${fileCount} files.`);
+        setDriveStatus({status: 'success', message: `Found ${fileCount} files`});
+        
+        if (fileCount === 0) {
+          toast.warning("No files found. Make sure you've shared at least one file with the service account.");
+        } else {
+          toast.success(`Successfully found ${fileCount} files in Google Drive.`);
+        }
+      }
+    } catch (err) {
+      setDebugInfo(`List files error: ${err.message || 'Unknown error'}`);
+      setDriveStatus({status: 'warning', message: 'Connected but listing failed'});
+      console.error("List files error:", err);
     }
   };
   
@@ -206,6 +252,45 @@ const ChatPageContent = () => {
     } catch (err) {
       setDebugInfo(`Credential check error: ${err.message || 'Unknown error'}`);
       toast.error(`Failed to check credentials: ${err.message}`);
+    }
+  };
+  
+  // Test sharing permissions
+  const testSharingPermissions = async () => {
+    setDebugInfo("Testing Google Drive sharing permissions...");
+    setDriveStatus({status: 'testing'});
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('drive-integration', {
+        body: { 
+          operation: 'test_permissions',
+          debug: true
+        },
+      });
+      
+      if (error) {
+        setDebugInfo(`Permission test failed: ${error.message}`);
+        setDriveStatus({status: 'error', message: 'Permission test failed'});
+        toast.error("Service account doesn't have proper permissions. Check Google Cloud Console.");
+        console.error("Permission test error:", error);
+      } else {
+        const userEmail = data?.user?.emailAddress;
+        const displayName = data?.user?.displayName;
+        
+        setDebugInfo(`Permissions OK! Connected as: ${userEmail || displayName || 'unknown'}`);
+        setDriveStatus({status: 'success', message: `Permissions verified for: ${userEmail || 'service account'}`});
+        toast.success(`Drive API access confirmed as: ${userEmail || displayName || 'service account'}`);
+        
+        // Show sharing instructions
+        toast.info(
+          "To share files with this service account, right-click a file in Google Drive, click 'Share', and add the service account email as a viewer.",
+          { duration: 6000 }
+        );
+      }
+    } catch (err) {
+      setDebugInfo(`Permission test error: ${err.message || 'Unknown error'}`);
+      setDriveStatus({status: 'error', message: 'API error during permission test'});
+      console.error("Permission test error:", err);
     }
   };
   
@@ -252,6 +337,15 @@ const ChatPageContent = () => {
             className="text-xs h-7"
           >
             Check Credentials
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={testSharingPermissions}
+            className="text-xs h-7"
+          >
+            Test Permissions
           </Button>
         </div>
       </div>

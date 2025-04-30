@@ -296,103 +296,321 @@ async function createDriveClient(requestId: string | undefined) {
         const searchQuery = encodeURIComponent(query);
         const fields = encodeURIComponent('files(id,name,mimeType,description,modifiedTime,webViewLink,thumbnailLink)');
         
-        const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=${searchQuery}&fields=${fields}&pageSize=${maxResults}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`
-            }
-          }
+        await logEvent(
+          requestId,
+          'drive-integration',
+          'drive_search_files',
+          `Searching files with query: ${query}`,
+          { query, maxResults },
+          'log',
+          'document'
         );
+        
+        try {
+          const response = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=${searchQuery}&fields=${fields}&pageSize=${maxResults}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`
+              }
+            }
+          );
 
-        if (!response.ok) {
-          throw new Error(`Drive search failed: ${response.status} ${response.statusText}`);
+          if (!response.ok) {
+            const errorText = await response.text();
+            await logError(
+              requestId,
+              'drive-integration',
+              'Drive search failed',
+              { 
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText 
+              },
+              { query, endpoint: 'files' },
+              'error',
+              'document'
+            );
+            
+            throw new Error(`Drive search failed: ${response.status} ${response.statusText} - ${errorText}`);
+          }
+
+          const data = await response.json();
+          
+          await logEvent(
+            requestId,
+            'drive-integration',
+            'drive_search_complete',
+            `Search completed, found ${data.files?.length || 0} files`,
+            { fileCount: data.files?.length || 0 },
+            'log',
+            'document'
+          );
+          
+          return data;
+        } catch (error) {
+          await logError(
+            requestId,
+            'drive-integration',
+            'Search files error',
+            error,
+            { query },
+            'error',
+            'document'
+          );
+          throw error;
         }
-
-        return await response.json();
       },
       
       // Get a specific file's metadata and content
       async getFile(fileId: string) {
         // First get file metadata
-        const metadataResponse = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,description,fileExtension,size,modifiedTime,webViewLink`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`
-            }
-          }
+        await logEvent(
+          requestId,
+          'drive-integration',
+          'drive_get_file',
+          `Getting file metadata for ID: ${fileId}`,
+          { fileId },
+          'log',
+          'document'
         );
-
-        if (!metadataResponse.ok) {
-          throw new Error(`Failed to get file metadata: ${metadataResponse.status} ${metadataResponse.statusText}`);
-        }
-
-        const file = await metadataResponse.json();
         
-        // Then get the file content
-        const contentResponse = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`
+        try {
+          const metadataResponse = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,description,fileExtension,size,modifiedTime,webViewLink`,
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`
+              }
             }
-          }
-        );
+          );
 
-        if (!contentResponse.ok) {
-          throw new Error(`Failed to get file content: ${contentResponse.status} ${contentResponse.statusText}`);
+          if (!metadataResponse.ok) {
+            const errorText = await metadataResponse.text();
+            await logError(
+              requestId,
+              'drive-integration',
+              'Failed to get file metadata',
+              { 
+                status: metadataResponse.status,
+                statusText: metadataResponse.statusText,
+                error: errorText 
+              },
+              { fileId },
+              'error',
+              'document'
+            );
+            throw new Error(`Failed to get file metadata: ${metadataResponse.status} ${metadataResponse.statusText} - ${errorText}`);
+          }
+
+          const file = await metadataResponse.json();
+          
+          // Then get the file content
+          await logEvent(
+            requestId,
+            'drive-integration',
+            'drive_get_content',
+            `Getting content for file: ${file.name}`,
+            { fileId, fileName: file.name },
+            'log',
+            'document'
+          );
+          
+          const contentResponse = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`
+              }
+            }
+          );
+
+          if (!contentResponse.ok) {
+            const errorText = await contentResponse.text();
+            await logError(
+              requestId,
+              'drive-integration',
+              'Failed to get file content',
+              { 
+                status: contentResponse.status,
+                statusText: contentResponse.statusText,
+                error: errorText 
+              },
+              { fileId, fileName: file.name },
+              'error',
+              'document'
+            );
+            throw new Error(`Failed to get file content: ${contentResponse.status} ${contentResponse.statusText} - ${errorText}`);
+          }
+
+          const content = await contentResponse.text();
+          
+          // Determine file type for proper processing
+          const fileType = file.mimeType || 'unknown';
+          
+          await logEvent(
+            requestId,
+            'drive-integration',
+            'drive_file_retrieved',
+            `Successfully retrieved file: ${file.name}`,
+            { fileId, fileName: file.name, fileType, contentLength: content.length },
+            'log',
+            'document'
+          );
+          
+          return {
+            file: {
+              ...file,
+              file_type: fileType,
+              last_accessed: new Date().toISOString()
+            },
+            content: {
+              content,
+              type: fileType
+            }
+          };
+        } catch (error) {
+          await logError(
+            requestId,
+            'drive-integration',
+            'Get file error',
+            error,
+            { fileId },
+            'error',
+            'document'
+          );
+          throw error;
         }
-
-        const content = await contentResponse.text();
-        
-        // Determine file type for proper processing
-        const fileType = file.mimeType || 'unknown';
-        
-        return {
-          file: {
-            ...file,
-            file_type: fileType,
-            last_accessed: new Date().toISOString()
-          },
-          content: {
-            content,
-            type: fileType
-          }
-        };
       },
       
       // List files in Google Drive
       async listFiles(limit: number = 10) {
         const fields = encodeURIComponent('files(id,name,mimeType,description,modifiedTime,webViewLink,thumbnailLink)');
         
-        const response = await fetch(
-          `https://www.googleapis.com/drive/v3/files?fields=${fields}&pageSize=${limit}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`
-            }
-          }
+        await logEvent(
+          requestId,
+          'drive-integration',
+          'drive_list_files',
+          `Listing files (limit: ${limit})`,
+          { limit },
+          'log',
+          'document'
         );
-
-        if (!response.ok) {
-          throw new Error(`Failed to list files: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
         
-        // Format the response to include last_accessed and file_type
-        return {
-          files: data.files.map((file: any) => ({
-            id: file.id,
-            name: file.name,
-            file_type: file.mimeType || 'unknown',
-            description: file.description || null,
-            last_accessed: new Date().toISOString(),
-            webViewLink: file.webViewLink,
-            thumbnailLink: file.thumbnailLink
-          }))
-        };
+        try {
+          // First try with a more specific request to check permissions
+          const testResponse = await fetch(
+            `https://www.googleapis.com/drive/v3/about?fields=user`,
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`
+              }
+            }
+          );
+          
+          if (!testResponse.ok) {
+            const errorText = await testResponse.text();
+            await logError(
+              requestId,
+              'drive-integration',
+              'Permission test failed',
+              { 
+                status: testResponse.status,
+                statusText: testResponse.statusText,
+                error: errorText 
+              },
+              { endpoint: 'about' },
+              'error',
+              'permission'
+            );
+            throw new Error(`Permission check failed: ${testResponse.status} ${testResponse.statusText} - ${errorText}`);
+          }
+          
+          const aboutData = await testResponse.json();
+          
+          await logEvent(
+            requestId,
+            'drive-integration',
+            'drive_permission_check',
+            `Permission check passed`,
+            { user: aboutData.user },
+            'log',
+            'permission'
+          );
+        
+          const response = await fetch(
+            `https://www.googleapis.com/drive/v3/files?fields=${fields}&pageSize=${limit}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`
+              }
+            }
+          );
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorJson;
+            
+            try {
+              errorJson = JSON.parse(errorText);
+            } catch (e) {
+              // If parsing fails, just use the text
+              errorJson = { error: errorText };
+            }
+            
+            await logError(
+              requestId,
+              'drive-integration',
+              'Failed to list files',
+              { 
+                status: response.status,
+                statusText: response.statusText,
+                error: errorJson
+              },
+              { endpoint: 'files', limit },
+              'error',
+              'document'
+            );
+            
+            throw new Error(`Failed to list files: ${response.status} ${response.statusText} - ${JSON.stringify(errorJson)}`);
+          }
+
+          const data = await response.json();
+          
+          await logEvent(
+            requestId,
+            'drive-integration',
+            'drive_list_complete',
+            `List files completed, found ${data.files?.length || 0} files`,
+            { fileCount: data.files?.length || 0 },
+            'log',
+            'document'
+          );
+          
+          // Format the response to include last_accessed and file_type
+          return {
+            files: data.files.map((file: any) => ({
+              id: file.id,
+              name: file.name,
+              file_type: file.mimeType || 'unknown',
+              description: file.description || null,
+              last_accessed: new Date().toISOString(),
+              webViewLink: file.webViewLink,
+              thumbnailLink: file.thumbnailLink
+            }))
+          };
+        } catch (error) {
+          await logError(
+            requestId,
+            'drive-integration',
+            'List files error',
+            error,
+            { limit },
+            'error',
+            'document'
+          );
+          throw error;
+        }
       }
     };
   } catch (error) {
@@ -545,6 +763,37 @@ serve(async (req) => {
           result = { status: 'ok', message: 'Drive integration is operational' };
           break;
           
+        case 'test_permissions':
+          // Test specific API permissions and endpoints
+          try {
+            // Try the about endpoint which requires less permissions
+            const accessToken = await generateJWT(requestId);
+            const testResponse = await fetch(
+              `https://www.googleapis.com/drive/v3/about?fields=user,storageQuota`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`
+                }
+              }
+            );
+            
+            if (!testResponse.ok) {
+              throw new Error(`About API failed: ${testResponse.status} ${testResponse.statusText}`);
+            }
+            
+            const aboutData = await testResponse.json();
+            
+            result = { 
+              status: 'ok', 
+              message: 'Google Drive permissions test passed',
+              user: aboutData.user,
+              quota: aboutData.storageQuota
+            };
+          } catch (error) {
+            throw new Error(`Permissions test failed: ${error.message}`);
+          }
+          break;
+          
         default:
           throw new Error(`Unsupported operation: ${operation}`);
       }
@@ -559,8 +808,20 @@ serve(async (req) => {
         'document'
       );
       
+      // Enhanced error response with more details for debugging
+      const enhancedError = {
+        error: error.message,
+        operation: operation,
+        details: null
+      };
+      
+      // For list operation errors, add more context
+      if (operation === 'list') {
+        enhancedError.details = 'This may be due to permission issues or the service account not having access to any files.';
+      }
+      
       return new Response(
-        JSON.stringify({ error: error.message }), 
+        JSON.stringify(enhancedError), 
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

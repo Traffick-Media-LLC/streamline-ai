@@ -7,6 +7,7 @@ import { useChatFetching } from "./useChatFetching";
 import { useChatSelection } from "./useChatSelection";
 import { useChatSending } from "./useChatSending";
 import { useChatDocuments } from "./useChatDocuments";
+import { toast } from "@/components/ui/sonner";
 
 export const useChatOperations = () => {
   const { user, isGuest } = useAuth();
@@ -24,7 +25,14 @@ export const useChatOperations = () => {
   
   const { createNewChat } = useChatCreation(user, isGuest, setChats, setCurrentChatId);
   const { handleMessageUpdate } = useMessageOperations(user, isGuest, setChats);
-  const { documentContext, setDocumentContext, getDocumentContext, fetchDocumentContents } = useChatDocuments();
+  const { 
+    documentContext, 
+    setDocumentContext, 
+    getDocumentContext, 
+    fetchDocumentContents,
+    isFetching 
+  } = useChatDocuments();
+  
   const { fetchChats } = useChatFetching(
     user, 
     isGuest, 
@@ -34,7 +42,9 @@ export const useChatOperations = () => {
     setIsInitializing, 
     setDocumentContext
   );
+  
   const { selectChat } = useChatSelection(user, currentChatId, setCurrentChatId, chats, setDocumentContext);
+  
   const { sendMessage } = useChatSending(
     user,
     isGuest,
@@ -47,6 +57,24 @@ export const useChatOperations = () => {
     fetchDocumentContents
   );
 
+  // Custom wrapper for the setDocumentContext function that includes some validation
+  const updateDocumentContext = (docIds: string[]) => {
+    if (!Array.isArray(docIds)) {
+      console.error("Invalid document IDs provided:", docIds);
+      toast.error("Invalid document selection");
+      return;
+    }
+    
+    // Filter out any non-string IDs
+    const validIds = docIds.filter(id => typeof id === 'string');
+    if (validIds.length !== docIds.length) {
+      console.warn("Some document IDs were filtered out:", docIds);
+    }
+    
+    // Update the context
+    setDocumentContext(validIds);
+  };
+
   return {
     currentChatId,
     isLoadingResponse,
@@ -56,7 +84,8 @@ export const useChatOperations = () => {
     chats,
     selectChat,
     isInitializing,
-    setDocumentContext,
-    getDocumentContext
+    setDocumentContext: updateDocumentContext,
+    getDocumentContext,
+    isFetchingDocuments: isFetching
   };
 };
