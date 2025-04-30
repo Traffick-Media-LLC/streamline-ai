@@ -245,7 +245,7 @@ export const useChatSending = (
           
           // Add detailed debug logging here to diagnose edge function issues
           console.log("Making Edge Function call to 'chat' with payload:", {
-            content,
+            message: content,
             messagesCount: chatMessages.length,
             documentIds: documentIds.length,
             documentContents: documentContents.length,
@@ -255,11 +255,11 @@ export const useChatSending = (
           // Make the actual API call with detailed error handling
           const { data, error } = await supabase.functions.invoke('chat', {
             body: { 
-              content, 
-              messages: chatMessages,
-              documentIds,
-              documentContents,
-              requestId  // Pass request ID to the edge function for logging
+              message: content, 
+              chatHistory: chatMessages,
+              documentContent: documentContents,
+              requestId,
+              chatId
             },
           });
           
@@ -317,7 +317,7 @@ export const useChatSending = (
             metadata: { 
               responseLength: data.message.length,
               referencedDocumentsCount: data.referencedDocuments?.length || 0,
-              tokensUsed: data.usage?.total_tokens,
+              tokensUsed: data.tokensUsed,
               promptTokens: data.usage?.prompt_tokens,
               completionTokens: data.usage?.completion_tokens,
               model: data.model || 'unknown'
@@ -361,7 +361,7 @@ export const useChatSending = (
               totalDuration: calculateDuration(startTime),
               aiDuration: calculateDuration(aiStartTime),
               responseLength: data.message.length,
-              tokensUsed: data.usage?.total_tokens
+              tokensUsed: data.tokensUsed
             }
           });
         } catch (aiError) {
