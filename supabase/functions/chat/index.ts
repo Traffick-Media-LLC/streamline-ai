@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -35,20 +34,24 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
     
     // Store in database
     if (supabase) {
-      await supabase
-        .from('chat_logs')
-        .insert({
-          request_id: requestId,
-          user_id: userId,
-          chat_id: chatId,
-          event_type: eventType,
-          component,
-          message,
-          duration_ms: durationMs,
-          metadata,
-          error_details: errorDetails,
-          severity
-        });
+      try {
+        await supabase
+          .from('chat_logs')
+          .insert({
+            request_id: requestId,
+            user_id: userId,
+            chat_id: chatId,
+            event_type: eventType,
+            component,
+            message,
+            duration_ms: durationMs,
+            metadata,
+            error_details: errorDetails,
+            severity
+          });
+      } catch (dbError) {
+        console.error("Failed to insert log to database:", dbError);
+      }
     }
   } catch (e) {
     // Don't let logging failures break the main flow
@@ -90,8 +93,21 @@ serve(async (req) => {
   const mainStartTime = startTimer();
   
   try {
-    const request = await req.json();
-    const { content, messages, documentIds = [], documentContents = [], requestId: clientRequestId } = request;
+    let requestData;
+    try {
+      requestData = await req.json();
+    } catch (jsonError) {
+      console.error("Failed to parse request JSON:", jsonError);
+      return new Response(
+        JSON.stringify({ error: "Invalid request format: " + jsonError.message }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
+    }
+    
+    const { content, messages, documentIds = [], documentContents = [], requestId: clientRequestId } = requestData;
     
     requestId = clientRequestId || `edge-${Date.now()}`;
     
@@ -106,8 +122,16 @@ serve(async (req) => {
     
     // Analyze the input to determine which sources to prioritize
     const analyzeStartTime = startTimer();
-    const legalityQuery = isLegalityQuery(content);
-    const fileQuery = isFileQuery(content);
+    let legalityQuery = false;
+    let fileQuery = false;
+    
+    try {
+      legalityQuery = isLegalityQuery(content);
+      fileQuery = isFileQuery(content);
+    } catch (analyzeError) {
+      console.error("Error analyzing query:", analyzeError);
+      // Default to false if analysis fails
+    }
     
     await logEvent(supabase, requestId, 'query_analysis', 'chat_function', `Query analysis completed: Legality=${legalityQuery}, File=${fileQuery}`, {
       durationMs: calculateDuration(analyzeStartTime),
@@ -115,7 +139,14 @@ serve(async (req) => {
     });
     
     // Extract potential terms for database searches
-    const searchTerms = extractSearchTerms(content);
+    let searchTerms = [];
+    try {
+      searchTerms = extractSearchTerms(content);
+    } catch (extractError) {
+      console.error("Error extracting search terms:", extractError);
+      searchTerms = [];
+    }
+    
     await logEvent(supabase, requestId, 'search_terms_extracted', 'chat_function', `Search terms extracted from query`, {
       metadata: { searchTerms }
     });
@@ -400,6 +431,10 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
 
 // Helper function to determine if a query is about legality
 function isLegalityQuery(content) {
+  if (!content || typeof content !== 'string') {
+    return false;
+  }
+  
   const legalityKeywords = [
     'legal', 'illegal', 'allowed', 'banned', 'prohibited', 'law', 'regulation',
     'compliant', 'compliance', 'restriction', 'permit', 'authorized', 'lawful',
@@ -412,6 +447,10 @@ function isLegalityQuery(content) {
 
 // Helper function to determine if a query is about files or documents
 function isFileQuery(content) {
+  if (!content || typeof content !== 'string') {
+    return false;
+  }
+  
   const fileKeywords = [
     'file', 'document', 'pdf', 'image', 'picture', 'photo', 'logo', 'sheet',
     'presentation', 'slide', 'deck', 'brochure', 'manual', 'guide', 'form',
@@ -425,6 +464,10 @@ function isFileQuery(content) {
 
 // Extract meaningful terms for database searches
 function extractSearchTerms(content) {
+  if (!content || typeof content !== 'string') {
+    return [];
+  }
+  
   // Simple extraction - can be enhanced with NLP in the future
   return content
     .split(/\s+/)
@@ -433,7 +476,7 @@ function extractSearchTerms(content) {
     .filter(word => !/^(what|when|where|why|how|can|the|and|for|this|that)$/i.test(word));
 }
 
-// Check for product legality in state database
+// Fix for the reserved word issue
 async function checkProductLegality(supabase, searchTerms, requestId) {
   const startTime = startTimer();
   try {
@@ -442,10 +485,19 @@ async function checkProductLegality(supabase, searchTerms, requestId) {
       metadata: { searchTerms }
     });
     
+    if (!searchTerms || !Array.isArray(searchTerms) || searchTerms.length === 0) {
+      await logEvent(supabase, requestId, 'no_search_terms', 'legality_check', 'No search terms provided for product search', {
+        severity: 'warning'
+      });
+      return null;
+    }
+    
+    const searchConditions = searchTerms.map(term => `name.ilike.%${term}%`).join(',');
+    
     let { data: products, error: productsError } = await supabase
       .from('products')
       .select('id, name, brand_id')
-      .or(searchTerms.map(term => `name.ilike.%${term}%`).join(','))
+      .or(searchConditions)
       .limit(5);
     
     if (productsError) {

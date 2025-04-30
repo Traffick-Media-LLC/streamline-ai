@@ -1,6 +1,10 @@
 
-// This file should re-export from hooks/use-toast without creating circular dependencies
-import { useToast as useToastHook, toast } from "@/hooks/use-toast";
+// To avoid circular dependencies, we re-export the toast from sonner directly
+import { toast } from "sonner";
 
-export const useToast = useToastHook;
+// Re-export toast
 export { toast };
+
+// Export useToast hook from @/hooks/use-toast
+import { useToast } from "@/hooks/use-toast";
+export { useToast };

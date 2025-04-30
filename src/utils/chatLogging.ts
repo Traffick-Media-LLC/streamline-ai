@@ -47,24 +47,28 @@ export const logChatEvent = async (log: ChatLog): Promise<void> => {
     }
 
     // Store log in database
-    const { error } = await supabase
-      .from('chat_logs')
-      .insert({
-        request_id: log.requestId,
-        user_id: log.userId,
-        chat_id: log.chatId,
-        event_type: log.eventType,
-        component: log.component,
-        message: log.message,
-        duration_ms: log.durationMs,
-        metadata: log.metadata || {},
-        error_details: log.errorDetails || {},
-        severity: log.severity || 'info',
-        timestamp: new Date(timestamp).toISOString()
-      });
+    try {
+      const { error } = await supabase
+        .from('chat_logs')
+        .insert({
+          request_id: log.requestId,
+          user_id: log.userId,
+          chat_id: log.chatId,
+          event_type: log.eventType,
+          component: log.component,
+          message: log.message,
+          duration_ms: log.durationMs,
+          metadata: log.metadata || {},
+          error_details: log.errorDetails || {},
+          severity: log.severity || 'info',
+          timestamp: new Date(timestamp).toISOString()
+        });
 
-    if (error) {
-      console.error('Failed to store chat log:', error);
+      if (error) {
+        console.error('Failed to store chat log:', error);
+      }
+    } catch (dbError) {
+      console.error('Database error in logChatEvent:', dbError);
     }
   } catch (e) {
     console.error('Error in logChatEvent:', e);
@@ -82,27 +86,31 @@ export const logChatError = async (
   userId?: string,
   severity: 'error' | 'critical' = 'error'
 ): Promise<void> => {
-  const errorDetails = {
-    message: error?.message || 'Unknown error',
-    stack: error?.stack,
-    name: error?.name,
-    code: error?.code
-  };
+  try {
+    const errorDetails = {
+      message: error?.message || 'Unknown error',
+      stack: error?.stack,
+      name: error?.name,
+      code: error?.code
+    };
 
-  await logChatEvent({
-    requestId,
-    chatId,
-    userId,
-    eventType: 'error',
-    component,
-    message,
-    errorDetails,
-    metadata,
-    severity
-  });
+    await logChatEvent({
+      requestId,
+      chatId,
+      userId,
+      eventType: 'error',
+      component,
+      message,
+      errorDetails,
+      metadata,
+      severity
+    });
 
-  // For critical errors, show a user-facing toast
-  if (severity === 'critical') {
-    toast.error(`Chat error: ${message}`);
+    // For critical errors, show a user-facing toast
+    if (severity === 'critical') {
+      toast.error(`Chat error: ${message}`);
+    }
+  } catch (e) {
+    console.error('Error in logChatError:', e);
   }
 };

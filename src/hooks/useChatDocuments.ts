@@ -29,13 +29,14 @@ export const useChatDocuments = () => {
       const formattedRequestId = requestId || uuidv4();
       
       // Format chatId to ensure UUID compatibility
-      // For guest chats, we'll generate a UUID to use as a reference in the database
-      // but we'll use the original chatId for client-side operations
       let formattedChatId = chatId;
+      let originalChatId = chatId; // Keep original for client-side reference
+      
       try {
         if (chatId && chatId.startsWith('guest-')) {
           // Create a stable UUID derived from the guest chat ID for database compatibility
           formattedChatId = uuidv4();
+          console.log(`Converting guest chat ID ${chatId} to UUID ${formattedChatId} for database compatibility`);
         }
       } catch (chatIdError) {
         console.error("Error formatting chatId:", chatIdError);
@@ -44,10 +45,10 @@ export const useChatDocuments = () => {
       
       // Log the document fetch attempt
       try {
-        logChatEvent({
+        await logChatEvent({
           requestId: formattedRequestId,
           userId,
-          chatId: formattedChatId, // Use the UUID-compatible chat ID
+          chatId: formattedChatId, // Use the UUID-compatible chat ID for database
           eventType: 'fetch_document_contents',
           component: 'useChatDocuments',
           message: `Fetching contents for ${documentIds.length} documents`,
@@ -68,6 +69,8 @@ export const useChatDocuments = () => {
             continue;
           }
 
+          console.log(`Fetching document content for ID: ${id}`);
+          
           const response = await supabase.functions.invoke('drive-integration', {
             body: { 
               operation: 'get', 
@@ -81,25 +84,29 @@ export const useChatDocuments = () => {
             console.error("Drive function error:", response.error);
             
             // Determine if this is a credentials error
-            const isCredentialsError = response.error.message?.includes("credentials") || 
-                                      response.error.message?.includes("authentication") ||
-                                      response.error.message?.includes("parse");
+            const errorMsg = response.error.message || "";
+            const isCredentialsError = 
+              errorMsg.includes("credentials") || 
+              errorMsg.includes("authentication") ||
+              errorMsg.includes("parse") ||
+              errorMsg.includes("JSON");
                                       
             // Provide a user-friendly error message based on error type
             if (isCredentialsError) {
               toast.error("Google Drive credentials are invalid or malformed. Please check your configuration.");
+              console.error("Google Drive credentials error details:", errorMsg);
             } else {
-              toast.error(`Error fetching document: ${response.error.message || "Unknown error"}`);
+              toast.error(`Error fetching document: ${errorMsg || "Unknown error"}`);
             }
             
             try {
-              logChatEvent({
+              await logChatEvent({
                 requestId: formattedRequestId,
                 userId,
                 chatId: formattedChatId,
                 eventType: 'fetch_document_error',
                 component: 'useChatDocuments',
-                message: `Drive function error: ${response.error.message || "Unknown error"}`,
+                message: `Drive function error: ${errorMsg || "Unknown error"}`,
                 severity: 'error',
                 errorDetails: response.error
               });
@@ -114,7 +121,7 @@ export const useChatDocuments = () => {
           const data = response.data;
           if (data?.error) {
             try {
-              logChatEvent({
+              await logChatEvent({
                 requestId: formattedRequestId,
                 userId,
                 chatId: formattedChatId,
@@ -133,6 +140,7 @@ export const useChatDocuments = () => {
               toast.error("Document access is unavailable. Google Drive credentials are not configured.");
             } else if (data.error?.includes("credentials") || data.error?.includes("parse")) {
               toast.error("Invalid Google Drive credentials format. Please check your configuration.");
+              console.error("Invalid Google Drive credentials format details:", data.error);
             } else {
               toast.error(`Error fetching document: ${data.error}`);
             }
@@ -142,7 +150,7 @@ export const useChatDocuments = () => {
           
           if (!data) {
             try {
-              logChatEvent({
+              await logChatEvent({
                 requestId: formattedRequestId,
                 userId,
                 chatId: formattedChatId,
@@ -166,7 +174,7 @@ export const useChatDocuments = () => {
             });
             
             try {
-              logChatEvent({
+              await logChatEvent({
                 requestId: formattedRequestId,
                 userId,
                 chatId: formattedChatId,
@@ -184,7 +192,7 @@ export const useChatDocuments = () => {
             }
           } else {
             try {
-              logChatEvent({
+              await logChatEvent({
                 requestId: formattedRequestId,
                 userId,
                 chatId: formattedChatId,
@@ -204,7 +212,7 @@ export const useChatDocuments = () => {
         } catch (err) {
           console.error("Exception in document fetch loop:", err);
           try {
-            logChatEvent({
+            await logChatEvent({
               requestId: formattedRequestId,
               userId,
               chatId: formattedChatId,
@@ -221,7 +229,7 @@ export const useChatDocuments = () => {
       }
       
       try {
-        logChatEvent({
+        await logChatEvent({
           requestId: formattedRequestId,
           userId,
           chatId: formattedChatId,
@@ -249,7 +257,7 @@ export const useChatDocuments = () => {
       
       // Safely log the error without referencing potentially invalid chatId
       try {
-        logChatEvent({
+        await logChatEvent({
           requestId: fallbackRequestId,
           userId,
           eventType: 'document_fetch_failed',

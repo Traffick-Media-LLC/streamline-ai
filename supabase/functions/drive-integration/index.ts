@@ -35,20 +35,24 @@ const logEvent = async (supabase, requestId, eventType, component, message, opti
     
     // Store in database
     if (supabase) {
-      await supabase
-        .from('chat_logs')
-        .insert({
-          request_id: requestId,
-          user_id: userId,
-          chat_id: chatId,
-          event_type: eventType,
-          component,
-          message,
-          duration_ms: durationMs,
-          metadata,
-          error_details: errorDetails,
-          severity
-        });
+      try {
+        await supabase
+          .from('chat_logs')
+          .insert({
+            request_id: requestId,
+            user_id: userId,
+            chat_id: chatId,
+            event_type: eventType,
+            component,
+            message,
+            duration_ms: durationMs,
+            metadata,
+            error_details: errorDetails,
+            severity
+          });
+      } catch (dbError) {
+        console.error("Failed to insert log to database:", dbError);
+      }
     }
   } catch (e) {
     // Don't let logging failures break the main flow
@@ -82,21 +86,44 @@ async function createDriveClient(credentials) {
     try {
       // First, ensure credentials is a string
       if (typeof credentials !== 'string') {
-        throw new Error(`Credentials must be a string, got ${typeof credentials}`);
+        const credType = typeof credentials;
+        console.error(`Invalid credentials type: expected string, got ${credType}`);
+        throw new Error(`Credentials must be a string, got ${credType}`);
       }
+      
+      // Trim whitespace to ensure clean parsing
+      const credentialsString = credentials.trim();
       
       // Check if the credentials look like a JSON string
-      if (!credentials.trim().startsWith('{')) {
-        throw new Error("Credentials don't appear to be in JSON format");
+      if (!credentialsString.startsWith('{')) {
+        console.error("Credentials don't appear to be in JSON format");
+        const preview = credentialsString.substring(0, 30);
+        throw new Error(`Credentials don't appear to be in JSON format. Preview: ${preview}...`);
       }
       
-      // Attempt to parse
-      key = JSON.parse(credentials);
+      // Attempt to parse with detailed error catching
+      try {
+        key = JSON.parse(credentialsString);
+      } catch (jsonError) {
+        console.error("JSON parsing error:", jsonError);
+        throw new Error(`Failed to parse credentials JSON: ${jsonError.message}`);
+      }
       
       // Validate that key has required properties
-      if (!key.client_email || !key.private_key) {
-        throw new Error("Credentials missing required fields (client_email or private_key)");
+      if (!key) {
+        throw new Error("Parsed credentials resulted in null or undefined");
       }
+      
+      if (!key.client_email) {
+        throw new Error("Credentials missing required field: client_email");
+      }
+      
+      if (!key.private_key) {
+        throw new Error("Credentials missing required field: private_key");
+      }
+      
+      console.log("Successfully parsed Google Drive credentials");
+      
     } catch (e) {
       console.error("Error parsing Google Drive credentials:", e);
       const credentialPreview = typeof credentials === 'string' 
@@ -142,6 +169,11 @@ async function generateJWT(key) {
   const signatureInput = `${headerBase64}.${claimBase64}`;
   
   try {
+    // Check for valid private key
+    if (!key.private_key || typeof key.private_key !== 'string') {
+      throw new Error(`Invalid private key: ${typeof key.private_key}`);
+    }
+    
     // Import private key
     const privateKey = await crypto.subtle.importKey(
       "pkcs8",
@@ -201,19 +233,38 @@ function pemToArrayBuffer(pem) {
       throw new Error(`Invalid private key format: ${typeof pem}`);
     }
     
-    const base64 = pem
-      .replace(/-----BEGIN PRIVATE KEY-----/, "")
-      .replace(/-----END PRIVATE KEY-----/, "")
-      .replace(/\n/g, "");
+    // Clean the private key - remove any extra whitespace and ensure proper format
+    let cleanedPem = pem.trim();
     
-    const binary = atob(base64);
-    const buffer = new Uint8Array(binary.length);
-    
-    for (let i = 0; i < binary.length; i++) {
-      buffer[i] = binary.charCodeAt(i);
+    // Check if the key has the BEGIN/END markers
+    if (!cleanedPem.includes("-----BEGIN PRIVATE KEY-----")) {
+      throw new Error("Private key is missing BEGIN marker");
+    }
+    if (!cleanedPem.includes("-----END PRIVATE KEY-----")) {
+      throw new Error("Private key is missing END marker");
     }
     
-    return buffer.buffer;
+    const base64 = cleanedPem
+      .replace(/-----BEGIN PRIVATE KEY-----/, "")
+      .replace(/-----END PRIVATE KEY-----/, "")
+      .replace(/\s+/g, "");  // Remove all whitespace, not just newlines
+    
+    if (!base64) {
+      throw new Error("Private key is empty after removing headers");
+    }
+    
+    try {
+      const binary = atob(base64);
+      const buffer = new Uint8Array(binary.length);
+      
+      for (let i = 0; i < binary.length; i++) {
+        buffer[i] = binary.charCodeAt(i);
+      }
+      
+      return buffer.buffer;
+    } catch (decodeError) {
+      throw new Error(`Failed to decode base64 private key: ${decodeError.message}`);
+    }
   } catch (e) {
     console.error("Error converting PEM to ArrayBuffer:", e);
     throw new Error(`Private key conversion failed: ${e.message}`);
@@ -371,7 +422,25 @@ serve(async (req) => {
   const mainStartTime = startTimer();
 
   try {
-    const { operation, fileId, query, limit = 10, requestId: clientRequestId } = await req.json();
+    // Parse request body
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (jsonParseError) {
+      console.error("Invalid JSON in request:", jsonParseError);
+      return new Response(
+        JSON.stringify({ 
+          error: "Invalid JSON in request body",
+          details: jsonParseError.message
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
+    
+    const { operation, fileId, query, limit = 10, requestId: clientRequestId } = requestBody;
     requestId = clientRequestId || `drive-${Date.now()}`;
     
     await logEvent(supabase, requestId, 'function_invoked', 'drive_integration', `Drive integration invoked with operation: ${operation}`, {
