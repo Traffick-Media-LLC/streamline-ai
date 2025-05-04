@@ -1,3 +1,4 @@
+
 import { useChatContext } from "../contexts/ChatContext";
 import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
@@ -70,7 +71,7 @@ const ChatWindow = () => {
     return <div className="flex flex-col items-center justify-center h-full p-4 text-center space-y-6">
         <Animated type="slide-up" delay={0.1}>
           <h1 className="text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-streamline-red to-streamline-darkGray">
-            {userName ? `Hey, ${userName}` : "Hi, i'm Max."}
+            {userName ? `Hey, ${userName}` : "Hey, there!"}
           </h1>
         </Animated>
         
