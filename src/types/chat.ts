@@ -3,17 +3,11 @@ export interface ChatContextType {
   currentChatId: string | null;
   isLoadingResponse: boolean;
   createNewChat: () => Promise<string | null>;
-  sendMessage: (content: string, docIds?: string[]) => Promise<void>;
+  sendMessage: (content: string) => Promise<void>;
   getCurrentChat: () => Chat | null;
   chats: Chat[];
   selectChat: (chatId: string) => void;
   isInitializing: boolean;
-  setDocumentContext: (docIds: string[]) => void;
-  getDocumentContext: () => string[];
-  showDriveSetupInstructions: () => void;
-  isFetchingDocuments?: boolean;
-  sharedDriveId?: string; // Added this property
-  searchDriveFiles?: (query: string) => Promise<void>; // Added search files function
 }
 
 export interface Chat {
@@ -29,18 +23,7 @@ export interface Message {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: number;
-  documentIds?: string[];
-  referencedDocuments?: DocumentReference[];
   animationDelay?: number;
-}
-
-export interface DocumentReference {
-  id: string;
-  name: string;
-  content?: string;
-  processed_at?: string;
-  webLink?: string; // Added web link to document references
-  thumbnailLink?: string; // Added thumbnail link
 }
 
 // Enhanced chat log interface with categorization
@@ -56,5 +39,5 @@ export interface ChatLog {
   errorDetails?: Record<string, any>;
   severity?: 'debug' | 'info' | 'warning' | 'error' | 'critical';
   timestamp?: number;
-  category?: 'auth' | 'network' | 'document' | 'ai_response' | 'database' | 'credential' | 'generic';
+  category?: 'auth' | 'network' | 'ai_response' | 'database' | 'credential' | 'generic';
 }

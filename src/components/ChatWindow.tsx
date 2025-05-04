@@ -1,11 +1,12 @@
+
 import { useChatContext } from "../contexts/ChatContext";
 import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Animated, AnimatedList } from "@/components/ui/animated";
 import { useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+
 const ChatWindow = () => {
   const {
     getCurrentChat,
@@ -52,6 +53,7 @@ const ChatWindow = () => {
     }
     return messages;
   }, [currentChat]);
+
   if (isInitializing) {
     return <div className="flex items-center justify-center h-full">
         <Animated type="scale">
@@ -62,6 +64,7 @@ const ChatWindow = () => {
         </Animated>
       </div>;
   }
+
   if (!currentChat) {
     return <div className="flex flex-col items-center justify-center h-full p-4 text-center space-y-6">
         <Animated type="slide-up" delay={0.1}>
@@ -82,6 +85,7 @@ const ChatWindow = () => {
         </Animated>
       </div>;
   }
+
   return <div className="flex-1 h-full overflow-hidden flex flex-col">
       <ScrollArea className="flex-1">
         <div className="p-4 min-h-full">
@@ -101,4 +105,5 @@ const ChatWindow = () => {
       </ScrollArea>
     </div>;
 };
+
 export default ChatWindow;
