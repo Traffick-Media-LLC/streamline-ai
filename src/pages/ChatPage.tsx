@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 import { Database, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ const ChatPageContent = () => {
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
   
   // Check connection to Edge Function
-  useState(() => {
+  useEffect(() => {
     const checkEdgeFunctionConnection = async () => {
       if (process.env.NODE_ENV === 'development') {
         try {
@@ -46,7 +46,7 @@ const ChatPageContent = () => {
     };
     
     checkEdgeFunctionConnection();
-  }, []); // Fixed: Removed incorrect arguments here
+  }, []); 
   
   // Render debugging panel (development or when toggled)
   const renderDebugPanel = () => {
