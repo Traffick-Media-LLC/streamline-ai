@@ -66,8 +66,7 @@ export const useMessageOperations = (
           message: `Saving ${message.role} message to database`,
           metadata: { 
             messageId: message.id, 
-            messageRole: message.role,
-            hasDocumentIds: !!message.documentIds && message.documentIds.length > 0
+            messageRole: message.role
           }
         });
         
@@ -77,8 +76,7 @@ export const useMessageOperations = (
           .insert({
             chat_id: chatId,
             role: message.role,
-            content: message.content,
-            document_ids: message.documentIds || [] // Include document_ids in the insert
+            content: message.content
           });
 
         if (error) {

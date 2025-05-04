@@ -51,7 +51,7 @@ export const useChatFetching = (
         const transformedChats = await Promise.all(data.map(async chat => {
           // Get messages for this chat
           const { data: messagesData, error: messagesError } = await supabase
-            .from('messages')
+            .from('chat_messages')
             .select()
             .eq('chat_id', chat.id)
             .order('timestamp', { ascending: true });

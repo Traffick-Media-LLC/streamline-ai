@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Message } from "../types/chat";
 import { formatTimestamp } from "../utils/chatUtils";
 import { renderTextWithLinks } from "../utils/textUtils";
-import { Copy, Edit, FileText, ExternalLink } from "lucide-react";
+import { Copy, Edit } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useChatContext } from "../contexts/ChatContext";
@@ -40,9 +40,6 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
     setIsEditing(false);
   };
 
-  // Show document references if any
-  const hasDocRefs = message.documentIds?.length > 0 || message.referencedDocuments?.length > 0;
-
   return (
     <div className={`flex items-start ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -78,54 +75,6 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
           ) : (
             <div className="text-[15px] font-normal leading-relaxed break-words whitespace-pre-wrap">
               {renderTextWithLinks(message.content)}
-              
-              {/* Show document references for assistant messages */}
-              {!isUser && message.referencedDocuments && message.referencedDocuments.length > 0 && (
-                <div className="mt-3 pt-2 border-t">
-                  <p className="text-xs text-muted-foreground mb-1">Referenced documents:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {message.referencedDocuments.map(doc => (
-                      <div 
-                        key={doc.id}
-                        className="bg-muted/50 text-xs px-2 py-1 rounded flex items-center gap-1"
-                      >
-                        <FileText size={12} className="text-blue-500" />
-                        {doc.webLink ? (
-                          <a 
-                            href={doc.webLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-blue-600 hover:underline"
-                          >
-                            <span>{doc.name}</span>
-                            <ExternalLink size={10} className="inline-block" />
-                          </a>
-                        ) : (
-                          <span>{doc.name}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Show attached documents for user messages */}
-              {isUser && message.documentIds && message.documentIds.length > 0 && (
-                <div className="mt-3 pt-2 border-t">
-                  <p className="text-xs text-muted-foreground mb-1">With document context:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {message.documentIds.map(docId => (
-                      <div 
-                        key={docId}
-                        className="bg-muted/50 text-xs px-2 py-1 rounded flex items-center gap-1"
-                      >
-                        <FileText size={12} />
-                        <span className="truncate max-w-[120px]">{docId}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>

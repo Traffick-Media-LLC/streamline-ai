@@ -21,7 +21,7 @@ export const calculateDuration = (startTime: number): number => {
 
 // Enhanced log category types for better error classification
 export type LogSeverity = 'debug' | 'info' | 'warning' | 'error' | 'critical';
-export type LogCategory = 'auth' | 'network' | 'document' | 'ai_response' | 'database' | 'credential' | 'generic';
+export type LogCategory = 'auth' | 'network' | 'ai_response' | 'database' | 'credential' | 'generic';
 
 // Log a chat event to the database and console with enhanced details
 export const logChatEvent = async (log: ChatLog): Promise<void> => {
@@ -135,10 +135,6 @@ export const logChatError = async (
         method: metadata?.method || 'unknown',
         status: error?.status || error?.response?.status
       } : {}),
-      ...(category === 'document' ? {
-        documentIds: metadata?.documentIds || [],
-        operation: metadata?.operation || 'unknown'
-      } : {}),
       ...(category === 'credential' ? {
         service: metadata?.service || 'unknown',
         credentialType: metadata?.credentialType || 'unknown'
@@ -166,9 +162,6 @@ export const logChatError = async (
       switch (category) {
         case 'network':
           userMessage = `Network error: ${message}`;
-          break;
-        case 'document':
-          userMessage = `Document error: ${message}`;
           break;
         case 'credential':
           userMessage = `Authentication error: ${message}`;

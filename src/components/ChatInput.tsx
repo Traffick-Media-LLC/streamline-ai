@@ -10,17 +10,13 @@ const ChatInput = () => {
   const {
     sendMessage,
     createNewChat,
-    isLoadingResponse,
-    getDocumentContext,
-    setDocumentContext
+    isLoadingResponse
   } = useChatContext();
-
-  const selectedDocuments = getDocumentContext();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isLoadingResponse) return;
-    await sendMessage(message, selectedDocuments);
+    await sendMessage(message);
     setMessage("");
   };
 

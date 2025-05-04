@@ -8,7 +8,6 @@ export const useChatState = () => {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [documentContext, setDocumentContext] = useState<string[]>([]);
 
   const getCurrentChat = () => {
     if (!currentChatId) return null;
@@ -24,8 +23,6 @@ export const useChatState = () => {
     setIsLoadingResponse,
     isInitializing,
     setIsInitializing,
-    documentContext,
-    setDocumentContext,
     getCurrentChat
   };
 };
