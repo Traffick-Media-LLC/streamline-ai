@@ -46,7 +46,7 @@ const ChatPageContent = () => {
     };
     
     checkEdgeFunctionConnection();
-  }, []);
+  }, []); // Fixed: Removed incorrect arguments here
   
   // Render debugging panel (development or when toggled)
   const renderDebugPanel = () => {
