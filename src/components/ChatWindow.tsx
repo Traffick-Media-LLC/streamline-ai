@@ -1,4 +1,3 @@
-
 import { useChatContext } from "../contexts/ChatContext";
 import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
@@ -7,31 +6,29 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Animated, AnimatedList } from "@/components/ui/animated";
 import { useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-
 const ChatWindow = () => {
   const {
     getCurrentChat,
     isLoadingResponse,
     isInitializing
   } = useChatContext();
-  
-  const { user } = useAuth();
+  const {
+    user
+  } = useAuth();
   const currentChat = getCurrentChat();
 
   // Get user's name from auth context
   const userName = useMemo(() => {
     if (!user) return '';
-    
+
     // Try to get name from user metadata (Google auth stores it here)
-    const fullName = user.user_metadata?.full_name || 
-                    `${user.user_metadata?.given_name || ''} ${user.user_metadata?.family_name || ''}`.trim();
-    
+    const fullName = user.user_metadata?.full_name || `${user.user_metadata?.given_name || ''} ${user.user_metadata?.family_name || ''}`.trim();
+
     // If we have a full name, return the first name
     if (fullName) {
       const firstName = fullName.split(' ')[0];
       return firstName || '';
     }
-    
     return '';
   }, [user]);
 
@@ -55,7 +52,6 @@ const ChatWindow = () => {
     }
     return messages;
   }, [currentChat]);
-
   if (isInitializing) {
     return <div className="flex items-center justify-center h-full">
         <Animated type="scale">
@@ -66,7 +62,6 @@ const ChatWindow = () => {
         </Animated>
       </div>;
   }
-
   if (!currentChat) {
     return <div className="flex flex-col items-center justify-center h-full p-4 text-center space-y-6">
         <Animated type="slide-up" delay={0.1}>
@@ -76,7 +71,7 @@ const ChatWindow = () => {
         </Animated>
         
         <Animated type="slide-up" delay={0.2}>
-          <h2 className="text-2xl font-medium text-foreground/90">Your personal Streamline assistant</h2>
+          <h2 className="text-2xl font-medium text-foreground/90">I'm Max, your personal Streamline assistant</h2>
         </Animated>
         
         <Animated type="fade" delay={0.3} className="max-w-md">
@@ -87,7 +82,6 @@ const ChatWindow = () => {
         </Animated>
       </div>;
   }
-
   return <div className="flex-1 h-full overflow-hidden flex flex-col">
       <ScrollArea className="flex-1">
         <div className="p-4 min-h-full">
@@ -107,5 +101,4 @@ const ChatWindow = () => {
       </ScrollArea>
     </div>;
 };
-
 export default ChatWindow;
