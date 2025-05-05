@@ -76,7 +76,7 @@ export const useStatePermissionsOperations = () => {
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
       // Check the user's role directly from Supabase
-      const { data: roleData, error: roleError } = await supabase.rpc('get_user_role', { user_id: supabase.auth.getUser() });
+      const { data: roleData, error: roleError } = await supabase.rpc('get_user_role');
       
       if (roleError) {
         throw new Error(`Failed to verify admin status: ${roleError.message}`);
@@ -169,9 +169,7 @@ export const useStatePermissionsOperations = () => {
       errorTracker.logError(
         'Failed to save state permissions',
         error,
-        { stateId, productIds, retryCount },
-        'error',
-        'database'
+        { stateId, productIds, retryCount }
       );
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
