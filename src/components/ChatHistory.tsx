@@ -1,3 +1,4 @@
+
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ProfileEditDialog from "./ProfileEditDialog";
-import ProfileSetupDialog from "./ProfileSetupDialog";
 
 const ChatHistory = ({
   onClose,
@@ -88,7 +88,6 @@ const ChatHistory = ({
   
   return (
     <div className="flex flex-col h-full">
-      <ProfileSetupDialog />
       <div className="p-2">
         <Button 
           variant="outline" 
