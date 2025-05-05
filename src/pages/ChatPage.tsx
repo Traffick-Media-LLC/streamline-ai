@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
-import { Database, Settings } from "lucide-react";
+import { Database, Settings, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import ChatWindow from "../components/ChatWindow";
@@ -12,11 +12,20 @@ import { toast } from "@/components/ui/sonner";
 import { useChatContext } from "../contexts/ChatContext";
 import { supabase } from "@/integrations/supabase/client";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import ChatHistory from "../components/ChatHistory";
+import { 
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const ChatPageContent = () => {
   const { user } = useAuth();
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const isMobile = useIsMobile();
   
   // Check connection to Edge Function
   useEffect(() => {
@@ -46,7 +55,7 @@ const ChatPageContent = () => {
     };
     
     checkEdgeFunctionConnection();
-  }, []); 
+  }, []);
   
   // Render debugging panel (development or when toggled)
   const renderDebugPanel = () => {
@@ -68,6 +77,15 @@ const ChatPageContent = () => {
         <header className="h-14 border-b flex items-center px-4">
           {user && (
             <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                title="Chat History"
+                className="h-8 w-8"
+                onClick={() => setHistoryOpen(true)}
+              >
+                <History size={16} />
+              </Button>
               <Button
                 variant="outline"
                 size="icon"
@@ -99,6 +117,14 @@ const ChatPageContent = () => {
           </div>
         </div>
       </div>
+      
+      {/* History Sheet */}
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent side="right" className="w-[320px] sm:w-[400px] p-0">
+          <ChatHistory onClose={() => setHistoryOpen(false)} isMobile={isMobile} />
+        </SheetContent>
+      </Sheet>
+      
       {renderDebugPanel()}
     </div>
   );

@@ -27,6 +27,10 @@ const ChatInput = () => {
     }
   };
 
+  const handleCreateNewChat = async () => {
+    await createNewChat();
+  };
+
   return (
     <div className="border-t p-4 bg-background">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -52,7 +56,7 @@ const ChatInput = () => {
           <Button 
             type="button" 
             variant="outline" 
-            onClick={() => createNewChat()} 
+            onClick={handleCreateNewChat} 
             className="flex items-center gap-2"
             disabled={isLoadingResponse}
           >
