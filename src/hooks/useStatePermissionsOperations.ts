@@ -72,7 +72,7 @@ export const useStatePermissionsOperations = () => {
       setIsError(false);
       setLastError(null);
 
-      // Fix: Pass arguments separately to match the method signature
+      // Fix: Use the correct method signature for logStage
       await errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
@@ -166,8 +166,11 @@ export const useStatePermissionsOperations = () => {
       setIsError(true);
       setLastError(error.message);
       
-      // Fix: Pass message and error as separate arguments
-      errorTracker.logError("Failed to save state permissions", error);
+      // Fix: Use the correct method signature for logError
+      await errorTracker.logError(
+        "Failed to save state permissions", 
+        error
+      );
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
         error,
