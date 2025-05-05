@@ -41,9 +41,9 @@ class ErrorBoundary extends Component<Props, State> {
     // Enhanced error logging with categorization
     console.error("Uncaught error:", error, errorInfo);
     
-    // Log to our centralized error tracking system
+    // Log to our centralized error tracking system with the appropriate method signature
     this.state.errorTracker.logError(
-      `Uncaught React error: ${error.message}`,
+      `Uncaught React error: ${error.message}`, 
       error,
       {
         componentStack: errorInfo.componentStack,

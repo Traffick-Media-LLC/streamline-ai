@@ -67,6 +67,7 @@ export class ErrorTracker {
    */
   async logError(message: string): Promise<void>;
   async logError(message: string, error: unknown): Promise<void>;
+  async logError(message: string, error: unknown, metadata: Record<string, any>): Promise<void>;
   async logError(
     message: string,
     error?: unknown,
@@ -74,6 +75,7 @@ export class ErrorTracker {
     severity?: 'error' | 'critical',
     category?: LogCategory
   ): Promise<void> {
+    // If we're calling with 5 parameters, we need to pass them all to the underlying logError
     await logError(
       this.context,
       message,
