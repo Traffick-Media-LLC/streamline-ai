@@ -165,8 +165,8 @@ export const useStatePermissionsOperations = () => {
       setIsError(true);
       setLastError(error.message);
       
-      // Fix: Use a single argument for the logError method
-      errorTracker.logError(error);
+      // Fix: Use correct arguments for the logError method
+      errorTracker.logError("Failed to save state permissions", error);
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
         error,
