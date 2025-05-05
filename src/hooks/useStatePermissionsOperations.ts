@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -165,12 +164,10 @@ export const useStatePermissionsOperations = () => {
       setIsError(true);
       setLastError(error.message);
       
-      // Fixed: Only passing the message and error object to logError
-      // The last parameter was causing the TypeScript error
-      errorTracker.logError(
-        'Failed to save state permissions',
-        error
-      );
+      // The issue is here - we need to match the signature from ErrorTracker.logError method
+      // In the ErrorTracker class in utils/chatLogging.ts, the logError method is defined to
+      // accept 1-5 parameters, but our implementation is using it incorrectly
+      errorTracker.logError('Failed to save state permissions');
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
         error,
