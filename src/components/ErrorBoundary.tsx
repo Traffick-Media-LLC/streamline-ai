@@ -3,7 +3,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { logChatError, generateRequestId, formatErrorForLogging } from "@/utils/chatLogging";
+import { ErrorTracker, generateRequestId } from "@/utils/logging";
 
 interface Props {
   children: ReactNode;
@@ -16,15 +16,21 @@ interface State {
   error: Error | null;
   errorInfo: ErrorInfo | null;
   requestId: string;
+  errorTracker: ErrorTracker;
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-    requestId: generateRequestId()
-  };
+  constructor(props: Props) {
+    super(props);
+    const requestId = generateRequestId();
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+      requestId,
+      errorTracker: new ErrorTracker(props.component || 'ErrorBoundary', undefined, undefined, requestId)
+    };
+  }
 
   public static getDerivedStateFromError(error: Error): Partial<State> {
     // Update state so the next render will show the fallback UI
@@ -35,13 +41,8 @@ class ErrorBoundary extends Component<Props, State> {
     // Enhanced error logging with categorization
     console.error("Uncaught error:", error, errorInfo);
     
-    // Use the component name provided in props or fallback to the class name
-    const componentName = this.props.component || 'ErrorBoundary';
-    
     // Log to our centralized error tracking system
-    logChatError(
-      this.state.requestId,
-      componentName,
+    this.state.errorTracker.logError(
       `Uncaught React error: ${error.message}`,
       error,
       {
@@ -50,21 +51,26 @@ class ErrorBoundary extends Component<Props, State> {
         errorType: error.name,
         errorLocation: error.stack?.split('\n')[1] || 'unknown'
       },
-      undefined,
-      undefined,
       'critical',
-      'generic'
+      'ui'
     );
     
     this.setState({ errorInfo });
   }
 
   public resetError = (): void => {
+    const requestId = generateRequestId();
     this.setState({ 
       hasError: false, 
       error: null,
       errorInfo: null,
-      requestId: generateRequestId() // Generate a new request ID for future errors
+      requestId,
+      errorTracker: new ErrorTracker(
+        this.props.component || 'ErrorBoundary', 
+        undefined, 
+        undefined, 
+        requestId
+      )
     });
   }
 

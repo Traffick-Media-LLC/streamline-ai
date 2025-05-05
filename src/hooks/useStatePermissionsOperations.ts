@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { logChatError, generateRequestId, ErrorTracker } from "@/utils/chatLogging";
+import { ErrorTracker, generateRequestId } from "@/utils/logging";
 
 export const useStatePermissionsOperations = () => {
   const [isSaving, setIsSaving] = useState(false);
@@ -14,10 +14,10 @@ export const useStatePermissionsOperations = () => {
 
   // Create a reusable error tracker for this component
   const errorTracker = new ErrorTracker(
-    generateRequestId(),
     'StatePermissionsOperations',
     undefined,
-    undefined
+    undefined,
+    generateRequestId()
   );
 
   const addDebugLog = (level: string, message: string, data?: any) => {
@@ -72,7 +72,6 @@ export const useStatePermissionsOperations = () => {
       setIsError(false);
       setLastError(null);
 
-      // Fix: Use the correct method signature for logStage
       await errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
@@ -166,10 +165,17 @@ export const useStatePermissionsOperations = () => {
       setIsError(true);
       setLastError(error.message);
       
-      // Fix: Use the correct method signature for logError
+      // Use our new properly typed method
       await errorTracker.logError(
         "Failed to save state permissions", 
-        error
+        error, 
+        {
+          stateId,
+          productIds,
+          retryCount
+        },
+        'error',
+        'database'
       );
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
