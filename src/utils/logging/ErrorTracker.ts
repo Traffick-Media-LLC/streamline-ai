@@ -63,23 +63,21 @@ export class ErrorTracker {
   
   /**
    * Log a specific error with the tracker context
-   * @param message The error message
-   * @param error The error object
-   * @param metadata Additional contextual data
-   * @param severity Error severity level
-   * @param category Error category
+   * Method overloads to support different parameter patterns
    */
+  async logError(message: string): Promise<void>;
+  async logError(message: string, error: unknown): Promise<void>;
   async logError(
     message: string,
-    error: unknown,
+    error?: unknown,
     metadata?: Record<string, any>,
-    severity: 'error' | 'critical' = 'error',
-    category: LogCategory = 'generic'
+    severity?: 'error' | 'critical',
+    category?: LogCategory
   ): Promise<void> {
     await logError(
       this.context,
       message,
-      error,
+      error || new Error(message),
       metadata,
       severity,
       category

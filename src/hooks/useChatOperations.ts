@@ -8,7 +8,7 @@ import { useChatSelection } from "./useChatSelection";
 import { useChatSending } from "./useChatSending";
 import { toast } from "@/components/ui/sonner";
 import { useState } from "react";
-import { generateRequestId } from "../utils/logging";
+import { generateRequestId, ErrorTracker } from "@/utils/logging";
 
 export const useChatOperations = () => {
   const { user, isGuest } = useAuth();

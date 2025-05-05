@@ -25,6 +25,7 @@ export interface EventLog extends BaseLog {
   severity?: LogSeverity;
   category?: LogCategory;
   durationMs?: number;
+  errorDetails?: Record<string, any>; // Added to fix TS2353 error
 }
 
 // Error-specific log with enhanced error details
@@ -51,6 +52,13 @@ export interface AppError extends Error {
   status?: number;
   cause?: Error | unknown;
   metadata?: Record<string, any>;
+}
+
+// Polyfill for Error.cause in older environments 
+declare global {
+  interface Error {
+    cause?: Error | unknown;
+  }
 }
 
 export interface NetworkError extends AppError {

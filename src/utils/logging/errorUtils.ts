@@ -16,9 +16,22 @@ export function isError(value: unknown): value is Error {
  * Checks if a value is a network error
  */
 export function isNetworkError(error: unknown): error is NetworkError {
-  return isError(error) && 
-    ('status' in error || 
-    (error.cause && typeof error.cause === 'object' && error.cause !== null && 'status' in error.cause));
+  if (!isError(error)) return false;
+  
+  // Check direct properties first
+  if ('status' in error && typeof error.status === 'number') return true;
+  
+  // Then check cause if it exists
+  const errorCause = error.cause;
+  if (errorCause && 
+      typeof errorCause === 'object' && 
+      errorCause !== null && 
+      'status' in errorCause && 
+      typeof errorCause.status === 'number') {
+    return true;
+  }
+  
+  return false;
 }
 
 /**
