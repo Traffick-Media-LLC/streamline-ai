@@ -164,10 +164,8 @@ export const useStatePermissionsOperations = () => {
       setIsError(true);
       setLastError(error.message);
       
-      // The issue is here - we need to match the signature from ErrorTracker.logError method
-      // In the ErrorTracker class in utils/chatLogging.ts, the logError method is defined to
-      // accept 1-5 parameters, but our implementation is using it incorrectly
-      errorTracker.logError('Failed to save state permissions');
+      // Fix: Pass both required arguments to logError (message and error)
+      errorTracker.logError('Failed to save state permissions', error);
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
         error,
