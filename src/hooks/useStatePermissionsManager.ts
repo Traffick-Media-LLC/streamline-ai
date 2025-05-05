@@ -11,7 +11,7 @@ export const useStatePermissionsManager = () => {
   const { isAuthenticated, isAdmin } = useAuth();
   const { states, stateProducts, loading: statesLoading, error: statesError, refreshData } = useStatePermissionsData();
   const { products, brands, loading: productsLoading, error: productsError } = useProductsData();
-  const { saveStatePermissions, isSaving } = useStatePermissionsOperations();
+  const { saveStatePermissions, isSaving, debugLogs } = useStatePermissionsOperations();
   
   const [selectedState, setSelectedState] = useState<State | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
@@ -135,6 +135,7 @@ export const useStatePermissionsManager = () => {
     getStateProducts,
     handleEditState,
     refreshData: forceRefreshData,
-    hasChanges
+    hasChanges,
+    debugLogs
   };
 };

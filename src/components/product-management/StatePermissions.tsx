@@ -1,14 +1,16 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, MapPin, List, Loader2 } from "lucide-react";
+import { AlertTriangle, RefreshCw, MapPin, List, Loader2, Bug } from "lucide-react";
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { StatePermissionsList } from "./StatePermissionsList";
 import { StatePermissionsMap } from "./StatePermissionsMap";
 import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
 import { StatePermissionsProps } from '@/types/statePermissions';
 import { useAuth } from "@/contexts/AuthContext";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const StatePermissions: React.FC<StatePermissionsProps> = () => {
   const {
@@ -32,10 +34,12 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     getStateProducts,
     handleEditState,
     refreshData,
-    hasChanges
+    hasChanges,
+    debugLogs
   } = useStatePermissionsManager();
 
   const { isAuthenticated, isAdmin } = useAuth();
+  const [showDebug, setShowDebug] = useState(false);
 
   // Show auth status for debugging
   React.useEffect(() => {
@@ -112,8 +116,64 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
             )}
             Refresh
           </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="ml-2"
+            onClick={() => setShowDebug(!showDebug)}
+            title="Toggle Debug Panel"
+          >
+            <Bug className="h-4 w-4" />
+          </Button>
         </div>
       </div>
+
+      {showDebug && (
+        <Collapsible className="mb-6 border rounded-md p-2">
+          <CollapsibleTrigger asChild>
+            <div className="flex items-center justify-between cursor-pointer p-2">
+              <h3 className="text-sm font-semibold flex items-center">
+                <Bug className="h-4 w-4 mr-2" /> Debug Information
+              </h3>
+              <span className="text-xs text-muted-foreground">
+                {debugLogs?.length || 0} entries
+              </span>
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-1 p-2 text-xs font-mono">
+                {debugLogs?.length ? (
+                  debugLogs.map((log, i) => (
+                    <div 
+                      key={i} 
+                      className={`p-2 rounded ${
+                        log.level === 'error' ? 'bg-red-50 text-red-800' : 
+                        log.level === 'warning' ? 'bg-yellow-50 text-yellow-800' : 
+                        log.level === 'success' ? 'bg-green-50 text-green-800' : 
+                        'bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex justify-between">
+                        <span className="font-bold">[{log.level.toUpperCase()}]</span>
+                        <span>{new Date().toISOString()}</span>
+                      </div>
+                      <div className="mt-1">{log.message}</div>
+                      {log.data && (
+                        <div className="mt-1 overflow-x-auto">
+                          <pre>{JSON.stringify(log.data, null, 2)}</pre>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-2 text-center text-muted-foreground">No logs available</div>
+                )}
+              </div>
+            </ScrollArea>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {loading ? (
         <div className="flex flex-col items-center justify-center my-12">
