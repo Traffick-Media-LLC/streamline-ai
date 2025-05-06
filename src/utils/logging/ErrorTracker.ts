@@ -75,7 +75,7 @@ export class ErrorTracker {
     severity?: 'error' | 'critical',
     category?: LogCategory
   ): Promise<void> {
-    // If we're calling with 5 parameters, we need to pass them all to the underlying logError
+    // Create a single object with all parameters to pass to the underlying logError function
     await logError(
       this.context,
       message,

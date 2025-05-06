@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
@@ -41,7 +40,8 @@ class ErrorBoundary extends Component<Props, State> {
     // Enhanced error logging with categorization
     console.error("Uncaught error:", error, errorInfo);
     
-    // Log to our centralized error tracking system with the appropriate method signature
+    // Log to our centralized error tracking system
+    // Using the method signature that accepts message, error, and metadata
     this.state.errorTracker.logError(
       `Uncaught React error: ${error.message}`, 
       error,
@@ -50,9 +50,7 @@ class ErrorBoundary extends Component<Props, State> {
         // Extract additional context that might be helpful
         errorType: error.name,
         errorLocation: error.stack?.split('\n')[1] || 'unknown'
-      },
-      'critical',
-      'ui'
+      }
     );
     
     this.setState({ errorInfo });
