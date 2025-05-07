@@ -73,14 +73,18 @@ export const useStatePermissionsOperations = () => {
       await errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
-      // Check the user's role directly from Supabase
-      const { data: roleData, error: roleError } = await supabase.rpc('get_user_role');
+      // Use the is_admin() function instead of directly querying user roles
+      const { data: isAdminResult, error: isAdminError } = await supabase.rpc('is_admin');
       
-      if (roleError) {
-        throw new Error(`Failed to verify admin status: ${roleError.message}`);
+      if (isAdminError) {
+        throw new Error(`Failed to verify admin status: ${isAdminError.message}`);
       }
       
-      addDebugLog('info', "User role check", { roleData });
+      addDebugLog('info', "Admin check result", { isAdmin: isAdminResult });
+      
+      if (!isAdminResult) {
+        throw new Error('Admin access required to modify permissions.');
+      }
 
       // First step: Delete existing permissions
       addDebugLog('info', "Deleting existing permissions", { stateId });
@@ -163,14 +167,17 @@ export const useStatePermissionsOperations = () => {
       setIsError(true);
       setLastError(error.message);
       
-      // Fix: Use our method signature with the correct number of arguments
       await errorTracker.logError(
-        "Failed to save state permissions", 
-        error, 
+        "Failed to save state permissions",
         {
           stateId,
           productIds,
-          retryCount
+          retryCount,
+          error: {
+            message: error.message,
+            code: error.code,
+            status: error.status
+          }
         }
       );
       
