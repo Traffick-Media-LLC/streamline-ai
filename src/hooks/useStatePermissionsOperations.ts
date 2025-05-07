@@ -14,10 +14,8 @@ export const useStatePermissionsOperations = () => {
 
   // Create a reusable error tracker for this component
   const errorTracker = new ErrorTracker(
-    'StatePermissionsOperations',
-    undefined,
-    undefined,
-    generateRequestId()
+    generateRequestId(),
+    'StatePermissionsOperations'
   );
 
   const addDebugLog = (level: string, message: string, data?: any) => {
