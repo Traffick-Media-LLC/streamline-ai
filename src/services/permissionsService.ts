@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorTracker } from "@/utils/logging";
 import { DebugLogger } from "@/utils/permissions/validationUtils";
@@ -53,7 +52,7 @@ export const deleteExistingPermissions = async (
       .select('*', { count: 'exact', head: true });
 
     if (deleteError) {
-      await errorTracker.logError("Delete error occurred", deleteError);
+      await errorTracker.logError(`Delete error occurred: ${deleteError.message}`);
       return { 
         success: false, 
         error: `Failed to update permissions: ${deleteError.message}` 
@@ -93,7 +92,7 @@ export const insertNewPermissions = async (
       .select();
 
     if (insertError) {
-      await errorTracker.logError("Insert error occurred", insertError);
+      await errorTracker.logError(`Insert error occurred: ${insertError.message}`);
       return { 
         success: false, 
         error: `Failed to save new permissions: ${insertError.message}` 
@@ -123,7 +122,7 @@ export const verifyPermissionsState = async (
       .eq('state_id', stateId);
       
     if (verifyError) {
-      await errorTracker.logError("Verification query failed", verifyError);
+      await errorTracker.logError(`Verification query failed: ${verifyError.message}`);
       return { success: false, error: verifyError.message };
     }
     
@@ -171,14 +170,14 @@ export const checkPermissionsExist = async (
       .eq('state_id', stateId);
     
     if (error) {
-      await errorTracker.logError("Error checking permissions", error);
+      await errorTracker.logError(`Error checking permissions: ${error.message}`);
       throw error;
     }
     
     await errorTracker.logStage('check_permissions', 'complete', { count });
     return !!count && count > 0;
-  } catch (error) {
-    await errorTracker.logError("Exception checking permissions", error);
+  } catch (error: any) {
+    await errorTracker.logError(`Exception checking permissions: ${error.message}`);
     console.error('Error checking permissions:', error);
     return false; 
   }
