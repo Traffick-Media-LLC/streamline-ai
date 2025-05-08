@@ -8,6 +8,7 @@ import { StatePermissionsHeader } from "./StatePermissionsHeader";
 import { StatePermissionsContent } from "./StatePermissionsContent";
 import { StatePermissionsDebugPanel } from "./StatePermissionsDebugPanel";
 import { StatePermissionsAuthCheck } from "./StatePermissionsAuthCheck";
+import { toast } from "@/components/ui/sonner";
 
 const StatePermissions: React.FC<StatePermissionsProps> = () => {
   const {
@@ -32,7 +33,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     handleEditState,
     refreshData,
     hasChanges,
-    debugLogs
+    debugLogs,
+    refreshCounter // Get the refresh counter to force re-renders
   } = useStatePermissionsManager();
 
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
@@ -41,8 +43,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
 
   // Show auth status for debugging
   React.useEffect(() => {
-    console.log("StatePermissions component - Auth status:", { isAuthenticated, isAdmin, isGuest });
-  }, [isAuthenticated, isAdmin, isGuest]);
+    console.log("StatePermissions component - Auth status:", { isAuthenticated, isAdmin, isGuest, refreshCounter });
+  }, [isAuthenticated, isAdmin, isGuest, refreshCounter]);
 
   // On mount, perform a refresh
   useEffect(() => {
@@ -52,13 +54,44 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     }
   }, [isAuthenticated, isAdmin, isGuest, refreshData]);
 
+  // When isDialogOpen changes to false (dialog closes), refresh data
+  useEffect(() => {
+    if (!isDialogOpen && (isAuthenticated || isAdmin || isGuest)) {
+      console.log("Dialog closed, refreshing data");
+      // Short delay before refresh to ensure state is updated
+      setTimeout(() => {
+        refreshData();
+      }, 300);
+    }
+  }, [isDialogOpen, isAuthenticated, isAdmin, isGuest, refreshData]);
+
+  // Force a refresh if auth state changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isAuthenticated || isAdmin || isGuest) {
+        console.log("Auth state changed, refreshing data");
+        refreshData();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, isAdmin, isGuest, refreshData]);
+
   // Create auth check component but don't render immediately
   const authCheckComponent = (
     <StatePermissionsAuthCheck 
       isAuthenticated={isAuthenticated || isGuest}
       isAdmin={isAdmin || isGuest}
       error={error}
-      refreshData={refreshData}
+      refreshData={() => {
+        toast.loading("Refreshing data...");
+        refreshData().then(success => {
+          if (success) {
+            toast.success("Data refreshed successfully");
+          } else {
+            toast.error("Failed to refresh data");
+          }
+        });
+      }}
     />
   );
   

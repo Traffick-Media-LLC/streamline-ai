@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { useStatePermissionsData } from './useStatePermissionsData';
 import { useProductsData } from './useProductsData';
@@ -11,7 +12,7 @@ import { State } from '@/types/statePermissions';
 import { useAuth } from "@/contexts/AuthContext";
 
 export const useStatePermissionsManager = () => {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, isGuest } = useAuth();
   
   // Data fetching hooks
   const { 
@@ -19,7 +20,8 @@ export const useStatePermissionsManager = () => {
     stateProducts, 
     loading: statesLoading, 
     error: statesError, 
-    refreshData 
+    refreshData,
+    refreshCounter // Get the refresh counter to force re-renders
   } = useStatePermissionsData();
   
   const { 
@@ -77,27 +79,42 @@ export const useStatePermissionsManager = () => {
 
   // Effect to check authentication status
   useEffect(() => {
-    if (!isAuthenticated && !isAdmin) {
-      console.log("Not authenticated or not admin. Auth state:", { isAuthenticated, isAdmin });
+    if (!isAuthenticated && !isAdmin && !isGuest) {
+      console.log("Not authenticated or not admin. Auth state:", { isAuthenticated, isAdmin, isGuest });
     } else {
-      console.log("Authenticated and admin access confirmed. Auth state:", { isAuthenticated, isAdmin });
+      console.log("Authenticated and admin access confirmed. Auth state:", { isAuthenticated, isAdmin, isGuest });
     }
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin, isGuest]);
   
   // Initial data loading
   useEffect(() => {
-    if (isAuthenticated && isAdmin) {
-      performRobustRefresh();
+    if (isAuthenticated || isAdmin || isGuest) {
+      console.log("Initial data loading triggered by auth state");
+      performRobustRefresh(true);
     }
-  }, [isAuthenticated, isAdmin, performRobustRefresh]);
+  }, [isAuthenticated, isAdmin, isGuest, performRobustRefresh]);
+
+  // Additional effect to monitor stateProducts changes for debugging
+  useEffect(() => {
+    console.log("StateProducts updated:", stateProducts.length, "items");
+  }, [stateProducts]);
+
+  // Effect to monitor refreshCounter changes
+  useEffect(() => {
+    if (refreshCounter > 0) {
+      console.log("Refresh counter updated:", refreshCounter);
+    }
+  }, [refreshCounter]);
 
   // Wrap the base state click handler to include the states array and setIsDialogOpen
   const handleStateClick = useCallback((stateName: string) => {
+    console.log("handleStateClick called with state:", stateName);
     return baseHandleStateClick(stateName, states, setIsDialogOpen);
   }, [baseHandleStateClick, states, setIsDialogOpen]);
 
   // Wrap the base edit state handler with setIsDialogOpen
   const handleEditState = useCallback((state: State) => {
+    console.log("handleEditState called with state:", state.name);
     return baseHandleEditState(state, setIsDialogOpen);
   }, [baseHandleEditState, setIsDialogOpen]);
 
@@ -139,6 +156,7 @@ export const useStatePermissionsManager = () => {
     handleEditState,
     refreshData: forceRefreshData,
     hasChanges,
-    debugLogs
+    debugLogs,
+    refreshCounter
   };
 };

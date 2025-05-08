@@ -55,7 +55,7 @@ export const usePermissionsOperations = ({
       if (success) {
         console.log("Save successful, preparing to refresh data");
         
-        // Mark that we have changes but don't close dialog yet
+        // Mark that we have no changes, but don't close dialog yet
         setHasChanges(false);
         
         // Record the state we just saved for re-selection
@@ -67,45 +67,50 @@ export const usePermissionsOperations = ({
         toast.dismiss(saveToastId);
         toast.success("State permissions saved successfully");
         
-        // Start a longer refresh delay to ensure database has settled
-        console.log("Starting refresh sequence with delay");
-        setTimeout(async () => {
-          // Only close dialog after refresh completes
-          console.log("Starting data refresh after save");
-          
-          try {
-            // Multiple attempts with increasing delay if needed
-            let refreshSuccess = false;
-            let attempts = 0;
-            
-            while (!refreshSuccess && attempts < 3) {
-              attempts++;
-              const delay = Math.pow(2, attempts - 1) * 500; // 500ms, 1s, 2s
-              
-              if (attempts > 1) {
-                console.log(`Refresh attempt ${attempts} with ${delay}ms delay`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-              }
-              
-              refreshSuccess = await performRobustRefresh(true);
-            }
-            
-            if (refreshSuccess) {
-              console.log("Refresh successful after save");
-              setIsDialogOpen(false);
-            } else {
-              console.error("Failed to refresh data after multiple attempts");
-              toast.error("Warning: UI may not reflect the latest data. Please try manual refresh.", {
-                description: "The save was successful but refreshing the data failed"
-              });
-              setIsDialogOpen(false);
-            }
-          } catch (refreshError) {
-            console.error("Exception during refresh:", refreshError);
-            toast.error("Error refreshing UI after save");
+        // Start a longer refresh sequence with multiple attempts
+        console.log("Starting multi-phase refresh sequence");
+        
+        // Phase 1: Initial delay to ensure database has settled
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Phase 2: First refresh attempt
+        let refreshSuccess = await performRobustRefresh(true);
+        
+        // Phase 3: If first attempt fails, try again with longer delay
+        if (!refreshSuccess) {
+          console.log("First refresh failed, trying again after delay");
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          refreshSuccess = await performRobustRefresh(true);
+        }
+        
+        // Phase 4: Final attempt if needed
+        if (!refreshSuccess) {
+          console.log("Second refresh failed, final attempt");
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          refreshSuccess = await performRobustRefresh(true);
+        }
+        
+        // Only close dialog after all refresh attempts
+        if (refreshSuccess) {
+          console.log("Refresh successful, closing dialog");
+          // Delay closing to ensure UI updates first
+          setTimeout(() => {
             setIsDialogOpen(false);
-          }
-        }, 1000); // Increased delay for database to finalize transaction
+          }, 500);
+        } else {
+          console.error("Failed to refresh data after multiple attempts");
+          toast.error("Warning: UI may not reflect the latest data", {
+            description: "The save was successful but refreshing the UI failed. Please try manual refresh.",
+            action: {
+              label: "Refresh",
+              onClick: () => performRobustRefresh(true)
+            }
+          });
+          // Still close dialog even if refresh fails
+          setTimeout(() => {
+            setIsDialogOpen(false);
+          }, 500);
+        }
       } else {
         console.error("Save failed");
         toast.dismiss(saveToastId);

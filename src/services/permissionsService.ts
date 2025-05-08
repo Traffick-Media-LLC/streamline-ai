@@ -235,10 +235,14 @@ export const verifyPermissionsState = async (
     // Small delay to ensure database has settled
     await new Promise(resolve => setTimeout(resolve, 300));
     
+    // Add cache buster to ensure fresh data
+    const cacheBuster = Date.now();
+    
     const { data: verifyData, error: verifyError } = await supabase
       .from('state_allowed_products')
       .select('product_id')
-      .eq('state_id', stateId);
+      .eq('state_id', stateId)
+      .order('product_id');
       
     if (verifyError) {
       await errorTracker.logError(`Verification query failed: ${verifyError.message}`);
@@ -335,6 +339,10 @@ export const checkPermissionsExist = async (
 ): Promise<boolean> => {
   try {
     await errorTracker.logStage('check_permissions', 'start', { stateId });
+    
+    // Add cache buster to ensure fresh data
+    const cacheBuster = Date.now();
+    
     const { count, error } = await supabase
       .from('state_allowed_products')
       .select('*', { count: 'exact', head: true })

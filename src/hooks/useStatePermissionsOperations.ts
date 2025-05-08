@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { ErrorTracker } from "@/utils/logging";
@@ -24,17 +24,33 @@ export const useStatePermissionsOperations = () => {
 
   const addDebugLog: DebugLogger = (level: string, message: string, data?: any) => {
     console.log(`[${level}] ${message}`, data);
-    setDebugLogs(prev => [...prev, { level, message, data }]);
+    // Use a callback to ensure we're getting the latest state
+    setDebugLogs(prev => {
+      // Limit log size to prevent memory issues
+      const newLogs = [...prev, { level, message, data }];
+      if (newLogs.length > 100) {
+        return newLogs.slice(newLogs.length - 100);
+      }
+      return newLogs;
+    });
   };
 
+  const clearDebugLogs = useCallback(() => {
+    setDebugLogs([]);
+  }, []);
+
   const saveStatePermissions = async (stateId: number, productIds: number[], retryCount = 0): Promise<boolean> => {
+    // Generate a unique operation ID for logging and tracking
+    const operationId = `save-${stateId}-${Date.now()}`;
+    
     addDebugLog('info', "Starting saveStatePermissions", { 
       stateId, 
       productIds, 
-      isAuthenticated, 
-      isAdmin, 
+      isAuthenticated: isAuthenticated || isGuest, 
+      isAdmin: isAdmin || isGuest, 
       isGuest,
-      retryCount 
+      retryCount,
+      operationId
     });
     
     // Verify authentication and admin status first with more detailed logging
@@ -60,7 +76,8 @@ export const useStatePermissionsOperations = () => {
         productIds,
         isAuthenticated: isAuthenticated || isGuest,
         isAdmin: isAdmin || isGuest,
-        isGuest
+        isGuest,
+        operationId
       });
 
       // Verify admin status
@@ -115,14 +132,15 @@ export const useStatePermissionsOperations = () => {
       });
 
       // Log successful completion
-      await errorTracker.logStage('saving_permissions', 'complete');
+      await errorTracker.logStage('saving_permissions', 'complete', { operationId });
       return true;
     } catch (error: any) {
       // Log error
       await errorTracker.logStage('saving_permissions', 'error', { 
         errorMessage: error.message,
         errorCode: error.code,
-        errorStatus: error.status
+        errorStatus: error.status,
+        operationId
       });
       
       console.error('Error saving state permissions:', error);
@@ -139,13 +157,19 @@ export const useStatePermissionsOperations = () => {
         productIds
       });
       
-      // Handle retry for network-related errors
+      // Handle retry for network-related errors or verification issues
       if (retryCount < 2 && (
         error.message.includes('network') || 
         error.message.includes('timeout') || 
-        error.message.includes('connection')
+        error.message.includes('connection') ||
+        error.message.includes('Verification failed')
       )) {
         addDebugLog('info', "Retrying save operation", { retryCount: retryCount + 1 });
+        
+        // Increase delay for each retry
+        const delay = Math.pow(2, retryCount) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
         return await saveStatePermissions(stateId, productIds, retryCount + 1);
       }
       
@@ -161,6 +185,7 @@ export const useStatePermissionsOperations = () => {
     isSaving,
     isError,
     lastError,
-    debugLogs
+    debugLogs,
+    clearDebugLogs
   };
 };

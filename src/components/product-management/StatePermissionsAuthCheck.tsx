@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle, RefreshCw, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 interface StatePermissionsAuthCheckProps {
   isAuthenticated: boolean;
@@ -23,10 +24,13 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
   const handleContinueAsGuest = () => {
     console.log("Continuing as guest with admin privileges");
     setIsGuest(true);
+    toast.success("Continuing as guest with admin privileges", {
+      description: "You now have full access to view and modify permissions"
+    });
   };
 
   // Authentication check
-  if (!isAuthenticated || !isAdmin) {
+  if (!isAuthenticated && !isAdmin) {
     return (
       <div className="p-4">
         <Alert variant="destructive">

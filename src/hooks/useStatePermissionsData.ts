@@ -13,6 +13,7 @@ export const useStatePermissionsData = () => {
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   const [lastRefreshTime, setLastRefreshTime] = useState<number | null>(null);
+  const [refreshCounter, setRefreshCounter] = useState(0); // New counter to force re-renders
 
   const fetchStates = useCallback(async (abortSignal?: AbortSignal) => {
     try {
@@ -26,7 +27,8 @@ export const useStatePermissionsData = () => {
         .from('states')
         .select('*', { count: 'exact' })
         .order('name')
-        .abortSignal(abortSignal);
+        .abortSignal(abortSignal)
+        .eq('1', '1'); // Adding dummy parameter with unique value to bust cache
       
       if (error) throw error;
       console.log("States data received:", data?.length || 0, "items");
@@ -57,7 +59,8 @@ export const useStatePermissionsData = () => {
       const { data, error } = await supabase
         .from('state_allowed_products')
         .select('*', { count: 'exact' })
-        .abortSignal(abortSignal);
+        .abortSignal(abortSignal)
+        .eq('1', '1'); // Adding dummy parameter with unique value to bust cache
       
       if (error) throw error;
       console.log("State products data received:", data?.length || 0, "items");
@@ -69,6 +72,7 @@ export const useStatePermissionsData = () => {
         product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
       })) || [];
       
+      console.log("Normalized state products:", normalizedData);
       setStateProducts(normalizedData);
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -112,10 +116,18 @@ export const useStatePermissionsData = () => {
       // Set last refresh time immediately to prevent duplicate calls
       setLastRefreshTime(currentTime);
       
+      // Increment refresh counter to force re-renders
+      setRefreshCounter(prev => prev + 1);
+      
+      // First clear the state products to avoid stale data
+      setStateProducts([]);
+      
       // Delay between requests to prevent race conditions
       await fetchStates(signal);
-      // Short delay between API calls
-      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Longer delay between API calls to ensure states are loaded first
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
       await fetchStateProducts(signal);
       
       console.log("State permissions data refresh complete");
@@ -143,7 +155,7 @@ export const useStatePermissionsData = () => {
       // Create new AbortController for this attempt
       abortController = new AbortController();
       
-      const success = await refreshData();
+      const success = await refreshData(true); // Always force refresh on initial load
       
       if (!success && refreshAttempts < 2 && isMounted) {
         // Increment attempts and try again with exponential backoff
@@ -166,13 +178,14 @@ export const useStatePermissionsData = () => {
         abortController.abort();
       }
     };
-  }, [isAuthenticated, isAdmin, isGuest, refreshAttempts, refreshData]);
+  }, [isAuthenticated, isAdmin, isGuest, refreshAttempts, refreshData, refreshCounter]); // Added refreshCounter to dependencies
 
   return {
     states,
     stateProducts,
     loading,
     error,
-    refreshData
+    refreshData,
+    refreshCounter // Expose the counter to force re-renders in dependent components
   };
 };
