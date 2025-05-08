@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorTracker } from "@/utils/logging";
 import { DebugLogger } from "@/utils/permissions/validationUtils";
@@ -52,6 +53,7 @@ export const deleteExistingPermissions = async (
     .select('*'); // no 'head: true'
 
   if (deleteError) {
+    // Here's the fix - errorTracker.logError was being called with too many arguments
     await errorTracker.logError(`Delete error occurred: ${deleteError.message}`);
     return {
       success: false,
