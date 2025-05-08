@@ -73,17 +73,24 @@ export const StatePermissionsErrorBoundary: React.FC<StatePermissionsErrorBounda
   onRetry,
   component = 'StatePermissions'
 }) => {
+  // Create a fallback element using the StatePermissionsErrorFallback component
+  const renderFallback = React.useCallback(({ error, resetErrorBoundary, requestId }: { 
+    error: Error; 
+    resetErrorBoundary: () => void;
+    requestId: string;
+  }) => (
+    <StatePermissionsErrorFallback
+      error={error}
+      resetErrorBoundary={resetErrorBoundary}
+      requestId={requestId}
+      onRetry={onRetry}
+    />
+  ), [onRetry]);
+
   return (
     <ErrorBoundary
       component={component}
-      fallback={({ error, resetErrorBoundary, requestId }) => (
-        <StatePermissionsErrorFallback
-          error={error}
-          resetErrorBoundary={resetErrorBoundary}
-          requestId={requestId}
-          onRetry={onRetry}
-        />
-      )}
+      fallback={renderFallback}
     >
       {children}
     </ErrorBoundary>

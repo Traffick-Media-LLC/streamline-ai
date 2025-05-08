@@ -43,7 +43,9 @@ export const usePermissionsOperations = ({
       saveToastId = toast.loading("Saving permissions...", { id: "saving-permissions-progress" }).id;
       
       // Ensure stateId is treated as a number
-      const stateId = typeof selectedState.id === 'number' ? selectedState.id : parseInt(String(selectedState.id), 10);
+      const stateId = typeof selectedState.id === 'number' ? 
+        selectedState.id : 
+        parseInt(String(selectedState.id), 10);
       
       const success = await saveStatePermissions(stateId, selectedProducts);
       if (success) {
