@@ -13,22 +13,19 @@ export const useStatePermissionsData = () => {
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   const [lastRefreshTime, setLastRefreshTime] = useState<number | null>(null);
-  const [refreshCounter, setRefreshCounter] = useState(0); // New counter to force re-renders
+  // Use a simple number for refresh counter instead of a function that references itself
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   const fetchStates = useCallback(async (abortSignal?: AbortSignal) => {
     try {
       setError(null);
       console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin, isGuest });
       
-      // Generate a cache-busting query param
-      const cacheBuster = Date.now();
-      
       const { data, error } = await supabase
         .from('states')
         .select('*', { count: 'exact' })
         .order('name')
-        .abortSignal(abortSignal)
-        .eq('1', '1'); // Adding dummy parameter with unique value to bust cache
+        .abortSignal(abortSignal);
       
       if (error) throw error;
       console.log("States data received:", data?.length || 0, "items");
@@ -53,14 +50,11 @@ export const useStatePermissionsData = () => {
     try {
       console.log("Fetching state products data...");
       
-      // Generate a cache-busting query param
-      const cacheBuster = Date.now();
-      
+      // Remove cache buster that caused recursive type dependency
       const { data, error } = await supabase
         .from('state_allowed_products')
         .select('*', { count: 'exact' })
-        .abortSignal(abortSignal)
-        .eq('1', '1'); // Adding dummy parameter with unique value to bust cache
+        .abortSignal(abortSignal);
       
       if (error) throw error;
       console.log("State products data received:", data?.length || 0, "items");
@@ -86,6 +80,7 @@ export const useStatePermissionsData = () => {
     }
   }, []);
 
+  // Simplified refresh function that avoids circular references
   const refreshData = useCallback(async (force = false) => {
     if (!isAuthenticated && !isGuest) {
       console.log("Not authenticated, skipping state permissions data fetch");
@@ -178,7 +173,7 @@ export const useStatePermissionsData = () => {
         abortController.abort();
       }
     };
-  }, [isAuthenticated, isAdmin, isGuest, refreshAttempts, refreshData, refreshCounter]); // Added refreshCounter to dependencies
+  }, [isAuthenticated, isAdmin, isGuest, refreshAttempts, refreshData]);
 
   return {
     states,
