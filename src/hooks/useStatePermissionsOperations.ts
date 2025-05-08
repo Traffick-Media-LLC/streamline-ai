@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { ErrorTracker, generateRequestId } from "@/utils/logging";
+import { ErrorTracker } from "@/utils/logging";
 
 export const useStatePermissionsOperations = () => {
   const [isSaving, setIsSaving] = useState(false);
@@ -13,10 +13,7 @@ export const useStatePermissionsOperations = () => {
   const [debugLogs, setDebugLogs] = useState<Array<{level: string, message: string, data?: any}>>([]);
 
   // Create a reusable error tracker for this component
-  const errorTracker = new ErrorTracker(
-    generateRequestId(),
-    'StatePermissionsOperations'
-  );
+  const errorTracker = new ErrorTracker('StatePermissionsOperations');
 
   const addDebugLog = (level: string, message: string, data?: any) => {
     console.log(`[${level}] ${message}`, data);
@@ -70,11 +67,13 @@ export const useStatePermissionsOperations = () => {
       setIsError(false);
       setLastError(null);
 
-      await errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
+      errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
-      // Use the is_admin() function instead of directly querying user roles
-      const { data: isAdminResult, error: isAdminError } = await supabase.rpc('is_admin');
+      // Use has_role('admin') which is less likely to have ambiguous column issues
+      const { data: isAdminResult, error: isAdminError } = await supabase.rpc('has_role', {
+        _role: 'admin'
+      });
       
       if (isAdminError) {
         throw new Error(`Failed to verify admin status: ${isAdminError.message}`);
@@ -152,12 +151,12 @@ export const useStatePermissionsOperations = () => {
         }
       }
 
-      await errorTracker.logStage('saving_permissions', 'complete');
+      errorTracker.logStage('saving_permissions', 'complete');
       toast.dismiss("saving-permissions");
       toast.success('State permissions updated successfully');
       return true;
     } catch (error: any) {
-      await errorTracker.logStage('saving_permissions', 'error', { 
+      errorTracker.logStage('saving_permissions', 'error', { 
         errorMessage: error.message,
         errorCode: error.code,
         errorStatus: error.status
@@ -167,17 +166,14 @@ export const useStatePermissionsOperations = () => {
       setIsError(true);
       setLastError(error.message);
       
-      await errorTracker.logError(
+      // Fix: Using the correct method signature with the right parameter order
+      errorTracker.logError(
         "Failed to save state permissions",
-        {
+        error,  // Pass the error object as the second parameter
+        {      // Pass metadata as the third parameter
           stateId,
           productIds,
-          retryCount,
-          error: {
-            message: error.message,
-            code: error.code,
-            status: error.status
-          }
+          retryCount
         }
       );
       
