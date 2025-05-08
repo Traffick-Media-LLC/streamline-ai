@@ -113,8 +113,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               }
             }, 0);
           } else {
-            setUserRole(null);
-            setIsAdmin(false);
+            // If logged out and not in guest mode, clear role status
+            if (!isGuest) {
+              setUserRole(null);
+              setIsAdmin(false);
+            }
           }
           setLoading(false);
         }
@@ -146,10 +149,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // When isGuest changes, update admin status and role accordingly
     if (isGuest) {
+      console.log("Guest mode enabled - granting admin privileges");
       setIsAdmin(true);
       setUserRole('admin');
+    } else if (!user) {
+      // Only reset admin status if not logged in
+      console.log("Guest mode disabled - reverting to authenticated status");
+      setIsAdmin(false);
+      setUserRole(null);
     }
-  }, [isGuest]);
+  }, [isGuest, user]);
 
   const signOut = async () => {
     try {

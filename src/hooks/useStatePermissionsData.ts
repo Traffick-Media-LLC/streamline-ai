@@ -11,16 +11,16 @@ export const useStatePermissionsData = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, isGuest } = useAuth();
   const [lastRefreshTime, setLastRefreshTime] = useState<number | null>(null);
 
   const fetchStates = useCallback(async (abortSignal?: AbortSignal) => {
     try {
       setError(null);
-      console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin });
+      console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin, isGuest });
       
       // Generate a cache-busting query param
-      const cacheBuster = `cache_bust=${Date.now()}`;
+      const cacheBuster = Date.now();
       
       const { data, error } = await supabase
         .from('states')
@@ -45,14 +45,14 @@ export const useStatePermissionsData = () => {
           : error.message
       });
     }
-  }, [isAuthenticated, isAdmin]);
+  }, [isAuthenticated, isAdmin, isGuest]);
 
   const fetchStateProducts = useCallback(async (abortSignal?: AbortSignal) => {
     try {
       console.log("Fetching state products data...");
       
       // Generate a cache-busting query param
-      const cacheBuster = `cache_bust=${Date.now()}`;
+      const cacheBuster = Date.now();
       
       const { data, error } = await supabase
         .from('state_allowed_products')
@@ -61,7 +61,15 @@ export const useStatePermissionsData = () => {
       
       if (error) throw error;
       console.log("State products data received:", data?.length || 0, "items");
-      setStateProducts(data || []);
+      
+      // Convert string IDs to numbers if needed
+      const normalizedData = data?.map(item => ({
+        ...item,
+        state_id: typeof item.state_id === 'string' ? parseInt(item.state_id, 10) : item.state_id,
+        product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
+      })) || [];
+      
+      setStateProducts(normalizedData);
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('State products fetch aborted');
@@ -75,7 +83,7 @@ export const useStatePermissionsData = () => {
   }, []);
 
   const refreshData = useCallback(async (force = false) => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated && !isGuest) {
       console.log("Not authenticated, skipping state permissions data fetch");
       setError("Authentication required. Please ensure you're logged in or continue as guest.");
       setLoading(false);
@@ -104,8 +112,11 @@ export const useStatePermissionsData = () => {
       // Set last refresh time immediately to prevent duplicate calls
       setLastRefreshTime(currentTime);
       
-      // Use Promise.all to fetch data in parallel
-      await Promise.all([fetchStates(signal), fetchStateProducts(signal)]);
+      // Delay between requests to prevent race conditions
+      await fetchStates(signal);
+      // Short delay between API calls
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await fetchStateProducts(signal);
       
       console.log("State permissions data refresh complete");
       setRefreshAttempts(0);
@@ -117,7 +128,7 @@ export const useStatePermissionsData = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchStates, fetchStateProducts, isAuthenticated, lastRefreshTime]);
+  }, [fetchStates, fetchStateProducts, isAuthenticated, isGuest, lastRefreshTime]);
 
   // Implement automatic retry logic for initial load
   useEffect(() => {
@@ -143,7 +154,7 @@ export const useStatePermissionsData = () => {
       }
     };
     
-    if (isAuthenticated || isAdmin) {
+    if (isAuthenticated || isAdmin || isGuest) {
       attemptRefresh();
     } else {
       console.log("Waiting for authentication state before loading data");
@@ -155,7 +166,7 @@ export const useStatePermissionsData = () => {
         abortController.abort();
       }
     };
-  }, [isAuthenticated, isAdmin, refreshAttempts, refreshData]);
+  }, [isAuthenticated, isAdmin, isGuest, refreshAttempts, refreshData]);
 
   return {
     states,

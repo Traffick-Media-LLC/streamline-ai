@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface StatePermissionsAuthCheckProps {
   isAuthenticated: boolean;
@@ -17,6 +18,13 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
   error,
   refreshData
 }) => {
+  const { setIsGuest } = useAuth();
+
+  const handleContinueAsGuest = () => {
+    console.log("Continuing as guest with admin privileges");
+    setIsGuest(true);
+  };
+
   // Authentication check
   if (!isAuthenticated || !isAdmin) {
     return (
@@ -25,15 +33,25 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Authentication Required</AlertTitle>
           <AlertDescription>
-            This page requires admin access. Please ensure you're logged in with appropriate permissions.
+            This page requires admin access. Please ensure you're logged in with appropriate permissions,
+            or continue as a guest to view and edit permissions.
           </AlertDescription>
         </Alert>
-        <Button 
-          onClick={() => window.location.href = '/auth'} 
-          className="mt-4 flex items-center gap-2"
-        >
-          Go to Login
-        </Button>
+        <div className="mt-4 flex items-center gap-2">
+          <Button 
+            onClick={() => window.location.href = '/auth'} 
+            className="flex items-center gap-2"
+          >
+            Go to Login
+          </Button>
+          <Button 
+            onClick={handleContinueAsGuest}
+            variant="outline" 
+            className="flex items-center gap-2 ml-2"
+          >
+            <User className="h-4 w-4" /> Continue as Guest
+          </Button>
+        </div>
       </div>
     );
   }

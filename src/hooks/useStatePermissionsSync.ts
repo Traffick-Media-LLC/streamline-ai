@@ -5,27 +5,43 @@ import { toast } from "@/components/ui/sonner";
 export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) => Promise<boolean>) => {
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<number | null>(null);
 
   // Enhanced refresh function with multiple attempts and proper error handling
   const performRobustRefresh = useCallback(async (forceRefresh = false) => {
-    console.log("Performing robust data refresh...");
+    console.log("Performing robust data refresh...", { forceRefresh });
+    
+    // Throttle refreshes to prevent too many calls in quick succession
+    const currentTime = Date.now();
+    if (!forceRefresh && lastRefreshTimestamp && (currentTime - lastRefreshTimestamp < 1000)) {
+      console.log("Throttling refresh request:", currentTime - lastRefreshTimestamp, "ms since last refresh");
+      return true;
+    }
+    
     setIsRefreshing(true);
     
     try {
+      setLastRefreshTimestamp(currentTime);
       const success = await refreshData(forceRefresh);
       
-      if (!success && refreshAttempts < 3) {
-        console.log(`Refresh attempt ${refreshAttempts + 1} failed, trying again...`);
-        setRefreshAttempts(prev => prev + 1);
+      if (!success) {
+        console.warn(`Refresh attempt ${refreshAttempts + 1} failed`);
         
-        // Exponential backoff
-        const delay = Math.pow(2, refreshAttempts) * 500;
-        setTimeout(() => performRobustRefresh(true), delay);
-        return false;
-      } else if (!success) {
-        console.error("Multiple refresh attempts failed");
-        toast.error("Failed to refresh data after multiple attempts");
-        return false;
+        if (refreshAttempts < 2) {
+          console.log("Scheduling another refresh attempt");
+          setRefreshAttempts(prev => prev + 1);
+          
+          // Exponential backoff
+          const delay = Math.pow(2, refreshAttempts) * 1000;
+          setTimeout(() => performRobustRefresh(true), delay);
+          return false;
+        } else {
+          console.error("Multiple refresh attempts failed");
+          if (forceRefresh) {
+            toast.error("Failed to refresh data after multiple attempts");
+          }
+          return false;
+        }
       } else {
         console.log("Data refreshed successfully");
         setRefreshAttempts(0);
@@ -38,7 +54,12 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
     } finally {
       setIsRefreshing(false);
     }
-  }, [refreshData, refreshAttempts]);
+  }, [refreshData, refreshAttempts, lastRefreshTimestamp]);
+
+  // Reset refresh attempts when the component mounts
+  useEffect(() => {
+    setRefreshAttempts(0);
+  }, []);
 
   return {
     isRefreshing,

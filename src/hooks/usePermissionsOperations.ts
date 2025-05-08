@@ -45,34 +45,76 @@ export const usePermissionsOperations = ({
       return;
     }
 
-    const success = await saveStatePermissions(stateId, selectedProducts);
-    if (success) {
-      console.log("Save successful, refreshing data");
-      setIsDialogOpen(false);
-      setHasChanges(false);
+    // Show saving toast that we can update later
+    const saveToastId = "saving-permissions";
+    toast.loading("Saving state permissions...", { id: saveToastId });
+
+    try {
+      const success = await saveStatePermissions(stateId, selectedProducts);
       
-      // Record the state we just saved for re-selection
-      const savedStateId = stateId; // Using the properly typed stateId
-      const savedProductIds = [...selectedProducts];
-      
-      // First close the dialog
-      setIsDialogOpen(false);
-      
-      // Refresh with a longer delay and multiple attempts if needed
-      setTimeout(async () => {
-        const refreshSuccess = await performRobustRefresh(true);
+      if (success) {
+        console.log("Save successful, preparing to refresh data");
         
-        if (refreshSuccess) {
-          console.log("Refresh successful after save");
-        } else {
-          console.error("Failed to refresh data after save");
-          toast.error("Warning: UI may not reflect the latest data", {
-            description: "The save was successful but refreshing the data failed"
-          });
-        }
-      }, 800); // Increased delay for database to finalize transaction
-    } else {
-      console.error("Save failed");
+        // Mark that we have changes but don't close dialog yet
+        setHasChanges(false);
+        
+        // Record the state we just saved for re-selection
+        const savedStateId = stateId;
+        const savedStateName = selectedState.name;
+        const savedProductIds = [...selectedProducts];
+        
+        // First update the toast to show success
+        toast.dismiss(saveToastId);
+        toast.success("State permissions saved successfully");
+        
+        // Start a longer refresh delay to ensure database has settled
+        console.log("Starting refresh sequence with delay");
+        setTimeout(async () => {
+          // Only close dialog after refresh completes
+          console.log("Starting data refresh after save");
+          
+          try {
+            // Multiple attempts with increasing delay if needed
+            let refreshSuccess = false;
+            let attempts = 0;
+            
+            while (!refreshSuccess && attempts < 3) {
+              attempts++;
+              const delay = Math.pow(2, attempts - 1) * 500; // 500ms, 1s, 2s
+              
+              if (attempts > 1) {
+                console.log(`Refresh attempt ${attempts} with ${delay}ms delay`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+              }
+              
+              refreshSuccess = await performRobustRefresh(true);
+            }
+            
+            if (refreshSuccess) {
+              console.log("Refresh successful after save");
+              setIsDialogOpen(false);
+            } else {
+              console.error("Failed to refresh data after multiple attempts");
+              toast.error("Warning: UI may not reflect the latest data. Please try manual refresh.", {
+                description: "The save was successful but refreshing the data failed"
+              });
+              setIsDialogOpen(false);
+            }
+          } catch (refreshError) {
+            console.error("Exception during refresh:", refreshError);
+            toast.error("Error refreshing UI after save");
+            setIsDialogOpen(false);
+          }
+        }, 1000); // Increased delay for database to finalize transaction
+      } else {
+        console.error("Save failed");
+        toast.dismiss(saveToastId);
+        toast.error("Failed to save permissions");
+      }
+    } catch (error: any) {
+      console.error("Exception during save:", error);
+      toast.dismiss(saveToastId);
+      toast.error(`Error saving permissions: ${error.message}`);
     }
   }, [
     selectedState, 

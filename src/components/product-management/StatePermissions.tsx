@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
 import { StatePermissionsProps } from '@/types/statePermissions';
@@ -34,26 +35,35 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     debugLogs
   } = useStatePermissionsManager();
 
-  const { isAuthenticated, isAdmin } = useAuth();
-  const [showDebug, setShowDebug] = useState(false);
+  const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  // Enable debug panel by default to help troubleshoot
+  const [showDebug, setShowDebug] = useState(true);
 
   // Show auth status for debugging
   React.useEffect(() => {
-    console.log("StatePermissions component - Auth status:", { isAuthenticated, isAdmin });
-  }, [isAuthenticated, isAdmin]);
+    console.log("StatePermissions component - Auth status:", { isAuthenticated, isAdmin, isGuest });
+  }, [isAuthenticated, isAdmin, isGuest]);
+
+  // On mount, perform a refresh
+  useEffect(() => {
+    if (isAuthenticated || isAdmin || isGuest) {
+      console.log("StatePermissions: Initial data refresh");
+      refreshData();
+    }
+  }, [isAuthenticated, isAdmin, isGuest, refreshData]);
 
   // Create auth check component but don't render immediately
   const authCheckComponent = (
     <StatePermissionsAuthCheck 
-      isAuthenticated={isAuthenticated}
-      isAdmin={isAdmin}
+      isAuthenticated={isAuthenticated || isGuest}
+      isAdmin={isAdmin || isGuest}
       error={error}
       refreshData={refreshData}
     />
   );
   
   // If there are auth issues or errors, render the auth check component
-  if (!isAuthenticated || !isAdmin || error) {
+  if ((!isAuthenticated && !isGuest) || (!isAdmin && !isGuest) || error) {
     return authCheckComponent;
   }
 
