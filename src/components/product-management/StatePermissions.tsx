@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
@@ -8,7 +9,7 @@ import { StatePermissionsContent } from "./StatePermissionsContent";
 import { StatePermissionsDebugPanel } from "./StatePermissionsDebugPanel";
 import { StatePermissionsAuthCheck } from "./StatePermissionsAuthCheck";
 import { toast } from "@/components/ui/sonner";
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const StatePermissions: React.FC<StatePermissionsProps> = () => {
   const {
