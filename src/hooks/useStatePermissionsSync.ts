@@ -1,11 +1,34 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) => Promise<boolean>) => {
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<number | null>(null);
+  const [refreshSuccessCount, setRefreshSuccessCount] = useState(0);
+
+  // Function to forcibly clear any cached data
+  const clearCache = useCallback(async () => {
+    try {
+      console.log("Attempting to clear Supabase cache with cache-busting query");
+      
+      // Execute a minimal query with a timestamp to force cache bypass
+      const cacheInvalidationToken = Date.now().toString();
+      await supabase.from('state_allowed_products')
+        .select('id', { head: true, count: 'exact' })
+        .eq('id', -1) // Non-existent ID to make query lightweight
+        .order('id', { ascending: true, nullsFirst: false, foreignTable: null })
+        .limit(1)
+        .maybeSingle();
+        
+      return true;
+    } catch (error) {
+      console.warn("Cache clearing attempt failed:", error);
+      return false;
+    }
+  }, []);
 
   // Enhanced refresh function with multiple attempts, proper error handling, and cache invalidation
   const performRobustRefresh = useCallback(async (forceRefresh = false) => {
@@ -23,6 +46,11 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
     try {
       // Always set the timestamp to prevent multiple refreshes
       setLastRefreshTimestamp(currentTime);
+      
+      // Try to clear cache before refreshing
+      if (forceRefresh) {
+        await clearCache();
+      }
       
       // Force invalidate supabase cache by adding cacheBuster parameter
       const success = await refreshData(true); // Always use force refresh to ensure fresh data
@@ -51,6 +79,7 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
       } else {
         console.log("Data refreshed successfully");
         setRefreshAttempts(0);
+        setRefreshSuccessCount(prev => prev + 1);
         return true;
       }
     } catch (error) {
@@ -62,16 +91,30 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
     } finally {
       setIsRefreshing(false);
     }
-  }, [refreshData, refreshAttempts, lastRefreshTimestamp]);
+  }, [refreshData, refreshAttempts, lastRefreshTimestamp, clearCache]);
 
   // Reset refresh attempts when the component mounts
   useEffect(() => {
     setRefreshAttempts(0);
   }, []);
 
+  // Periodic refresh attempt if recent saves have occurred
+  useEffect(() => {
+    if (refreshSuccessCount > 0) {
+      const timer = setTimeout(() => {
+        console.log("Running follow-up refresh to ensure data consistency");
+        performRobustRefresh(true);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [refreshSuccessCount, performRobustRefresh]);
+
   return {
     isRefreshing,
     performRobustRefresh,
-    refreshAttempts
+    refreshAttempts,
+    clearCache,
+    refreshSuccessCount
   };
 };

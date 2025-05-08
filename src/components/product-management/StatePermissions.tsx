@@ -56,6 +56,19 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     });
   }, [isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized, states.length, products.length]);
 
+  // Add effect to automatically refresh data periodically when the dialog is open
+  React.useEffect(() => {
+    if (isDialogOpen && selectedState) {
+      // Set up a refresh interval while the dialog is open
+      const refreshInterval = setInterval(() => {
+        console.log("Dialog is open - performing background data refresh");
+        refreshData().catch(err => console.error("Background refresh failed:", err));
+      }, 5000); // Refresh every 5 seconds while dialog is open
+      
+      return () => clearInterval(refreshInterval);
+    }
+  }, [isDialogOpen, selectedState, refreshData]);
+
   // Create auth check component but don't render immediately
   const authCheckComponent = (
     <StatePermissionsAuthCheck 

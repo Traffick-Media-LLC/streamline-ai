@@ -18,6 +18,7 @@ export const useStatePermissionsOperations = () => {
   const [lastError, setLastError] = useState<string | null>(null);
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   const [debugLogs, setDebugLogs] = useState<Array<{level: string, message: string, data?: any}>>([]);
+  const [lastSaveTimestamp, setLastSaveTimestamp] = useState<number | null>(null);
 
   // Create a reusable error tracker for this component
   const errorTracker = new ErrorTracker('StatePermissionsOperations');
@@ -112,6 +113,10 @@ export const useStatePermissionsOperations = () => {
       // Log insertion results
       addDebugLog('success', "New permissions inserted", insertResult.data);
       
+      // Record the timestamp of the successful save
+      const saveTime = Date.now();
+      setLastSaveTimestamp(saveTime);
+      
       // Another short delay to ensure insertion is completed before verification
       await new Promise(resolve => setTimeout(resolve, 300));
 
@@ -186,6 +191,7 @@ export const useStatePermissionsOperations = () => {
     isError,
     lastError,
     debugLogs,
-    clearDebugLogs
+    clearDebugLogs,
+    lastSaveTimestamp
   };
 };

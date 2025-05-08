@@ -22,7 +22,8 @@ export const useStatePermissionsManager = () => {
     error: statesError, 
     refreshData: refreshStateData,
     refreshCounter,
-    hasInitialized
+    hasInitialized,
+    fetchProductsForState
   } = useStatePermissionsData();
   
   const { 
@@ -35,7 +36,8 @@ export const useStatePermissionsManager = () => {
   const { 
     saveStatePermissions, 
     isSaving, 
-    debugLogs 
+    debugLogs,
+    lastSaveTimestamp 
   } = useStatePermissionsOperations();
 
   // Refactored UI state hooks
@@ -63,7 +65,8 @@ export const useStatePermissionsManager = () => {
   // Data sync hook
   const { 
     isRefreshing, 
-    performRobustRefresh 
+    performRobustRefresh,
+    clearCache
   } = useStatePermissionsSync(refreshStateData);
 
   // Product utilities
@@ -77,6 +80,15 @@ export const useStatePermissionsManager = () => {
   useEffect(() => {
     setHasChanges(true);
   }, [selectedProducts, setHasChanges]);
+  
+  // Effect to refresh data when last save timestamp changes
+  useEffect(() => {
+    if (lastSaveTimestamp && selectedState) {
+      console.log("Last save timestamp changed, fetching fresh data for selected state");
+      // Fetch fresh data for the current state
+      fetchProductsForState(selectedState.id);
+    }
+  }, [lastSaveTimestamp, selectedState, fetchProductsForState]);
 
   // Effect to check authentication status
   useEffect(() => {
@@ -91,14 +103,32 @@ export const useStatePermissionsManager = () => {
   // Wrap the base state click handler to include the states array and setIsDialogOpen
   const handleStateClick = useCallback((stateName: string) => {
     console.log("handleStateClick called with state:", stateName);
-    return baseHandleStateClick(stateName, states, setIsDialogOpen);
-  }, [baseHandleStateClick, states, setIsDialogOpen]);
+    
+    const result = baseHandleStateClick(stateName, states, setIsDialogOpen);
+    
+    // After handling state click, fetch the latest products for this state directly
+    if (result && result.stateId) {
+      console.log("Fetching fresh product data for selected state:", result.stateId);
+      fetchProductsForState(result.stateId);
+    }
+    
+    return result;
+  }, [baseHandleStateClick, states, setIsDialogOpen, fetchProductsForState]);
 
   // Wrap the base edit state handler with setIsDialogOpen
   const handleEditState = useCallback((state: State) => {
     console.log("handleEditState called with state:", state.name);
-    return baseHandleEditState(state, setIsDialogOpen);
-  }, [baseHandleEditState, setIsDialogOpen]);
+    
+    const result = baseHandleEditState(state, setIsDialogOpen);
+    
+    // After editing state, fetch the latest products for this state directly
+    if (result && result.stateId) {
+      console.log("Fetching fresh product data for edited state:", result.stateId);
+      fetchProductsForState(result.stateId);
+    }
+    
+    return result;
+  }, [baseHandleEditState, setIsDialogOpen, fetchProductsForState]);
 
   // Permission operations hook
   const { handleSavePermissions } = usePermissionsOperations({
@@ -111,10 +141,11 @@ export const useStatePermissionsManager = () => {
     hasChanges
   });
 
-  const forceRefreshData = useCallback(() => {
-    console.log("Forcing data refresh");
+  const forceRefreshData = useCallback(async () => {
+    console.log("Forcing data refresh with cache clearing");
+    await clearCache();
     return performRobustRefresh(true);
-  }, [performRobustRefresh]);
+  }, [performRobustRefresh, clearCache]);
 
   return {
     states,

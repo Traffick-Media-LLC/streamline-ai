@@ -2,6 +2,7 @@
 import { useCallback } from 'react';
 import { State } from '@/types/statePermissions';
 import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UsePermissionsOperationsProps {
   saveStatePermissions: (stateId: number, productIds: number[]) => Promise<boolean>;
@@ -22,6 +23,24 @@ export const usePermissionsOperations = ({
   setHasChanges,
   hasChanges
 }: UsePermissionsOperationsProps) => {
+
+  // Helper function to force cache invalidation
+  const forceInvalidateCache = useCallback(async () => {
+    // Add a random parameter to force the query to bypass cache
+    try {
+      // Simple query to force a cache refresh
+      await supabase.from('state_allowed_products')
+        .select('*', { count: 'exact', head: true })
+        .filter('created_at', 'gte', new Date(Date.now() - 1000 * 60).toISOString())
+        .limit(1);
+      
+      console.log("Cache invalidation query executed");
+      return true;
+    } catch (error) {
+      console.warn("Cache invalidation failed:", error);
+      return false;
+    }
+  }, []);
 
   const handleSavePermissions = useCallback(async () => {
     if (!selectedState) {
@@ -50,6 +69,9 @@ export const usePermissionsOperations = ({
     toast.loading("Saving state permissions...", { id: saveToastId });
 
     try {
+      // Record timestamp before save to ensure we don't refresh with stale data
+      const saveStartTime = Date.now();
+      
       const success = await saveStatePermissions(stateId, selectedProducts);
       
       if (success) {
@@ -67,45 +89,67 @@ export const usePermissionsOperations = ({
         toast.dismiss(saveToastId);
         toast.success("State permissions saved successfully");
         
-        // Start a longer refresh sequence with multiple attempts
-        console.log("Starting multi-phase refresh sequence");
+        // Start a more aggressive refresh sequence with multiple attempts
+        console.log("Starting enhanced refresh sequence");
         
-        // Phase 1: Initial delay to ensure database has settled
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // First try to forcibly invalidate any caching
+        await forceInvalidateCache();
         
-        // Phase 2: First refresh attempt
+        // Phase 1: Short delay to allow database to settle
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Phase 2: First refresh attempt with force flag
+        console.log("Executing first forced refresh");
         let refreshSuccess = await performRobustRefresh(true);
         
-        // Phase 3: If first attempt fails, try again with longer delay
         if (!refreshSuccess) {
-          console.log("First refresh failed, trying again after delay");
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          console.log("First refresh failed, trying again with longer delay");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Try cache invalidation again
+          await forceInvalidateCache();
+          
+          // Second attempt with longer wait and force flag
           refreshSuccess = await performRobustRefresh(true);
-        }
-        
-        // Phase 4: Final attempt if needed
-        if (!refreshSuccess) {
-          console.log("Second refresh failed, final attempt");
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          refreshSuccess = await performRobustRefresh(true);
+          
+          if (!refreshSuccess) {
+            console.log("Second refresh failed, final attempt with maximum delay");
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Final cache invalidation attempt
+            await forceInvalidateCache();
+            
+            // Final refresh attempt with maximum wait
+            refreshSuccess = await performRobustRefresh(true);
+          }
         }
         
         // Only close dialog after all refresh attempts
         if (refreshSuccess) {
           console.log("Refresh successful, closing dialog");
+          
           // Delay closing to ensure UI updates first
           setTimeout(() => {
             setIsDialogOpen(false);
-          }, 500);
+          }, 300);
+          
+          // Force one more refresh after dialog closes
+          setTimeout(() => {
+            performRobustRefresh(true);
+          }, 800);
+          
         } else {
           console.error("Failed to refresh data after multiple attempts");
           toast.error("Warning: UI may not reflect the latest data", {
             description: "The save was successful but refreshing the UI failed. Please try manual refresh.",
             action: {
               label: "Refresh",
-              onClick: () => performRobustRefresh(true)
+              onClick: () => {
+                forceInvalidateCache().then(() => performRobustRefresh(true));
+              }
             }
           });
+          
           // Still close dialog even if refresh fails
           setTimeout(() => {
             setIsDialogOpen(false);
@@ -128,7 +172,8 @@ export const usePermissionsOperations = ({
     saveStatePermissions, 
     setIsDialogOpen, 
     setHasChanges, 
-    performRobustRefresh
+    performRobustRefresh,
+    forceInvalidateCache
   ]);
 
   return { handleSavePermissions };

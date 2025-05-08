@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -80,6 +79,45 @@ export const useStatePermissionsData = () => {
       setError(`Failed to load state product permissions: ${error.message}`);
       toast.error("Failed to load state product permissions");
       return false;
+    }
+  }, []);
+
+  // New function to fetch products for a specific state directly from the database
+  const fetchProductsForState = useCallback(async (stateId: number) => {
+    console.log(`Directly fetching products for state ID: ${stateId}`);
+    
+    try {
+      const { data, error } = await supabase
+        .from('state_allowed_products')
+        .select('*')
+        .eq('state_id', stateId);
+        
+      if (error) {
+        throw error;
+      }
+      
+      console.log(`Direct state ${stateId} products query returned:`, data?.length || 0, "items");
+      
+      // Convert string IDs to numbers if needed
+      const normalizedData = data?.map(item => ({
+        ...item,
+        state_id: typeof item.state_id === 'string' ? parseInt(item.state_id, 10) : item.state_id,
+        product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
+      })) || [];
+      
+      // Update the state products by replacing any existing entries for this state
+      // and keeping products for other states
+      setStateProducts(prev => {
+        // Remove existing products for this state
+        const otherStateProducts = prev.filter(p => p.state_id !== stateId);
+        // Add the newly fetched products
+        return [...otherStateProducts, ...normalizedData];
+      });
+      
+      return normalizedData;
+    } catch (error) {
+      console.error(`Error fetching products for state ${stateId}:`, error);
+      return null;
     }
   }, []);
 
@@ -224,7 +262,8 @@ export const useStatePermissionsData = () => {
     loading,
     error,
     refreshData,
-    refreshCounter, // Expose the counter to force re-renders in dependent components
-    hasInitialized
+    refreshCounter,
+    hasInitialized,
+    fetchProductsForState
   };
 };
