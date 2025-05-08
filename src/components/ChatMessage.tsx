@@ -7,6 +7,7 @@ import { Copy, Edit } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useChatContext } from "../contexts/ChatContext";
+import { ErrorTracker } from "@/utils/logging";
 
 interface ChatMessageProps {
   message: Message;
@@ -25,11 +26,14 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
   const isUser = message.role === "user";
 
   const handleCopyMessage = async () => {
+    const errorTracker = new ErrorTracker('ChatMessage');
     try {
       await navigator.clipboard.writeText(message.content);
       toast.success("Message copied to clipboard");
+      await errorTracker.logStage('copy_message', 'complete');
     } catch (err) {
       toast.error("Failed to copy message");
+      await errorTracker.logError("Failed to copy message", err);
     }
   };
 

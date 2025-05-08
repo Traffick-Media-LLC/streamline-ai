@@ -6,8 +6,6 @@ import { useMessageOperations } from "./useMessageOperations";
 import { useChatFetching } from "./useChatFetching";
 import { useChatSelection } from "./useChatSelection";
 import { useChatSending } from "./useChatSending";
-import { toast } from "@/components/ui/sonner";
-import { useState } from "react";
 import { generateRequestId, ErrorTracker } from "@/utils/logging";
 
 export const useChatOperations = () => {

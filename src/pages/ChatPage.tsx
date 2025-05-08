@@ -19,6 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ErrorTracker } from "@/utils/logging";
 
 const ChatPageContent = () => {
   const { user } = useAuth();
@@ -33,6 +34,9 @@ const ChatPageContent = () => {
       if (process.env.NODE_ENV === 'development') {
         try {
           // Simple health check for the Edge Function
+          const errorTracker = new ErrorTracker('ChatPage');
+          await errorTracker.logStage('edge_function_check', 'start');
+
           const startTime = performance.now();
           const { data, error } = await supabase.functions.invoke('chat', {
             body: { mode: "health_check" },
@@ -43,13 +47,27 @@ const ChatPageContent = () => {
           if (error) {
             console.error("Edge Function health check failed:", error);
             setDebugInfo(`Edge Function Error: ${error.message || 'Unknown error'}`);
+            await errorTracker.logError(
+              "Edge Function health check failed",
+              error,
+              { duration }
+            );
           } else {
             console.log("Edge Function health check passed:", data);
             setDebugInfo(`Edge Function OK (${duration}ms)`);
+            await errorTracker.logStage('edge_function_check', 'complete', {
+              duration,
+              response: data
+            });
           }
         } catch (err) {
           console.error("Failed to connect to Edge Function:", err);
           setDebugInfo(`Connection Error: ${err.message || 'Unknown error'}`);
+          const errorTracker = new ErrorTracker('ChatPage');
+          await errorTracker.logError(
+            "Failed to connect to Edge Function",
+            err
+          );
         }
       }
     };

@@ -2,8 +2,9 @@
 import { useState } from "react";
 import { Message } from "../types/chat";
 import { v4 as uuidv4 } from "uuid";
-import { generateRequestId, logChatEvent, logChatError } from "../utils/chatLogging";
+import { generateRequestId, logEvent, logError, ErrorTracker } from "@/utils/logging";
 import { toast } from "@/components/ui/sonner";
+import { LogCategory } from "@/types/logging";
 
 export const useChatSending = (
   user,
@@ -25,6 +26,7 @@ export const useChatSending = (
 
     // Get request ID for tracking
     const requestId = generateRequestId();
+    const errorTracker = new ErrorTracker('useChatSending', user?.id, currentChatId, requestId);
 
     // Initialize current chat if doesn't exist
     let chatId = currentChatId;
@@ -48,24 +50,13 @@ export const useChatSending = (
     
     // Set loading state
     setIsLoadingResponse(true);
-    
-    // Get the start time for timing the request
-    const startTime = performance.now();
 
     try {
       // Log the chat request
-      await logChatEvent({
-        requestId,
-        userId: user?.id,
-        chatId,
-        eventType: 'send_message',
-        component: 'useChatSending',
-        message: 'User message sent',
-        metadata: { 
-          messageLength: content.length,
-          isAuthenticated: !!user?.id,
-          isGuest: isGuest
-        }
+      await errorTracker.logStage('send_message', 'start', { 
+        messageLength: content.length,
+        isAuthenticated: !!user?.id,
+        isGuest: isGuest
       });
       
       // Add the user message locally
@@ -93,16 +84,8 @@ export const useChatSending = (
         requestId
       };
       
-      await logChatEvent({
-        requestId,
-        userId: user?.id,
-        chatId,
-        eventType: 'api_request_start',
-        component: 'useChatSending',
-        message: 'Making request to Edge Function',
-        metadata: { 
-          historyLength: streamlinedHistory.length 
-        }
+      await errorTracker.logStage('api_request', 'start', { 
+        historyLength: streamlinedHistory.length 
       });
       
       // Fetch from the chat Edge function
@@ -110,8 +93,6 @@ export const useChatSending = (
       const { data, error } = await supabase.functions.invoke('chat', {
         body
       });
-      
-      const responseTime = Math.round(performance.now() - startTime);
       
       if (error) {
         throw new Error(`${error.message || 'Unknown error'}`);
@@ -122,20 +103,11 @@ export const useChatSending = (
         throw new Error(`${data.error || 'Unknown error in response'}`);
       }
       
-      await logChatEvent({
-        requestId,
-        userId: user?.id,
-        chatId,
-        eventType: 'api_request_success',
-        component: 'useChatSending',
-        message: 'Received successful response from Edge Function',
-        durationMs: responseTime,
-        metadata: { 
-          tokensUsed: data.tokensUsed,
-          model: data.model,
-          messageLength: data.message?.length || 0
-        },
-        category: 'ai_response'
+      await errorTracker.logStage('api_request', 'complete', { 
+        tokensUsed: data.tokensUsed,
+        model: data.model,
+        messageLength: data.message?.length || 0,
+        responseTime: data.responseTime
       });
       
       // Create assistant message
@@ -148,18 +120,16 @@ export const useChatSending = (
       
       // Update the chat with the assistant response
       await handleMessageUpdate(chatId, assistantMessage);
+      await errorTracker.logStage('send_message', 'complete');
       
     } catch (error) {
       // Log the error
-      await logChatError(
-        requestId,
-        'useChatSending',
+      await errorTracker.logError(
         `Error sending message: ${error.message || 'Unknown error'}`,
         error,
         { messageId },
-        chatId,
-        user?.id,
-        'error'
+        'error',
+        'ai_response' as LogCategory
       );
       
       // Show error to user

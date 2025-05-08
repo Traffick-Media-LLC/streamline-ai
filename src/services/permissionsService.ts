@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorTracker } from "@/utils/logging";
 import { DebugLogger } from "@/utils/permissions/validationUtils";
@@ -138,10 +139,7 @@ export const verifyPermissionsState = async (
     });
     
     if (!allSaved || extraItems.length > 0) {
-      await errorTracker.logError("Verification failed - database state doesn't match requested state", null, {
-        requestedIds: productIds,
-        actualIds: verifiedIds
-      });
+      await errorTracker.logError("Verification failed - database state doesn't match requested state");
       return { 
         success: false, 
         error: "Database state doesn't match requested state", 
