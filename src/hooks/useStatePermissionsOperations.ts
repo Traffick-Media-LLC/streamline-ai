@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -54,15 +55,31 @@ export const useStatePermissionsOperations = () => {
       if (!deleteResult.success) {
         throw new Error(deleteResult.error);
       }
+      
+      // Log deletion results
+      addDebugLog('info', "Existing permissions deleted", deleteResult.data);
 
       // Insert new permissions
       const insertResult = await insertNewPermissions(stateId, productIds, errorTracker);
       if (!insertResult.success) {
         throw new Error(insertResult.error);
       }
+      
+      // Log insertion results
+      addDebugLog('success', "New permissions inserted", insertResult.data);
 
       // Verify the changes
-      await verifyPermissionsState(stateId, productIds, errorTracker);
+      const verifyResult = await verifyPermissionsState(stateId, productIds, errorTracker);
+      if (!verifyResult.success) {
+        throw new Error(verifyResult.error || "Verification failed");
+      }
+      
+      // Log verification results
+      addDebugLog('success', "Permissions verified", { 
+        verified: verifyResult.success,
+        productCount: productIds.length,
+        verifiedIds: verifyResult.data?.verifiedIds?.length
+      });
 
       // Log successful completion
       await errorTracker.logStage('saving_permissions', 'complete');
@@ -82,9 +99,7 @@ export const useStatePermissionsOperations = () => {
       setLastError(error.message);
       
       // Log error with the tracker
-      errorTracker.logError(
-        `Failed to save state permissions: ${error.message}`
-      );
+      await errorTracker.logError(`Failed to save state permissions: ${error.message}`);
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
         error,

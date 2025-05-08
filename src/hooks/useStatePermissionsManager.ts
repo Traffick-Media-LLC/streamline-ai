@@ -19,8 +19,10 @@ export const useStatePermissionsManager = () => {
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loading = statesLoading || productsLoading;
+  const loading = statesLoading || productsLoading || isRefreshing;
   const error = statesError || productsError;
 
   // Track selected products changes
@@ -36,6 +38,47 @@ export const useStatePermissionsManager = () => {
       console.log("Authenticated and admin access confirmed. Auth state:", { isAuthenticated, isAdmin });
     }
   }, [isAuthenticated, isAdmin]);
+
+  // Enhanced refresh function with multiple attempts and proper error handling
+  const performRobustRefresh = useCallback(async (forceRefresh = false) => {
+    console.log("Performing robust data refresh...");
+    setIsRefreshing(true);
+    
+    try {
+      const success = await refreshData(forceRefresh);
+      
+      if (!success && refreshAttempts < 3) {
+        console.log(`Refresh attempt ${refreshAttempts + 1} failed, trying again...`);
+        setRefreshAttempts(prev => prev + 1);
+        
+        // Exponential backoff
+        const delay = Math.pow(2, refreshAttempts) * 500;
+        setTimeout(() => performRobustRefresh(true), delay);
+        return false;
+      } else if (!success) {
+        console.error("Multiple refresh attempts failed");
+        toast.error("Failed to refresh data after multiple attempts");
+        return false;
+      } else {
+        console.log("Data refreshed successfully");
+        setRefreshAttempts(0);
+        return true;
+      }
+    } catch (error) {
+      console.error("Error during refresh:", error);
+      toast.error("Error refreshing data");
+      return false;
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refreshData, refreshAttempts]);
+  
+  // Initial data loading
+  useEffect(() => {
+    if (isAuthenticated && isAdmin) {
+      performRobustRefresh();
+    }
+  }, [isAuthenticated, isAdmin, performRobustRefresh]);
 
   const handleStateClick = useCallback((stateName: string) => {
     console.log("State clicked:", stateName);
@@ -78,10 +121,42 @@ export const useStatePermissionsManager = () => {
       setIsDialogOpen(false);
       setHasChanges(false);
       
-      // Refresh with a small delay to allow the database to update
-      setTimeout(() => {
-        refreshData(true);
-      }, 300);
+      // Record the state we just saved for re-selection
+      const savedStateId = selectedState.id;
+      const savedProductIds = [...selectedProducts];
+      
+      // First close the dialog
+      setIsDialogOpen(false);
+      
+      // Refresh with a longer delay and multiple attempts if needed
+      setTimeout(async () => {
+        const refreshSuccess = await performRobustRefresh(true);
+        
+        if (refreshSuccess) {
+          console.log("Refresh successful after save");
+          
+          // If we're still on the same state, update the selection to match the database
+          if (selectedState?.id === savedStateId) {
+            const currentStateProducts = stateProducts
+              .filter(sp => sp.state_id === savedStateId)
+              .map(sp => sp.product_id || 0)
+              .filter(id => id !== 0);
+              
+            console.log("Updated product IDs after refresh:", currentStateProducts);
+            
+            // Only update if different
+            if (JSON.stringify(currentStateProducts) !== JSON.stringify(selectedProducts)) {
+              console.log("Updating selected products to match database");
+              setSelectedProducts(currentStateProducts);
+            }
+          }
+        } else {
+          console.error("Failed to refresh data after save");
+          toast.error("Warning: UI may not reflect the latest data", {
+            description: "The save was successful but refreshing the data failed"
+          });
+        }
+      }, 800); // Increased delay for database to finalize transaction
     } else {
       console.error("Save failed");
     }
@@ -111,8 +186,8 @@ export const useStatePermissionsManager = () => {
 
   const forceRefreshData = useCallback(() => {
     console.log("Forcing data refresh");
-    return refreshData(true);
-  }, [refreshData]);
+    return performRobustRefresh(true);
+  }, [performRobustRefresh]);
 
   return {
     states,

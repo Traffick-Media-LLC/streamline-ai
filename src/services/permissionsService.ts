@@ -53,7 +53,6 @@ export const deleteExistingPermissions = async (
     .select('*'); // no 'head: true'
 
   if (deleteError) {
-    // Here's the fix - errorTracker.logError was being called with too many arguments
     await errorTracker.logError(`Delete error occurred: ${deleteError.message}`);
     return {
       success: false,
@@ -120,6 +119,10 @@ export const verifyPermissionsState = async (
 ): Promise<PermissionsOperationResult> => {
   try {
     await errorTracker.logStage('verify_permissions', 'start', { stateId, productIds });
+    
+    // Small delay to ensure database has settled
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     const { data: verifyData, error: verifyError } = await supabase
       .from('state_allowed_products')
       .select('product_id')
@@ -131,14 +134,21 @@ export const verifyPermissionsState = async (
     }
     
     const verifiedIds = verifyData.map(item => item.product_id);
+    
+    // Verify that all requested products are present
     const allSaved = productIds.every(id => verifiedIds.includes(id));
+    
+    // Check for any extra items that shouldn't be there
     const extraItems = verifiedIds.filter(id => !productIds.includes(id));
     
+    // Log verification details
     await errorTracker.logStage('verify_permissions', 'progress', { 
       expectedCount: productIds.length,
       actualCount: verifiedIds.length,
       allSaved,
-      extraItems
+      extraItems,
+      expectedIds: productIds,
+      verifiedIds
     });
     
     if (!allSaved || extraItems.length > 0) {
