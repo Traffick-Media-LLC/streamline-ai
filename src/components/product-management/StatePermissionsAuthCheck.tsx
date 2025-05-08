@@ -17,6 +17,7 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
   error,
   refreshData
 }) => {
+  // Authentication check
   if (!isAuthenticated || !isAdmin) {
     return (
       <div className="p-4">
@@ -37,6 +38,7 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
     );
   }
 
+  // Error check
   if (error) {
     return (
       <div className="p-4">
@@ -52,5 +54,6 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
     );
   }
 
+  // If no issues, return null explicitly
   return null;
 };

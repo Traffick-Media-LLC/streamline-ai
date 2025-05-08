@@ -38,14 +38,21 @@ export const usePermissionsOperations = ({
       return;
     }
 
-    const success = await saveStatePermissions(selectedState.id, selectedProducts);
+    // Ensure we're working with a proper state ID (number)
+    const stateId = typeof selectedState.id === 'number' ? selectedState.id : parseInt(selectedState.id as string, 10);
+    if (isNaN(stateId)) {
+      toast.error("Invalid state ID");
+      return;
+    }
+
+    const success = await saveStatePermissions(stateId, selectedProducts);
     if (success) {
       console.log("Save successful, refreshing data");
       setIsDialogOpen(false);
       setHasChanges(false);
       
       // Record the state we just saved for re-selection
-      const savedStateId = selectedState.id;
+      const savedStateId = stateId; // Using the properly typed stateId
       const savedProductIds = [...selectedProducts];
       
       // First close the dialog

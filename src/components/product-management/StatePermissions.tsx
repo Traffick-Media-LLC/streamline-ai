@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
@@ -43,8 +42,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     console.log("StatePermissions component - Auth status:", { isAuthenticated, isAdmin });
   }, [isAuthenticated, isAdmin]);
 
-  // First check auth and errors
-  const authErrorCheck = (
+  // Create auth check component but don't render immediately
+  const authCheckComponent = (
     <StatePermissionsAuthCheck 
       isAuthenticated={isAuthenticated}
       isAdmin={isAdmin}
@@ -53,11 +52,12 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     />
   );
   
-  // If there are auth issues or errors, only render the auth check component
-  if (authErrorCheck) {
-    return authErrorCheck;
+  // If there are auth issues or errors, render the auth check component
+  if (!isAuthenticated || !isAdmin || error) {
+    return authCheckComponent;
   }
 
+  // Otherwise, render the main content
   return (
     <div>
       <StatePermissionsHeader 
