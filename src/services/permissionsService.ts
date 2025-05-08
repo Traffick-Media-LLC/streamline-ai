@@ -45,22 +45,24 @@ export const deleteExistingPermissions = async (
 ): Promise<PermissionsOperationResult> => {
   try {
     await errorTracker.logStage('delete_permissions', 'start', { stateId });
-    const { error: deleteError, count } = await supabase
-      .from('state_allowed_products')
-      .delete()
-      .eq('state_id', stateId)
-      .select('*', { count: 'exact', head: true });
+    const { error: deleteError, data } = await supabase
+    .from('state_allowed_products')
+    .delete()
+    .eq('state_id', stateId)
+    .select('*'); // no 'head: true'
 
-    if (deleteError) {
-      await errorTracker.logError(`Delete error occurred: ${deleteError.message}`);
-      return { 
-        success: false, 
-        error: `Failed to update permissions: ${deleteError.message}` 
-      };
-    }
+  if (deleteError) {
+    await errorTracker.logError(`Delete error occurred: ${deleteError.message}`);
+    return {
+      success: false,
+      error: `Failed to update permissions: ${deleteError.message}`,
+    };
+  }
 
-    await errorTracker.logStage('delete_permissions', 'complete', { count });
-    return { success: true, data: { deletedCount: count } };
+  await errorTracker.logStage('delete_permissions', 'complete', { deletedCount: data?.length ?? 0 });
+
+  return { success: true, data: { deletedCount: data?.length ?? 0 } };
+
   } catch (error: any) {
     return { 
       success: false, 
