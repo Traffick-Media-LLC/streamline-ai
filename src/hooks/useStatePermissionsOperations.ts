@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -171,8 +170,7 @@ export const useStatePermissionsOperations = () => {
       
       // Fix: Using the correct method signature with the right parameter order
       errorTracker.logError(
-        "Failed to save state permissions: " + error.message,
-        error  // Pass only the error object as the second parameter
+        `Failed to save state permissions: ${error.message}`
       );
       
       addDebugLog('error', `Error saving permissions: ${error.message}`, { 
