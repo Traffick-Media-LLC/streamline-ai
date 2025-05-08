@@ -1,7 +1,8 @@
+
 import { useState } from "react";
 import { Message } from "../types/chat";
 import { v4 as uuidv4 } from "uuid";
-import { generateRequestId, logEvent, logError, ErrorTracker } from "@/utils/logging";
+import { generateRequestId, logEvent, ErrorTracker } from "@/utils/logging";
 import { toast } from "@/components/ui/sonner";
 import { LogCategory } from "@/types/logging";
 
@@ -122,7 +123,7 @@ export const useChatSending = (
       await errorTracker.logStage('send_message', 'complete');
       
     } catch (error) {
-      // Log the error
+      // Log the error - Fix here: Using the proper signature for logError
       await errorTracker.logError(
         `Error sending message: ${error.message || 'Unknown error'}`,
         error,

@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorTracker } from "@/utils/logging";
 import { DebugLogger } from "@/utils/permissions/validationUtils";
@@ -75,7 +76,7 @@ export const insertNewPermissions = async (
   errorTracker: ErrorTracker
 ): Promise<PermissionsOperationResult> => {
   if (productIds.length === 0) {
-    await errorTracker.logStage('insert_permissions', 'complete', { reason: 'no_products' });
+    await errorTracker.logStage('insert_permissions', 'progress', { reason: 'no_products' });
     return { success: true, data: { insertedCount: 0 } };
   }
 

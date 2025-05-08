@@ -1,6 +1,7 @@
+
 import { useState } from "react";
 import { Chat } from "../types/chat";
-import { logEvent } from "../utils/chatLogging";
+import { logEvent } from "../utils/logging";
 
 export const useChatState = () => {
   const [chats, setChats] = useState<Chat[]>([]);
