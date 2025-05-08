@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { FcGoogle } from "react-icons/fc";
@@ -15,7 +15,11 @@ const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, setIsGuest } = useAuth();
+  
+  // Get the redirect path from location state or default to home
+  const from = location.state?.from || "/";
 
   useEffect(() => {
     // Preload the homepage assets
@@ -58,8 +62,8 @@ const AuthPage = () => {
       console.log("Auth state change:", event, session);
       setUser(session?.user || null);
       if (session?.user) {
-        console.log("User authenticated:", session.user);
-        navigate("/");
+        console.log("User authenticated:", session.user, "Redirecting to:", from);
+        navigate(from);
       } else {
         console.log("No authenticated user");
       }
@@ -69,7 +73,7 @@ const AuthPage = () => {
       console.log("Cleaning up auth subscriptions");
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, from]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -77,7 +81,7 @@ const AuthPage = () => {
       const { error, data } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: window.location.origin + from,
           queryParams: {
             prompt: 'select_account',
             access_type: 'offline'
@@ -109,12 +113,13 @@ const AuthPage = () => {
   const handleGuestAccess = () => {
     setIsGuest(true);
     toast.success("Continuing as guest with admin access");
-    navigate('/');
+    console.log("Guest mode enabled, redirecting to:", from);
+    navigate(from);
   };
 
   if (isAuthenticated) {
-    console.log("Already authenticated, redirecting to home");
-    return <Navigate to="/" />;
+    console.log("Already authenticated, redirecting to:", from);
+    return <Navigate to={from} />;
   }
 
   return (
@@ -132,7 +137,9 @@ const AuthPage = () => {
               </Animated>
               
               <Animated type="fade" delay={0.4}>
-                <p className="mt-2 text-sm text-muted-foreground"></p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {from !== "/" ? "You'll be redirected back to the page you were trying to access." : ""}
+                </p>
               </Animated>
             </div>
 

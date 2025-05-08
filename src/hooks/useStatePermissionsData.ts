@@ -13,8 +13,8 @@ export const useStatePermissionsData = () => {
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   const [lastRefreshTime, setLastRefreshTime] = useState<number | null>(null);
-  // Use a simple number for refresh counter instead of a function that references itself
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const fetchStates = useCallback(async (abortSignal?: AbortSignal) => {
     try {
@@ -30,10 +30,11 @@ export const useStatePermissionsData = () => {
       if (error) throw error;
       console.log("States data received:", data?.length || 0, "items");
       setStates(data || []);
+      return true;
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('States fetch aborted');
-        return;
+        return false;
       }
       
       console.error('Error fetching states:', error);
@@ -43,6 +44,7 @@ export const useStatePermissionsData = () => {
           ? "Admin access required. Please ensure you have proper permissions."
           : error.message
       });
+      return false;
     }
   }, [isAuthenticated, isAdmin, isGuest]);
 
@@ -50,7 +52,6 @@ export const useStatePermissionsData = () => {
     try {
       console.log("Fetching state products data...");
       
-      // Remove cache buster that caused recursive type dependency
       const { data, error } = await supabase
         .from('state_allowed_products')
         .select('*', { count: 'exact' })
@@ -68,20 +69,23 @@ export const useStatePermissionsData = () => {
       
       console.log("Normalized state products:", normalizedData);
       setStateProducts(normalizedData);
+      return true;
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('State products fetch aborted');
-        return;
+        return false;
       }
       
       console.error('Error fetching state products:', error);
       setError(`Failed to load state product permissions: ${error.message}`);
       toast.error("Failed to load state product permissions");
+      return false;
     }
   }, []);
 
-  // Simplified refresh function that avoids circular references
+  // Simplified refresh function with better throttling and single-execution guarantees
   const refreshData = useCallback(async (force = false) => {
+    // Skip if not authenticated and not in guest mode
     if (!isAuthenticated && !isGuest) {
       console.log("Not authenticated, skipping state permissions data fetch");
       setError("Authentication required. Please ensure you're logged in or continue as guest.");
@@ -89,9 +93,9 @@ export const useStatePermissionsData = () => {
       return false;
     }
     
+    // Implement better throttling to prevent multiple simultaneous refreshes
     const currentTime = Date.now();
-    // Skip refresh if not forced and we've refreshed in the last 500ms
-    if (!force && lastRefreshTime && currentTime - lastRefreshTime < 500) {
+    if (!force && lastRefreshTime && (currentTime - lastRefreshTime < 1000)) {
       console.log("Skipping refresh due to throttling", {
         lastRefresh: new Date(lastRefreshTime).toISOString(),
         timeSinceLast: currentTime - lastRefreshTime
@@ -99,6 +103,8 @@ export const useStatePermissionsData = () => {
       return true;
     }
     
+    // Set last refresh time immediately to prevent duplicate calls
+    setLastRefreshTime(currentTime);
     setLoading(true);
     setError(null);
     console.log("Starting state permissions data refresh...");
@@ -108,64 +114,73 @@ export const useStatePermissionsData = () => {
     const signal = controller.signal;
     
     try {
-      // Set last refresh time immediately to prevent duplicate calls
-      setLastRefreshTime(currentTime);
-      
       // Increment refresh counter to force re-renders
       setRefreshCounter(prev => prev + 1);
       
       // First clear the state products to avoid stale data
       setStateProducts([]);
       
-      // Delay between requests to prevent race conditions
-      await fetchStates(signal);
+      // Sequential fetching to prevent race conditions
+      const statesSuccess = await fetchStates(signal);
       
-      // Longer delay between API calls to ensure states are loaded first
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // If states fetch failed, don't attempt to fetch products
+      if (!statesSuccess) {
+        setLoading(false);
+        return false;
+      }
       
-      await fetchStateProducts(signal);
+      // Short delay between requests to prevent race conditions
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      console.log("State permissions data refresh complete");
+      const productsSuccess = await fetchStateProducts(signal);
+      
+      console.log("State permissions data refresh complete:", {
+        statesSuccess,
+        productsSuccess
+      });
+      
       setRefreshAttempts(0);
-      return true;
+      setLoading(false);
+      return statesSuccess && productsSuccess;
     } catch (error: any) {
       console.error("Error refreshing data:", error);
       setError(`Failed to refresh data: ${error.message}`);
-      return false;
-    } finally {
       setLoading(false);
+      return false;
     }
   }, [fetchStates, fetchStateProducts, isAuthenticated, isGuest, lastRefreshTime]);
 
-  // Implement automatic retry logic for initial load
+  // Revised initialization logic with proper auth state handling
   useEffect(() => {
     let isMounted = true;
     let abortController: AbortController | null = null;
     
-    const attemptRefresh = async () => {
-      if (!isMounted) return;
+    const initializeData = async () => {
+      // Skip if already initialized
+      if (hasInitialized) {
+        return;
+      }
       
-      console.log(`State permissions data refresh attempt ${refreshAttempts + 1}`);
-      
-      // Create new AbortController for this attempt
-      abortController = new AbortController();
-      
-      const success = await refreshData(true); // Always force refresh on initial load
-      
-      if (!success && refreshAttempts < 2 && isMounted) {
-        // Increment attempts and try again with exponential backoff
-        setRefreshAttempts(prev => prev + 1);
-        const delay = Math.pow(2, refreshAttempts) * 1000; // 1s, 2s, 4s backoff
-        console.log(`Scheduling retry in ${delay}ms`);
-        setTimeout(attemptRefresh, delay);
+      // Ensure we have auth state before proceeding
+      if ((isAuthenticated || isGuest)) {
+        console.log("Authentication state confirmed, initializing data", { 
+          isAuthenticated, 
+          isAdmin, 
+          isGuest 
+        });
+        setHasInitialized(true);
+        
+        // Create new AbortController for this initialization
+        abortController = new AbortController();
+        
+        await refreshData(true);
+      } else {
+        console.log("Waiting for authentication state before initializing data");
       }
     };
-    
-    if (isAuthenticated || isAdmin || isGuest) {
-      attemptRefresh();
-    } else {
-      console.log("Waiting for authentication state before loading data");
-    }
+
+    // Trigger initialization when auth state is available
+    initializeData();
     
     return () => {
       isMounted = false;
@@ -173,7 +188,35 @@ export const useStatePermissionsData = () => {
         abortController.abort();
       }
     };
-  }, [isAuthenticated, isAdmin, isGuest, refreshAttempts, refreshData]);
+  }, [isAuthenticated, isAdmin, isGuest, refreshData, hasInitialized]);
+
+  // Implement automatic retry logic for initial load with better backoff
+  useEffect(() => {
+    // Skip if already loaded or no auth state yet
+    if (!hasInitialized || !(isAuthenticated || isGuest)) {
+      return;
+    }
+    
+    // Skip if loading is in progress
+    if (loading) {
+      return;
+    }
+    
+    // Only retry on error and limit attempts
+    if (error && refreshAttempts < 2) {
+      console.log(`State permissions data refresh attempt ${refreshAttempts + 1}`);
+      
+      // Exponential backoff for retries
+      const delay = Math.pow(2, refreshAttempts) * 2000; // 2s, 4s backoff
+      
+      const retryTimer = setTimeout(() => {
+        setRefreshAttempts(prev => prev + 1);
+        refreshData(true);
+      }, delay);
+      
+      return () => clearTimeout(retryTimer);
+    }
+  }, [error, refreshAttempts, loading, refreshData, hasInitialized, isAuthenticated, isGuest]);
 
   return {
     states,
@@ -181,6 +224,7 @@ export const useStatePermissionsData = () => {
     loading,
     error,
     refreshData,
-    refreshCounter // Expose the counter to force re-renders in dependent components
+    refreshCounter, // Expose the counter to force re-renders in dependent components
+    hasInitialized
   };
 };

@@ -20,8 +20,9 @@ export const useStatePermissionsManager = () => {
     stateProducts, 
     loading: statesLoading, 
     error: statesError, 
-    refreshData,
-    refreshCounter // Get the refresh counter to force re-renders
+    refreshData: refreshStateData,
+    refreshCounter,
+    hasInitialized
   } = useStatePermissionsData();
   
   const { 
@@ -63,7 +64,7 @@ export const useStatePermissionsManager = () => {
   const { 
     isRefreshing, 
     performRobustRefresh 
-  } = useStatePermissionsSync(refreshData);
+  } = useStatePermissionsSync(refreshStateData);
 
   // Product utilities
   const { getStateProducts } = useProductUtils(stateProducts, products);
@@ -79,33 +80,14 @@ export const useStatePermissionsManager = () => {
 
   // Effect to check authentication status
   useEffect(() => {
-    if (!isAuthenticated && !isAdmin && !isGuest) {
-      console.log("Not authenticated or not admin. Auth state:", { isAuthenticated, isAdmin, isGuest });
-    } else {
-      console.log("Authenticated and admin access confirmed. Auth state:", { isAuthenticated, isAdmin, isGuest });
-    }
-  }, [isAuthenticated, isAdmin, isGuest]);
+    console.log("StatePermissionsManager - Auth status check:", { 
+      isAuthenticated, 
+      isAdmin, 
+      isGuest,
+      hasInitialized
+    });
+  }, [isAuthenticated, isAdmin, isGuest, hasInitialized]);
   
-  // Initial data loading
-  useEffect(() => {
-    if (isAuthenticated || isAdmin || isGuest) {
-      console.log("Initial data loading triggered by auth state");
-      performRobustRefresh(true);
-    }
-  }, [isAuthenticated, isAdmin, isGuest, performRobustRefresh]);
-
-  // Additional effect to monitor stateProducts changes for debugging
-  useEffect(() => {
-    console.log("StateProducts updated:", stateProducts.length, "items");
-  }, [stateProducts]);
-
-  // Effect to monitor refreshCounter changes
-  useEffect(() => {
-    if (refreshCounter > 0) {
-      console.log("Refresh counter updated:", refreshCounter);
-    }
-  }, [refreshCounter]);
-
   // Wrap the base state click handler to include the states array and setIsDialogOpen
   const handleStateClick = useCallback((stateName: string) => {
     console.log("handleStateClick called with state:", stateName);
@@ -157,6 +139,7 @@ export const useStatePermissionsManager = () => {
     refreshData: forceRefreshData,
     hasChanges,
     debugLogs,
-    refreshCounter
+    refreshCounter,
+    hasInitialized
   };
 };

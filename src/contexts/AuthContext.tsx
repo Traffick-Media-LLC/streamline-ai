@@ -39,6 +39,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isGuest, setIsGuest] = useState(false);
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  // Track if we've tried to fetch role once already to avoid loops
+  const [hasInitializedRole, setHasInitializedRole] = useState(false);
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -84,11 +86,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log("No role found, setting to basic");
         setUserRole('basic');
       }
+      
+      setHasInitializedRole(true);
     } catch (error) {
       console.error('Error in fetchUserRole:', error);
       toast.error("Failed to fetch user role");
       setUserRole('basic');
       setIsAdmin(false);
+      setHasInitializedRole(true);
     }
   };
 
@@ -98,43 +103,58 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     // First set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event, "Session:", session?.user?.id);
+      async (event, newSession) => {
+        console.log("Auth state changed:", event, "Session:", newSession?.user?.id);
         
         if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
+          const newUser = newSession?.user ?? null;
+          setSession(newSession);
+          setUser(newUser);
           
-          if (session?.user) {
+          // Reset role initializaton flag when session changes
+          if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+            setHasInitializedRole(false);
+          }
+          
+          if (newUser && !hasInitializedRole) {
             // Use setTimeout to prevent potential auth deadlocks
             setTimeout(() => {
               if (mounted) {
-                fetchUserRole(session.user.id);
+                fetchUserRole(newUser.id);
               }
-            }, 0);
-          } else {
+            }, 10);
+          } else if (!newUser && !isGuest) {
             // If logged out and not in guest mode, clear role status
-            if (!isGuest) {
-              setUserRole(null);
-              setIsAdmin(false);
-            }
+            setUserRole(null);
+            setIsAdmin(false);
+            setHasInitializedRole(true);
           }
+          
           setLoading(false);
         }
       }
     );
 
     // Then check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log("Got initial session:", session?.user?.id);
+    supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
+      console.log("Got initial session:", existingSession?.user?.id);
       
       if (mounted) {
-        setSession(session);
-        setUser(session?.user ?? null);
+        const existingUser = existingSession?.user ?? null;
+        setSession(existingSession);
+        setUser(existingUser);
         
-        if (session?.user) {
-          await fetchUserRole(session.user.id);
+        if (existingUser && !hasInitializedRole) {
+          // Use setTimeout to avoid blocking issues
+          setTimeout(async () => {
+            if (mounted) {
+              await fetchUserRole(existingUser.id);
+            }
+          }, 10);
+        } else {
+          setHasInitializedRole(true);
         }
+        
         setLoading(false);
       }
     });
@@ -144,7 +164,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [hasInitializedRole]);
 
   useEffect(() => {
     // When isGuest changes, update admin status and role accordingly
@@ -152,6 +172,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log("Guest mode enabled - granting admin privileges");
       setIsAdmin(true);
       setUserRole('admin');
+      setLoading(false);
+      setHasInitializedRole(true);
     } else if (!user) {
       // Only reset admin status if not logged in
       console.log("Guest mode disabled - reverting to authenticated status");
@@ -175,14 +197,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const isActuallyAuthenticated = !!user || isGuest;
+
   return (
     <AuthContext.Provider
       value={{
         session,
         user,
         signOut,
-        loading,
-        isAuthenticated: !!user || isGuest,
+        loading: loading && !isActuallyAuthenticated,
+        isAuthenticated: isActuallyAuthenticated,
         isGuest,
         setIsGuest,
         userRole,

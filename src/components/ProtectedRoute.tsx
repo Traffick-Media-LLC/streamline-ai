@@ -1,8 +1,9 @@
 
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ShieldAlert } from "lucide-react";
+import { useState, useEffect } from "react";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
@@ -10,18 +11,30 @@ type ProtectedRouteProps = {
 };
 
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
-  const { isAuthenticated, loading, user, isAdmin, userRole } = useAuth();
+  const { isAuthenticated, loading, user, isAdmin, userRole, isGuest } = useAuth();
+  const [authChecked, setAuthChecked] = useState(false);
+  const location = useLocation();
 
   console.log("ProtectedRoute check:", { 
     isAuthenticated, 
     loading, 
-    isAdmin, 
+    isAdmin,
+    isGuest,
     requiredRole,
     userRole,
-    userId: user?.id
+    userId: user?.id,
+    path: location.pathname
   });
 
-  if (loading) {
+  // Wait for auth to be checked before making a decision
+  useEffect(() => {
+    if (!loading) {
+      setAuthChecked(true);
+    }
+  }, [loading]);
+
+  // Show loading state while auth is being checked
+  if (loading || !authChecked) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
@@ -29,11 +42,14 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     );
   }
 
-  if (!isAuthenticated) {
+  // If not authenticated (and not in guest mode), redirect to auth
+  if (!isAuthenticated && !isGuest) {
     console.log("Not authenticated, redirecting to auth page");
-    return <Navigate to="/auth" />;
+    // Add current path as state to redirect back after login
+    return <Navigate to="/auth" state={{ from: location.pathname }} />;
   }
 
+  // If admin role is required but user is not admin
   if (requiredRole === 'admin' && !isAdmin) {
     console.log("Admin role required but user is not admin. User role:", userRole);
     return (
