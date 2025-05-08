@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { State, Product } from '@/types/statePermissions';
 import { toast } from "@/components/ui/sonner";
 
@@ -10,7 +10,7 @@ export const useStateSelection = (stateProducts: any[]) => {
 
   // Effect to track selected products changes is moved to the main hook
 
-  const handleStateClick = useCallback((stateName: string, states: State[]) => {
+  const handleStateClick = useCallback((stateName: string, states: State[], setIsDialogOpen: (open: boolean) => void) => {
     console.log("State clicked:", stateName);
     const state = states.find(s => s.name === stateName);
     if (state) {
@@ -23,6 +23,7 @@ export const useStateSelection = (stateProducts: any[]) => {
       setSelectedState(state);
       setSelectedProducts(allowedProductIds);
       setHasChanges(false);
+      setIsDialogOpen(true); // Open the dialog when a state is selected
       return true; // Successfully selected state
     } else {
       console.error("State not found:", stateName);
@@ -31,7 +32,7 @@ export const useStateSelection = (stateProducts: any[]) => {
     }
   }, [stateProducts]);
 
-  const handleEditState = useCallback((state: State) => {
+  const handleEditState = useCallback((state: State, setIsDialogOpen: (open: boolean) => void) => {
     console.log("Editing state:", state);
     const allowedProductIds = stateProducts
       .filter(sp => sp.state_id === state.id)
@@ -41,6 +42,7 @@ export const useStateSelection = (stateProducts: any[]) => {
     setSelectedState(state);
     setSelectedProducts(allowedProductIds);
     setHasChanges(false);
+    setIsDialogOpen(true); // Open the dialog when edit is clicked
     return true; // Successfully set edit state
   }, [stateProducts]);
 

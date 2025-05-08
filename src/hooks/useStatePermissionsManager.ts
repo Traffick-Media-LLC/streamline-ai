@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useStatePermissionsData } from './useStatePermissionsData';
 import { useProductsData } from './useProductsData';
@@ -71,7 +70,7 @@ export const useStatePermissionsManager = () => {
   const loading = statesLoading || productsLoading || isRefreshing;
   const error = statesError || productsError;
 
-  // Track selected products changes
+  // Effect to track selected products changes
   useEffect(() => {
     setHasChanges(true);
   }, [selectedProducts, setHasChanges]);
@@ -92,15 +91,15 @@ export const useStatePermissionsManager = () => {
     }
   }, [isAuthenticated, isAdmin, performRobustRefresh]);
 
-  // Wrap the base state click handler to include the states array
+  // Wrap the base state click handler to include the states array and setIsDialogOpen
   const handleStateClick = useCallback((stateName: string) => {
-    return baseHandleStateClick(stateName, states);
-  }, [baseHandleStateClick, states]);
+    return baseHandleStateClick(stateName, states, setIsDialogOpen);
+  }, [baseHandleStateClick, states, setIsDialogOpen]);
 
-  // Wrap the base edit state handler
+  // Wrap the base edit state handler with setIsDialogOpen
   const handleEditState = useCallback((state: State) => {
-    return baseHandleEditState(state);
-  }, [baseHandleEditState]);
+    return baseHandleEditState(state, setIsDialogOpen);
+  }, [baseHandleEditState, setIsDialogOpen]);
 
   // Permission operations hook
   const { handleSavePermissions } = usePermissionsOperations({
