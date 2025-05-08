@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -66,6 +67,7 @@ export const useStatePermissionsOperations = () => {
       setIsError(false);
       setLastError(null);
 
+      // Fix: Using await with the logStage method
       await errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
@@ -150,11 +152,13 @@ export const useStatePermissionsOperations = () => {
         }
       }
 
+      // Fix: Using await with the logStage method
       await errorTracker.logStage('saving_permissions', 'complete');
       toast.dismiss("saving-permissions");
       toast.success('State permissions updated successfully');
       return true;
     } catch (error: any) {
+      // Fix: Using await with the logStage method
       await errorTracker.logStage('saving_permissions', 'error', { 
         errorMessage: error.message,
         errorCode: error.code,
