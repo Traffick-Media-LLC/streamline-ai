@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { ErrorTracker } from "@/utils/logging";
@@ -11,29 +11,23 @@ import {
   verifyPermissionsState,
   checkPermissionsExist
 } from "@/services/permissionsService";
-import { useErrorHandling } from './useErrorHandling';
 
 export const useStatePermissionsOperations = () => {
   const [isSaving, setIsSaving] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const { isAuthenticated, isAdmin } = useAuth();
   const [debugLogs, setDebugLogs] = useState<Array<{level: string, message: string, data?: any}>>([]);
-  
-  // Use the new error handling hook
-  const { 
-    error,
-    isError,
-    clearError,
-    handleError,
-    attemptRecovery,
-    errorTracker
-  } = useErrorHandling('StatePermissionsOperations');
 
-  const addDebugLog: DebugLogger = useCallback((level: string, message: string, data?: any) => {
+  // Create a reusable error tracker for this component
+  const errorTracker = new ErrorTracker('StatePermissionsOperations');
+
+  const addDebugLog: DebugLogger = (level: string, message: string, data?: any) => {
     console.log(`[${level}] ${message}`, data);
     setDebugLogs(prev => [...prev, { level, message, data }]);
-  }, []);
+  };
 
-  const saveStatePermissions = useCallback(async (stateId: number, productIds: number[], retryCount = 0): Promise<boolean> => {
+  const saveStatePermissions = async (stateId: number, productIds: number[], retryCount = 0): Promise<boolean> => {
     addDebugLog('info', "Starting saveStatePermissions", { stateId, productIds, isAuthenticated, isAdmin, retryCount });
     
     const validationContext: ValidationContext = { isAuthenticated, isAdmin };
@@ -43,7 +37,8 @@ export const useStatePermissionsOperations = () => {
 
     try {
       setIsSaving(true);
-      clearError();
+      setIsError(false);
+      setLastError(null);
 
       // Log operation start
       await errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
@@ -92,15 +87,40 @@ export const useStatePermissionsOperations = () => {
       toast.success('State permissions updated successfully');
       return true;
     } catch (error: any) {
-      // Enhanced error handling with categorization and recovery
-      const { isNetworkError } = await handleError(
-        error, 
-        'saving state permissions',
-        { stateId, productIds, retryCount }
-      );
+      // Log error
+      await errorTracker.logStage('saving_permissions', 'error', { 
+        errorMessage: error.message,
+        errorCode: error.code,
+        errorStatus: error.status
+      });
       
+      console.error('Error saving state permissions:', error);
+      setIsError(true);
+      setLastError(error.message);
+      
+      // Log error with the tracker
+      await errorTracker.logError(`Failed to save state permissions: ${error.message}`);
+      
+      addDebugLog('error', `Error saving permissions: ${error.message}`, { 
+        error,
+        stack: error.stack,
+        stateId,
+        productIds
+      });
+      
+      toast.dismiss("saving-permissions");
+      toast.error('Failed to update state permissions', {
+        description: error.message.includes('policy') 
+          ? 'Admin access required. Please ensure you have proper permissions.' 
+          : `Error: ${error.message}`
+      });
+
       // Handle retry for network-related errors
-      if (retryCount < 2 && isNetworkError) {
+      if (retryCount < 2 && (
+        error.message.includes('network') || 
+        error.message.includes('timeout') || 
+        error.message.includes('connection')
+      )) {
         addDebugLog('info', "Retrying save operation", { retryCount: retryCount + 1 });
         toast.info("Retrying save operation...");
         return await saveStatePermissions(stateId, productIds, retryCount + 1);
@@ -110,36 +130,14 @@ export const useStatePermissionsOperations = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [
-    isAuthenticated, 
-    isAdmin, 
-    addDebugLog, 
-    errorTracker, 
-    clearError, 
-    handleError
-  ]);
-
-  // Allow checking permissions with proper error handling
-  const checkPermissions = useCallback(async (stateId: number) => {
-    try {
-      await errorTracker.logStage('check_permissions', 'start', { stateId });
-      const result = await checkPermissionsExist(stateId, errorTracker);
-      await errorTracker.logStage('check_permissions', 'complete', { result });
-      return result;
-    } catch (error) {
-      await handleError(error, 'checking permissions', { stateId });
-      return false;
-    }
-  }, [errorTracker, handleError]);
+  };
 
   return {
     saveStatePermissions,
-    checkPermissionsExist: checkPermissions,
+    checkPermissionsExist: (stateId: number) => checkPermissionsExist(stateId, errorTracker),
     isSaving,
     isError,
-    error,
-    clearError,
-    attemptRecovery,
+    lastError,
     debugLogs
   };
 };

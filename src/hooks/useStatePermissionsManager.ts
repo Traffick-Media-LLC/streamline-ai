@@ -20,8 +20,7 @@ export const useStatePermissionsManager = () => {
     stateProducts, 
     loading: statesLoading, 
     error: statesError, 
-    refreshData,
-    clearError
+    refreshData 
   } = useStatePermissionsData();
   
   const { 
@@ -34,8 +33,7 @@ export const useStatePermissionsManager = () => {
   const { 
     saveStatePermissions, 
     isSaving, 
-    debugLogs,
-    error: operationsError
+    debugLogs 
   } = useStatePermissionsOperations();
 
   // Refactored UI state hooks
@@ -45,9 +43,7 @@ export const useStatePermissionsManager = () => {
     viewMode, 
     setViewMode, 
     isDialogOpen, 
-    setIsDialogOpen,
-    showDebug,
-    setShowDebug
+    setIsDialogOpen 
   } = useStateUIControls();
 
   // State selection hook
@@ -73,9 +69,7 @@ export const useStatePermissionsManager = () => {
 
   // Combined loading state
   const loading = statesLoading || productsLoading || isRefreshing;
-  
-  // Combined error handling
-  const error = operationsError || statesError || productsError;
+  const error = statesError || productsError;
 
   // Track selected products changes
   useEffect(() => {
@@ -139,7 +133,6 @@ export const useStatePermissionsManager = () => {
     setIsDialogOpen,
     loading,
     error,
-    clearError,
     isSaving,
     handleStateClick,
     handleSavePermissions,
@@ -147,8 +140,6 @@ export const useStatePermissionsManager = () => {
     handleEditState,
     refreshData: forceRefreshData,
     hasChanges,
-    debugLogs,
-    showDebug,
-    setShowDebug
+    debugLogs
   };
 };

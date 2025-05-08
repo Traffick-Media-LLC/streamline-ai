@@ -7,17 +7,15 @@ import { Button } from "@/components/ui/button";
 interface StatePermissionsAuthCheckProps {
   isAuthenticated: boolean;
   isAdmin: boolean;
-  error: any | null;
+  error: string | null;
   refreshData: () => void;
-  clearError?: () => void;
 }
 
 export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps> = ({
   isAuthenticated,
   isAdmin,
   error,
-  refreshData,
-  clearError
+  refreshData
 }) => {
   if (!isAuthenticated || !isAdmin) {
     return (
@@ -40,30 +38,16 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
   }
 
   if (error) {
-    const errorMessage = typeof error === 'string' ? error : 
-                          error?.message || 'Unknown error occurred';
-    
     return (
       <div className="p-4">
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error loading data</AlertTitle>
-          <AlertDescription>{errorMessage}</AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <div className="flex gap-2 mt-4">
-          <Button onClick={refreshData} className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" /> Try Again
-          </Button>
-          {clearError && (
-            <Button 
-              variant="outline" 
-              onClick={clearError} 
-              className="flex items-center gap-2"
-            >
-              Dismiss
-            </Button>
-          )}
-        </div>
+        <Button onClick={refreshData} className="mt-4 flex items-center gap-2">
+          <RefreshCw className="h-4 w-4" /> Try Again
+        </Button>
       </div>
     );
   }

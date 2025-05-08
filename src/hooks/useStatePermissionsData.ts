@@ -4,28 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { State, StateProduct } from '@/types/statePermissions';
-import { useErrorHandling } from './useErrorHandling';
 
 export const useStatePermissionsData = () => {
   const [states, setStates] = useState<State[]>([]);
   const [stateProducts, setStateProducts] = useState<StateProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
   const { isAuthenticated, isAdmin } = useAuth();
   const [lastRefreshTime, setLastRefreshTime] = useState<number | null>(null);
-  
-  const { 
-    error, 
-    isError, 
-    handleError, 
-    clearError, 
-    attemptRecovery, 
-    errorTracker 
-  } = useErrorHandling('StatePermissionsData');
 
   const fetchStates = useCallback(async (abortSignal?: AbortSignal) => {
     try {
-      clearError();
+      setError(null);
       console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin });
       
       // Generate a cache-busting query param
@@ -40,25 +31,21 @@ export const useStatePermissionsData = () => {
       if (error) throw error;
       console.log("States data received:", data?.length || 0, "items");
       setStates(data || []);
-      return true;
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('States fetch aborted');
-        return false;
+        return;
       }
       
-      const { isAuthError } = await handleError(error, 'fetching states', { 
-        authState: { isAuthenticated, isAdmin } 
+      console.error('Error fetching states:', error);
+      setError(`Failed to load states: ${error.message}`);
+      toast.error("Failed to load states", {
+        description: error.message.includes('policy') 
+          ? "Admin access required. Please ensure you have proper permissions."
+          : error.message
       });
-      
-      if (isAuthError) {
-        // Special handling for auth errors
-        console.log("Auth error detected during states fetch");
-      }
-      
-      return false;
     }
-  }, [isAuthenticated, isAdmin, clearError, handleError]);
+  }, [isAuthenticated, isAdmin]);
 
   const fetchStateProducts = useCallback(async (abortSignal?: AbortSignal) => {
     try {
@@ -75,26 +62,22 @@ export const useStatePermissionsData = () => {
       if (error) throw error;
       console.log("State products data received:", data?.length || 0, "items");
       setStateProducts(data || []);
-      return true;
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('State products fetch aborted');
-        return false;
+        return;
       }
       
-      await handleError(error, 'fetching state products');
-      return false;
+      console.error('Error fetching state products:', error);
+      setError(`Failed to load state product permissions: ${error.message}`);
+      toast.error("Failed to load state product permissions");
     }
-  }, [handleError]);
+  }, []);
 
   const refreshData = useCallback(async (force = false) => {
     if (!isAuthenticated) {
       console.log("Not authenticated, skipping state permissions data fetch");
-      await handleError(
-        new Error("Authentication required"), 
-        'data refresh', 
-        { isAuthenticated }
-      );
+      setError("Authentication required. Please ensure you're logged in or continue as guest.");
       setLoading(false);
       return false;
     }
@@ -110,14 +93,8 @@ export const useStatePermissionsData = () => {
     }
     
     setLoading(true);
-    clearError();
+    setError(null);
     console.log("Starting state permissions data refresh...");
-    
-    await errorTracker.logStage('data_refresh', 'start', {
-      force,
-      refreshAttempts,
-      lastRefreshTime
-    });
     
     // Create an AbortController for each fetch operation
     const controller = new AbortController();
@@ -128,41 +105,19 @@ export const useStatePermissionsData = () => {
       setLastRefreshTime(currentTime);
       
       // Use Promise.all to fetch data in parallel
-      const [statesSuccess, productsSuccess] = await Promise.all([
-        fetchStates(signal), 
-        fetchStateProducts(signal)
-      ]);
+      await Promise.all([fetchStates(signal), fetchStateProducts(signal)]);
       
-      const success = statesSuccess && productsSuccess;
-      
-      await errorTracker.logStage('data_refresh', 
-        success ? 'complete' : 'error',
-        { success, statesSuccess, productsSuccess }
-      );
-      
-      console.log("State permissions data refresh complete", { success });
-      
-      if (success) {
-        setRefreshAttempts(0);
-      }
-      
-      return success;
+      console.log("State permissions data refresh complete");
+      setRefreshAttempts(0);
+      return true;
     } catch (error: any) {
-      await handleError(error, 'refreshing data');
+      console.error("Error refreshing data:", error);
+      setError(`Failed to refresh data: ${error.message}`);
       return false;
     } finally {
       setLoading(false);
     }
-  }, [
-    fetchStates, 
-    fetchStateProducts, 
-    isAuthenticated, 
-    lastRefreshTime,
-    clearError,
-    handleError,
-    errorTracker,
-    refreshAttempts
-  ]);
+  }, [fetchStates, fetchStateProducts, isAuthenticated, lastRefreshTime]);
 
   // Implement automatic retry logic for initial load
   useEffect(() => {
@@ -202,23 +157,11 @@ export const useStatePermissionsData = () => {
     };
   }, [isAuthenticated, isAdmin, refreshAttempts, refreshData]);
 
-  // Add recovery capability
-  useEffect(() => {
-    if (isError && !loading) {
-      // Set up automatic recovery for certain errors
-      attemptRecovery(async () => {
-        return await refreshData(true);
-      });
-    }
-  }, [isError, loading, attemptRecovery, refreshData]);
-
   return {
     states,
     stateProducts,
     loading,
     error,
-    isError,
-    refreshData,
-    clearError
+    refreshData
   };
 };

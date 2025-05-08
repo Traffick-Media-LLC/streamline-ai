@@ -38,60 +38,34 @@ export const usePermissionsOperations = ({
       return;
     }
 
-    let saveToastId: string | undefined;
-    try {
-      saveToastId = toast.loading("Saving permissions...", { id: "saving-permissions-progress" }).id;
+    const success = await saveStatePermissions(selectedState.id, selectedProducts);
+    if (success) {
+      console.log("Save successful, refreshing data");
+      setIsDialogOpen(false);
+      setHasChanges(false);
       
-      // Ensure stateId is treated as a number
-      const stateId = typeof selectedState.id === 'number' ? 
-        selectedState.id : 
-        parseInt(String(selectedState.id), 10);
+      // Record the state we just saved for re-selection
+      const savedStateId = selectedState.id;
+      const savedProductIds = [...selectedProducts];
       
-      const success = await saveStatePermissions(stateId, selectedProducts);
-      if (success) {
-        console.log("Save successful, refreshing data");
-        setIsDialogOpen(false);
-        setHasChanges(false);
+      // First close the dialog
+      setIsDialogOpen(false);
+      
+      // Refresh with a longer delay and multiple attempts if needed
+      setTimeout(async () => {
+        const refreshSuccess = await performRobustRefresh(true);
         
-        // Record the state we just saved for re-selection
-        const savedStateId = stateId;
-        const savedProductIds = [...selectedProducts];
-        
-        // First close the dialog
-        setIsDialogOpen(false);
-        
-        // Show refresh toast
-        const refreshToastId = toast.loading("Refreshing data...", { id: "refresh-progress" }).id;
-        
-        // Refresh with a longer delay and multiple attempts if needed
-        setTimeout(async () => {
-          const refreshSuccess = await performRobustRefresh(true);
-          
-          toast.dismiss(refreshToastId);
-          
-          if (refreshSuccess) {
-            console.log("Refresh successful after save");
-            toast.success("Permissions updated successfully", { id: "update-complete" });
-          } else {
-            console.error("Failed to refresh data after save");
-            toast.error("Warning: UI may not reflect the latest data", {
-              description: "The save was successful but refreshing the data failed. Try refreshing the page.",
-              id: "refresh-failed"
-            });
-          }
-        }, 800); // Increased delay for database to finalize transaction
-      } else {
-        console.error("Save failed");
-        toast.error("Failed to save permissions", { id: "save-failed" });
-      }
-    } catch (error) {
-      console.error("Exception during save operation:", error);
-      toast.error("An unexpected error occurred", { 
-        description: error instanceof Error ? error.message : "Unknown error",
-        id: "save-error"
-      });
-    } finally {
-      if (saveToastId) toast.dismiss(saveToastId);
+        if (refreshSuccess) {
+          console.log("Refresh successful after save");
+        } else {
+          console.error("Failed to refresh data after save");
+          toast.error("Warning: UI may not reflect the latest data", {
+            description: "The save was successful but refreshing the data failed"
+          });
+        }
+      }, 800); // Increased delay for database to finalize transaction
+    } else {
+      console.error("Save failed");
     }
   }, [
     selectedState, 

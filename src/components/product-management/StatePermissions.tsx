@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
 import { StatePermissionsProps } from '@/types/statePermissions';
@@ -8,7 +8,6 @@ import { StatePermissionsHeader } from "./StatePermissionsHeader";
 import { StatePermissionsContent } from "./StatePermissionsContent";
 import { StatePermissionsDebugPanel } from "./StatePermissionsDebugPanel";
 import { StatePermissionsAuthCheck } from "./StatePermissionsAuthCheck";
-import { StatePermissionsErrorBoundary } from "./StatePermissionsErrorBoundary";
 
 const StatePermissions: React.FC<StatePermissionsProps> = () => {
   const {
@@ -26,7 +25,6 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     setIsDialogOpen,
     loading,
     error,
-    clearError,
     isSaving,
     handleStateClick,
     handleSavePermissions,
@@ -38,68 +36,69 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
   } = useStatePermissionsManager();
 
   const { isAuthenticated, isAdmin } = useAuth();
-  const [showDebug, setShowDebug] = React.useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Show auth status for debugging
   React.useEffect(() => {
     console.log("StatePermissions component - Auth status:", { isAuthenticated, isAdmin });
   }, [isAuthenticated, isAdmin]);
 
+  // First check auth and errors
+  const authErrorCheck = (
+    <StatePermissionsAuthCheck 
+      isAuthenticated={isAuthenticated}
+      isAdmin={isAdmin}
+      error={error}
+      refreshData={refreshData}
+    />
+  );
+  
+  // If there are auth issues or errors, only render the auth check component
+  if (authErrorCheck) {
+    return authErrorCheck;
+  }
+
   return (
-    <StatePermissionsErrorBoundary onRetry={refreshData}>
-      {/* Auth and error checks */}
-      <StatePermissionsAuthCheck 
-        isAuthenticated={isAuthenticated}
-        isAdmin={isAdmin}
-        error={error}
+    <div>
+      <StatePermissionsHeader 
+        viewMode={viewMode}
+        setViewMode={setViewMode}
         refreshData={refreshData}
-        clearError={clearError}
+        loading={loading}
+        showDebug={showDebug}
+        setShowDebug={setShowDebug}
       />
 
-      {/* Main content - only shown when authenticated and no errors */}
-      {isAuthenticated && isAdmin && !error && (
-        <div>
-          <StatePermissionsHeader 
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            refreshData={refreshData}
-            loading={loading}
-            showDebug={showDebug}
-            setShowDebug={setShowDebug}
-          />
+      <StatePermissionsDebugPanel 
+        debugLogs={debugLogs}
+        showDebug={showDebug}
+        setShowDebug={setShowDebug}
+      />
 
-          <StatePermissionsDebugPanel 
-            debugLogs={debugLogs}
-            showDebug={showDebug}
-            setShowDebug={setShowDebug}
-          />
+      <StatePermissionsContent 
+        loading={loading}
+        viewMode={viewMode}
+        states={states}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        getStateProducts={getStateProducts}
+        onEditState={handleEditState}
+        handleStateClick={handleStateClick}
+      />
 
-          <StatePermissionsContent 
-            loading={loading}
-            viewMode={viewMode}
-            states={states}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            getStateProducts={getStateProducts}
-            onEditState={handleEditState}
-            handleStateClick={handleStateClick}
-          />
-
-          <ProductSelectionDialog
-            open={isDialogOpen}
-            onOpenChange={setIsDialogOpen}
-            products={products}
-            brands={brands}
-            selectedProducts={selectedProducts}
-            onSelectionChange={setSelectedProducts}
-            onSave={handleSavePermissions}
-            isSaving={isSaving}
-            hasChanges={hasChanges}
-            stateName={selectedState?.name}
-          />
-        </div>
-      )}
-    </StatePermissionsErrorBoundary>
+      <ProductSelectionDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        products={products}
+        brands={brands}
+        selectedProducts={selectedProducts}
+        onSelectionChange={setSelectedProducts}
+        onSave={handleSavePermissions}
+        isSaving={isSaving}
+        hasChanges={hasChanges}
+        stateName={selectedState?.name}
+      />
+    </div>
   );
 };
 
