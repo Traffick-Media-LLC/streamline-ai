@@ -67,7 +67,7 @@ export const useStatePermissionsOperations = () => {
       setIsError(false);
       setLastError(null);
 
-      errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
+      await errorTracker.logStage('saving_permissions', 'start', { stateId, productIds });
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
       // Use has_role('admin') which is less likely to have ambiguous column issues
@@ -151,12 +151,12 @@ export const useStatePermissionsOperations = () => {
         }
       }
 
-      errorTracker.logStage('saving_permissions', 'complete');
+      await errorTracker.logStage('saving_permissions', 'complete');
       toast.dismiss("saving-permissions");
       toast.success('State permissions updated successfully');
       return true;
     } catch (error: any) {
-      errorTracker.logStage('saving_permissions', 'error', { 
+      await errorTracker.logStage('saving_permissions', 'error', { 
         errorMessage: error.message,
         errorCode: error.code,
         errorStatus: error.status
