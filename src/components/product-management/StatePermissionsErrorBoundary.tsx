@@ -76,7 +76,7 @@ export const StatePermissionsErrorBoundary: React.FC<StatePermissionsErrorBounda
   return (
     <ErrorBoundary
       component={component}
-      fallback={({ error, resetErrorBoundary, requestId }) => (
+      fallbackComponent={({ error, resetErrorBoundary, requestId }) => (
         <StatePermissionsErrorFallback
           error={error}
           resetErrorBoundary={resetErrorBoundary}

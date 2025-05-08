@@ -49,11 +49,7 @@ export const useErrorHandling = (component: string) => {
     await errorTracker.logError(
       `Error during ${operation}: ${errorMessage}`,
       err,
-      { ...context, operation },
-      'error',
-      isNetworkError ? 'network' : 
-        isAuthError ? 'credential' : 
-        isDataError ? 'database' : 'generic'
+      { ...context, operation }
     );
 
     // Update error state

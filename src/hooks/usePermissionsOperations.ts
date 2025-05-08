@@ -42,14 +42,14 @@ export const usePermissionsOperations = ({
     try {
       saveToastId = toast.loading("Saving permissions...", { id: "saving-permissions-progress" }).id;
       
-      const success = await saveStatePermissions(selectedState.id, selectedProducts);
+      const success = await saveStatePermissions(selectedState.id as number, selectedProducts);
       if (success) {
         console.log("Save successful, refreshing data");
         setIsDialogOpen(false);
         setHasChanges(false);
         
         // Record the state we just saved for re-selection
-        const savedStateId = selectedState.id;
+        const savedStateId = selectedState.id as number;
         const savedProductIds = [...selectedProducts];
         
         // First close the dialog
