@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Message } from "../types/chat";
 import { v4 as uuidv4 } from "uuid";
@@ -127,9 +126,7 @@ export const useChatSending = (
       await errorTracker.logError(
         `Error sending message: ${error.message || 'Unknown error'}`,
         error,
-        { messageId },
-        'error',
-        'ai_response' as LogCategory
+        { messageId }
       );
       
       // Show error to user

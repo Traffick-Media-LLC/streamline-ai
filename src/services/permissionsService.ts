@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorTracker } from "@/utils/logging";
 import { DebugLogger } from "@/utils/permissions/validationUtils";
@@ -22,7 +21,7 @@ export const verifyAdminStatus = async (errorTracker: ErrorTracker): Promise<Per
       };
     }
     
-    await errorTracker.logStage('admin_check', 'info', { isAdmin: isAdminResult });
+    await errorTracker.logStage('admin_check', 'progress', { isAdmin: isAdminResult });
     
     if (!isAdminResult) {
       return { 
@@ -76,7 +75,7 @@ export const insertNewPermissions = async (
   errorTracker: ErrorTracker
 ): Promise<PermissionsOperationResult> => {
   if (productIds.length === 0) {
-    await errorTracker.logStage('insert_permissions', 'skip', { reason: 'no_products' });
+    await errorTracker.logStage('insert_permissions', 'complete', { reason: 'no_products' });
     return { success: true, data: { insertedCount: 0 } };
   }
 
@@ -131,7 +130,7 @@ export const verifyPermissionsState = async (
     const allSaved = productIds.every(id => verifiedIds.includes(id));
     const extraItems = verifiedIds.filter(id => !productIds.includes(id));
     
-    await errorTracker.logStage('verify_permissions', 'info', { 
+    await errorTracker.logStage('verify_permissions', 'progress', { 
       expectedCount: productIds.length,
       actualCount: verifiedIds.length,
       allSaved,
@@ -139,7 +138,9 @@ export const verifyPermissionsState = async (
     });
     
     if (!allSaved || extraItems.length > 0) {
-      await errorTracker.logError("Verification failed - database state doesn't match requested state");
+      await errorTracker.logError(
+        "Verification failed - database state doesn't match requested state"
+      );
       return { 
         success: false, 
         error: "Database state doesn't match requested state", 
