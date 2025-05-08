@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ErrorTracker } from "@/utils/logging";
 import { DebugLogger } from "@/utils/permissions/validationUtils";
@@ -9,7 +8,7 @@ interface PermissionsOperationResult {
   data?: any;
 }
 
-export const verifyAdminStatus = async (addDebugLog: DebugLogger): Promise<PermissionsOperationResult> => {
+export const verifyAdminStatus = async (errorTracker: ErrorTracker): Promise<PermissionsOperationResult> => {
   try {
     const { data: isAdminResult, error: isAdminError } = await supabase.rpc('has_role', {
       _role: 'admin'
@@ -22,7 +21,7 @@ export const verifyAdminStatus = async (addDebugLog: DebugLogger): Promise<Permi
       };
     }
     
-    addDebugLog('info', "Admin check result", { isAdmin: isAdminResult });
+    await errorTracker.logStage('admin_check', 'info', { isAdmin: isAdminResult });
     
     if (!isAdminResult) {
       return { 
@@ -42,10 +41,10 @@ export const verifyAdminStatus = async (addDebugLog: DebugLogger): Promise<Permi
 
 export const deleteExistingPermissions = async (
   stateId: number, 
-  addDebugLog: DebugLogger
+  errorTracker: ErrorTracker
 ): Promise<PermissionsOperationResult> => {
   try {
-    addDebugLog('info', "Deleting existing permissions", { stateId });
+    await errorTracker.logStage('delete_permissions', 'start', { stateId });
     const { error: deleteError, count } = await supabase
       .from('state_allowed_products')
       .delete()
@@ -53,14 +52,14 @@ export const deleteExistingPermissions = async (
       .select('*', { count: 'exact', head: true });
 
     if (deleteError) {
-      addDebugLog('error', "Delete error occurred", { deleteError });
+      await errorTracker.logError("Delete error occurred", deleteError);
       return { 
         success: false, 
         error: `Failed to update permissions: ${deleteError.message}` 
       };
     }
 
-    addDebugLog('success', "Successfully deleted existing permissions", { count });
+    await errorTracker.logStage('delete_permissions', 'complete', { count });
     return { success: true, data: { deletedCount: count } };
   } catch (error: any) {
     return { 
@@ -73,10 +72,10 @@ export const deleteExistingPermissions = async (
 export const insertNewPermissions = async (
   stateId: number, 
   productIds: number[],
-  addDebugLog: DebugLogger
+  errorTracker: ErrorTracker
 ): Promise<PermissionsOperationResult> => {
   if (productIds.length === 0) {
-    addDebugLog('info', "No products to insert, skipping insert step");
+    await errorTracker.logStage('insert_permissions', 'skip', { reason: 'no_products' });
     return { success: true, data: { insertedCount: 0 } };
   }
 
@@ -86,21 +85,21 @@ export const insertNewPermissions = async (
       product_id: productId
     }));
 
-    addDebugLog('info', "Inserting new permissions", { newPermissions });
+    await errorTracker.logStage('insert_permissions', 'start', { newPermissions });
     const { error: insertError, data: insertData } = await supabase
       .from('state_allowed_products')
       .insert(newPermissions)
       .select();
 
     if (insertError) {
-      addDebugLog('error', "Insert error occurred", { insertError });
+      await errorTracker.logError("Insert error occurred", insertError);
       return { 
         success: false, 
         error: `Failed to save new permissions: ${insertError.message}` 
       };
     }
 
-    addDebugLog('success', "Successfully inserted new permissions", { insertedCount: insertData?.length });
+    await errorTracker.logStage('insert_permissions', 'complete', { insertedCount: insertData?.length });
     return { success: true, data: { insertedCount: insertData?.length } };
   } catch (error: any) {
     return { 
@@ -113,16 +112,17 @@ export const insertNewPermissions = async (
 export const verifyPermissionsState = async (
   stateId: number,
   productIds: number[],
-  addDebugLog: DebugLogger
+  errorTracker: ErrorTracker
 ): Promise<PermissionsOperationResult> => {
   try {
+    await errorTracker.logStage('verify_permissions', 'start', { stateId, productIds });
     const { data: verifyData, error: verifyError } = await supabase
       .from('state_allowed_products')
       .select('product_id')
       .eq('state_id', stateId);
       
     if (verifyError) {
-      addDebugLog('warning', "Verification query failed", { verifyError });
+      await errorTracker.logError("Verification query failed", verifyError);
       return { success: false, error: verifyError.message };
     }
     
@@ -130,7 +130,7 @@ export const verifyPermissionsState = async (
     const allSaved = productIds.every(id => verifiedIds.includes(id));
     const extraItems = verifiedIds.filter(id => !productIds.includes(id));
     
-    addDebugLog('info', "Verification results", { 
+    await errorTracker.logStage('verify_permissions', 'info', { 
       expectedCount: productIds.length,
       actualCount: verifiedIds.length,
       allSaved,
@@ -138,7 +138,7 @@ export const verifyPermissionsState = async (
     });
     
     if (!allSaved || extraItems.length > 0) {
-      addDebugLog('warning', "Verification failed - database state doesn't match requested state", {
+      await errorTracker.logError("Verification failed - database state doesn't match requested state", null, {
         requestedIds: productIds,
         actualIds: verifiedIds
       });
@@ -149,6 +149,7 @@ export const verifyPermissionsState = async (
       };
     }
     
+    await errorTracker.logStage('verify_permissions', 'complete', { verifiedIds });
     return { success: true, data: { verifiedIds } };
   } catch (error: any) {
     return { 
@@ -160,24 +161,24 @@ export const verifyPermissionsState = async (
 
 export const checkPermissionsExist = async (
   stateId: number,
-  addDebugLog: DebugLogger
+  errorTracker: ErrorTracker
 ): Promise<boolean> => {
   try {
-    addDebugLog('info', "Checking if permissions exist", { stateId });
+    await errorTracker.logStage('check_permissions', 'start', { stateId });
     const { count, error } = await supabase
       .from('state_allowed_products')
       .select('*', { count: 'exact', head: true })
       .eq('state_id', stateId);
     
     if (error) {
-      addDebugLog('error', "Error checking permissions", { error });
+      await errorTracker.logError("Error checking permissions", error);
       throw error;
     }
     
-    addDebugLog('info', "Permission check result", { count });
+    await errorTracker.logStage('check_permissions', 'complete', { count });
     return !!count && count > 0;
   } catch (error) {
-    addDebugLog('error', "Exception checking permissions", { error });
+    await errorTracker.logError("Exception checking permissions", error);
     console.error('Error checking permissions:', error);
     return false; 
   }

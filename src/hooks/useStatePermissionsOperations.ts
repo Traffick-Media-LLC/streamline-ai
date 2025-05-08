@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -45,25 +44,25 @@ export const useStatePermissionsOperations = () => {
       toast.loading("Saving state permissions...", { id: "saving-permissions" });
 
       // Verify admin status
-      const adminVerification = await verifyAdminStatus(addDebugLog);
+      const adminVerification = await verifyAdminStatus(errorTracker);
       if (!adminVerification.success) {
         throw new Error(adminVerification.error);
       }
 
       // Delete existing permissions
-      const deleteResult = await deleteExistingPermissions(stateId, addDebugLog);
+      const deleteResult = await deleteExistingPermissions(stateId, errorTracker);
       if (!deleteResult.success) {
         throw new Error(deleteResult.error);
       }
 
       // Insert new permissions
-      const insertResult = await insertNewPermissions(stateId, productIds, addDebugLog);
+      const insertResult = await insertNewPermissions(stateId, productIds, errorTracker);
       if (!insertResult.success) {
         throw new Error(insertResult.error);
       }
 
       // Verify the changes
-      await verifyPermissionsState(stateId, productIds, addDebugLog);
+      await verifyPermissionsState(stateId, productIds, errorTracker);
 
       // Log successful completion
       await errorTracker.logStage('saving_permissions', 'complete');
@@ -120,7 +119,7 @@ export const useStatePermissionsOperations = () => {
 
   return {
     saveStatePermissions,
-    checkPermissionsExist: (stateId: number) => checkPermissionsExist(stateId, addDebugLog),
+    checkPermissionsExist: (stateId: number) => checkPermissionsExist(stateId, errorTracker),
     isSaving,
     isError,
     lastError,
