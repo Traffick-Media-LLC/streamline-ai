@@ -3,6 +3,12 @@ import { useState, useCallback, useEffect } from 'react';
 import { State, Product } from '@/types/statePermissions';
 import { toast } from "@/components/ui/sonner";
 
+// Define a proper return type for state operations
+interface StateOperationResult {
+  success: boolean;
+  stateId?: number;
+}
+
 export const useStateSelection = (stateProducts: any[]) => {
   const [selectedState, setSelectedState] = useState<State | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
@@ -10,7 +16,7 @@ export const useStateSelection = (stateProducts: any[]) => {
 
   // Effect to track selected products changes is moved to the main hook
 
-  const handleStateClick = useCallback((stateName: string, states: State[], setIsDialogOpen: (open: boolean) => void) => {
+  const handleStateClick = useCallback((stateName: string, states: State[], setIsDialogOpen: (open: boolean) => void): StateOperationResult => {
     console.log("State clicked:", stateName);
     const state = states.find(s => s.name === stateName);
     if (state) {
@@ -24,15 +30,20 @@ export const useStateSelection = (stateProducts: any[]) => {
       setSelectedProducts(allowedProductIds);
       setHasChanges(false);
       setIsDialogOpen(true); // Open the dialog when a state is selected
-      return true; // Successfully selected state
+      return {
+        success: true,
+        stateId: state.id
+      };
     } else {
       console.error("State not found:", stateName);
       toast.error(`State "${stateName}" not found in database`);
-      return false; // Failed to select state
+      return {
+        success: false
+      };
     }
   }, [stateProducts]);
 
-  const handleEditState = useCallback((state: State, setIsDialogOpen: (open: boolean) => void) => {
+  const handleEditState = useCallback((state: State, setIsDialogOpen: (open: boolean) => void): StateOperationResult => {
     console.log("Editing state:", state);
     const allowedProductIds = stateProducts
       .filter(sp => sp.state_id === state.id)
@@ -43,7 +54,10 @@ export const useStateSelection = (stateProducts: any[]) => {
     setSelectedProducts(allowedProductIds);
     setHasChanges(false);
     setIsDialogOpen(true); // Open the dialog when edit is clicked
-    return true; // Successfully set edit state
+    return {
+      success: true,
+      stateId: state.id
+    };
   }, [stateProducts]);
 
   return {

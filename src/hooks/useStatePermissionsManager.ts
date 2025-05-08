@@ -11,6 +11,12 @@ import { usePermissionsOperations } from './usePermissionsOperations';
 import { State } from '@/types/statePermissions';
 import { useAuth } from "@/contexts/AuthContext";
 
+// Define a proper return type for state operations
+interface StateOperationResult {
+  success: boolean;
+  stateId?: number;
+}
+
 export const useStatePermissionsManager = () => {
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   
@@ -101,13 +107,13 @@ export const useStatePermissionsManager = () => {
   }, [isAuthenticated, isAdmin, isGuest, hasInitialized]);
   
   // Wrap the base state click handler to include the states array and setIsDialogOpen
-  const handleStateClick = useCallback((stateName: string) => {
+  const handleStateClick = useCallback((stateName: string): StateOperationResult => {
     console.log("handleStateClick called with state:", stateName);
     
     const result = baseHandleStateClick(stateName, states, setIsDialogOpen);
     
     // After handling state click, fetch the latest products for this state directly
-    if (result && result.stateId) {
+    if (result.success && result.stateId) {
       console.log("Fetching fresh product data for selected state:", result.stateId);
       fetchProductsForState(result.stateId);
     }
@@ -116,13 +122,13 @@ export const useStatePermissionsManager = () => {
   }, [baseHandleStateClick, states, setIsDialogOpen, fetchProductsForState]);
 
   // Wrap the base edit state handler with setIsDialogOpen
-  const handleEditState = useCallback((state: State) => {
+  const handleEditState = useCallback((state: State): StateOperationResult => {
     console.log("handleEditState called with state:", state.name);
     
     const result = baseHandleEditState(state, setIsDialogOpen);
     
     // After editing state, fetch the latest products for this state directly
-    if (result && result.stateId) {
+    if (result.success && result.stateId) {
       console.log("Fetching fresh product data for edited state:", result.stateId);
       fetchProductsForState(result.stateId);
     }
