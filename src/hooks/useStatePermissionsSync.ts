@@ -16,14 +16,19 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
       
       // Execute a minimal query with a timestamp to force cache bypass
       const cacheInvalidationToken = Date.now().toString();
+      
+      // Use a more effective cache-busting approach
       await supabase.from('state_allowed_products')
-        .select('id', { head: true, count: 'exact' })
+        .select('id', { head: true })
         .eq('id', -1) // Non-existent ID to make query lightweight
-        .order('id', { ascending: true })
         .limit(1)
-        // Add proper headers to avoid 406 errors
         .throwOnError();
         
+      // Additional cache-busting query with timestamp parameter
+      await supabase.rpc('get_system_time', {
+        _timestamp: cacheInvalidationToken
+      }).throwOnError();
+      
       return true;
     } catch (error) {
       console.warn("Cache clearing attempt failed:", error);

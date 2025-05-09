@@ -42,6 +42,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   // Enable debug panel by default to help troubleshoot
   const [showDebug, setShowDebug] = useState(true);
+  // Track when permissions are updated
+  const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
 
   // Show auth status for debugging
   React.useEffect(() => {
@@ -56,6 +58,29 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
     });
   }, [isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized, states.length, products.length]);
 
+  // Enhanced effect to refresh data when dialog closes
+  React.useEffect(() => {
+    if (!isDialogOpen && lastUpdateTime) {
+      console.log("Dialog closed after update - refreshing list view data");
+      
+      // Reset update tracker
+      setLastUpdateTime(null);
+      
+      // Short delay before refresh to ensure database has settled
+      const refreshTimer = setTimeout(() => {
+        refreshData().then(success => {
+          if (success) {
+            console.log("List view data refreshed successfully after dialog close");
+          } else {
+            console.error("Failed to refresh list view data after dialog close");
+          }
+        });
+      }, 300);
+      
+      return () => clearTimeout(refreshTimer);
+    }
+  }, [isDialogOpen, lastUpdateTime, refreshData]);
+
   // Add effect to automatically refresh data periodically when the dialog is open
   React.useEffect(() => {
     if (isDialogOpen && selectedState) {
@@ -68,6 +93,20 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
       return () => clearInterval(refreshInterval);
     }
   }, [isDialogOpen, selectedState, refreshData]);
+
+  // Enhanced save handler that tracks updates
+  const handleSaveWithTracking = async () => {
+    // Mark update time before save
+    setLastUpdateTime(Date.now());
+    
+    // Call the original save handler
+    await handleSavePermissions();
+    
+    // Force refresh after a short delay
+    setTimeout(() => {
+      refreshData();
+    }, 1000);
+  };
 
   // Create auth check component but don't render immediately
   const authCheckComponent = (
@@ -135,7 +174,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = () => {
           brands={brands}
           selectedProducts={selectedProducts}
           onSelectionChange={setSelectedProducts}
-          onSave={handleSavePermissions}
+          onSave={handleSaveWithTracking} // Use the enhanced save handler
           isSaving={isSaving}
           hasChanges={hasChanges}
           stateName={selectedState?.name}

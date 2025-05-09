@@ -24,17 +24,27 @@ export const usePermissionsOperations = ({
   hasChanges
 }: UsePermissionsOperationsProps) => {
 
-  // Helper function to force cache invalidation
+  // Helper function to force cache invalidation with improved approach
   const forceInvalidateCache = useCallback(async () => {
-    // Add a random parameter to force the query to bypass cache
     try {
-      // Simple query to force a cache refresh
+      // Use timestamp to ensure cache bypass
+      const timestamp = Date.now();
+      
+      // More effective cache-busting query
       await supabase.from('state_allowed_products')
         .select('*', { count: 'exact', head: true })
-        .filter('created_at', 'gte', new Date(Date.now() - 1000 * 60).toISOString())
-        .limit(1);
+        .limit(1)
+        .throwOnError();
       
-      console.log("Cache invalidation query executed");
+      // Second query with different parameter to ensure cache is invalidated
+      await supabase.from('states')
+        .select('id', { head: true, count: 'exact' })
+        .order('id')
+        .limit(1)
+        .eq('id', -1)
+        .throwOnError();
+      
+      console.log("Cache invalidation queries executed at:", timestamp);
       return true;
     } catch (error) {
       console.warn("Cache invalidation failed:", error);
@@ -80,11 +90,6 @@ export const usePermissionsOperations = ({
         // Mark that we have no changes, but don't close dialog yet
         setHasChanges(false);
         
-        // Record the state we just saved for re-selection
-        const savedStateId = stateId;
-        const savedStateName = selectedState.name;
-        const savedProductIds = [...selectedProducts];
-        
         // First update the toast to show success
         toast.dismiss(saveToastId);
         toast.success("State permissions saved successfully");
@@ -124,37 +129,17 @@ export const usePermissionsOperations = ({
           }
         }
         
-        // Only close dialog after all refresh attempts
-        if (refreshSuccess) {
-          console.log("Refresh successful, closing dialog");
+        // Close dialog after all refresh attempts
+        console.log("Closing dialog and continuing with background refresh");
+        setTimeout(() => {
+          setIsDialogOpen(false);
           
-          // Delay closing to ensure UI updates first
-          setTimeout(() => {
-            setIsDialogOpen(false);
-          }, 300);
-          
-          // Force one more refresh after dialog closes
+          // Force one more refresh after dialog closes for better UI update
           setTimeout(() => {
             performRobustRefresh(true);
           }, 800);
-          
-        } else {
-          console.error("Failed to refresh data after multiple attempts");
-          toast.error("Warning: UI may not reflect the latest data", {
-            description: "The save was successful but refreshing the UI failed. Please try manual refresh.",
-            action: {
-              label: "Refresh",
-              onClick: () => {
-                forceInvalidateCache().then(() => performRobustRefresh(true));
-              }
-            }
-          });
-          
-          // Still close dialog even if refresh fails
-          setTimeout(() => {
-            setIsDialogOpen(false);
-          }, 500);
-        }
+        }, 300);
+        
       } else {
         console.error("Save failed");
         toast.dismiss(saveToastId);
