@@ -24,10 +24,12 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
         .limit(1)
         .throwOnError();
         
-      // Additional cache-busting query with timestamp parameter
-      await supabase.rpc('get_system_time', {
-        _timestamp: cacheInvalidationToken
-      }).throwOnError();
+      // Additional cache-busting query with direct count
+      await supabase.from('states')
+        .select('*', { count: 'exact', head: true })
+        .limit(1)
+        .eq('id', -1)
+        .throwOnError();
       
       return true;
     } catch (error) {
