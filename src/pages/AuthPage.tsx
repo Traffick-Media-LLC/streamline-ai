@@ -78,13 +78,19 @@ const AuthPage = () => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      const { error, data } = await supabase.auth.signInWithOAuth({
+      // Get the current URL origin (e.g., https://example.com)
+      const origin = window.location.origin;
+      const redirectTo = `${origin}${from}`;
+      
+      console.log("Sign in with Google - Redirect URL:", redirectTo);
+      
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin + from,
+          redirectTo: redirectTo,
           queryParams: {
-            prompt: 'select_account',
-            access_type: 'offline'
+            access_type: 'offline',
+            prompt: 'consent'
           }
         }
       });
@@ -94,18 +100,13 @@ const AuthPage = () => {
         toast.error("Sign in failed", {
           description: error.message
         });
+        setLoading(false);
       }
-      
-      if (data) {
-        console.log("Auth response data:", data);
-        console.log("Auth URL:", data.url);
-      }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Unexpected error during sign in:", error);
       toast.error("Sign in failed", {
         description: "An unexpected error occurred"
       });
-    } finally {
       setLoading(false);
     }
   };
