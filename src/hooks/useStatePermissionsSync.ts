@@ -19,9 +19,10 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
       await supabase.from('state_allowed_products')
         .select('id', { head: true, count: 'exact' })
         .eq('id', -1) // Non-existent ID to make query lightweight
-        .order('id', { ascending: true, nullsFirst: false, foreignTable: null })
+        .order('id', { ascending: true })
         .limit(1)
-        .maybeSingle();
+        // Add proper headers to avoid 406 errors
+        .throwOnError();
         
       return true;
     } catch (error) {
