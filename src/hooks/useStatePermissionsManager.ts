@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useStatePermissionsData } from './useStatePermissionsData';
 import { useProductsData } from './useProductsData';
@@ -11,7 +10,6 @@ import { usePermissionsOperations } from './usePermissionsOperations';
 import { State } from '@/types/statePermissions';
 import { useAuth } from "@/contexts/AuthContext";
 
-// Define a proper return type for state operations
 interface StateOperationResult {
   success: boolean;
   stateId?: number;
@@ -20,7 +18,6 @@ interface StateOperationResult {
 export const useStatePermissionsManager = () => {
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   
-  // Data fetching hooks
   const { 
     states, 
     stateProducts, 
@@ -46,7 +43,6 @@ export const useStatePermissionsManager = () => {
     lastSaveTimestamp 
   } = useStatePermissionsOperations();
 
-  // Refactored UI state hooks
   const { 
     searchQuery, 
     setSearchQuery, 
@@ -56,7 +52,6 @@ export const useStatePermissionsManager = () => {
     setIsDialogOpen 
   } = useStateUIControls();
 
-  // State selection hook
   const { 
     selectedState, 
     setSelectedState, 
@@ -68,35 +63,27 @@ export const useStatePermissionsManager = () => {
     handleEditState: baseHandleEditState 
   } = useStateSelection(stateProducts);
 
-  // Data sync hook
   const { 
     isRefreshing, 
     performRobustRefresh,
     clearCache
   } = useStatePermissionsSync(refreshStateData);
 
-  // Product utilities
   const { getStateProducts } = useProductUtils(stateProducts, products);
 
-  // Combined loading state
   const loading = statesLoading || productsLoading || isRefreshing;
   const error = statesError || productsError;
 
-  // Effect to track selected products changes
   useEffect(() => {
     setHasChanges(true);
   }, [selectedProducts, setHasChanges]);
-  
-  // Effect to refresh data when last save timestamp changes
+
   useEffect(() => {
     if (lastSaveTimestamp && selectedState) {
-      console.log("Last save timestamp changed, fetching fresh data for selected state");
-      // Fetch fresh data for the current state
       fetchProductsForState(selectedState.id);
     }
   }, [lastSaveTimestamp, selectedState, fetchProductsForState]);
 
-  // Effect to check authentication status
   useEffect(() => {
     console.log("StatePermissionsManager - Auth status check:", { 
       isAuthenticated, 
@@ -105,38 +92,29 @@ export const useStatePermissionsManager = () => {
       hasInitialized
     });
   }, [isAuthenticated, isAdmin, isGuest, hasInitialized]);
-  
-  // Wrap the base state click handler to include the states array and setIsDialogOpen
+
   const handleStateClick = useCallback((stateName: string): StateOperationResult => {
     console.log("handleStateClick called with state:", stateName);
-    
     const result = baseHandleStateClick(stateName, states, setIsDialogOpen);
-    
-    // After handling state click, fetch the latest products for this state directly
+
     if (result.success && result.stateId) {
-      console.log("Fetching fresh product data for selected state:", result.stateId);
       fetchProductsForState(result.stateId);
     }
     
     return result;
   }, [baseHandleStateClick, states, setIsDialogOpen, fetchProductsForState]);
 
-  // Wrap the base edit state handler with setIsDialogOpen
   const handleEditState = useCallback((state: State): StateOperationResult => {
     console.log("handleEditState called with state:", state.name);
-    
     const result = baseHandleEditState(state, setIsDialogOpen);
-    
-    // After editing state, fetch the latest products for this state directly
+
     if (result.success && result.stateId) {
-      console.log("Fetching fresh product data for edited state:", result.stateId);
       fetchProductsForState(result.stateId);
     }
     
     return result;
   }, [baseHandleEditState, setIsDialogOpen, fetchProductsForState]);
 
-  // Permission operations hook
   const { handleSavePermissions } = usePermissionsOperations({
     saveStatePermissions,
     performRobustRefresh,
@@ -150,8 +128,13 @@ export const useStatePermissionsManager = () => {
   const forceRefreshData = useCallback(async () => {
     console.log("Forcing data refresh with cache clearing");
     await clearCache();
-    return performRobustRefresh(true);
-  }, [performRobustRefresh, clearCache]);
+    const success = await refreshData();
+    if (success) {
+      console.log("Data refreshed successfully");
+    } else {
+      console.error("Failed to refresh data");
+    }
+  }, [refreshData, clearCache]);
 
   return {
     states,
