@@ -1,12 +1,11 @@
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FilterControls } from "./FilterControls";
 import { ProductsTable } from "./ProductsTable";
-import { useProductFiltering } from "@/hooks/useProductFiltering";
 import { Product, Brand } from '@/types/statePermissions';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check } from 'lucide-react';
 
 interface ProductSelectionDialogProps {
   open: boolean;
@@ -33,13 +32,36 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
   hasChanges = false,
   stateName
 }) => {
-  const {
-    searchQuery,
-    setSearchQuery,
-    filterBrandId,
-    setFilterBrandId,
-    filteredProducts
-  } = useProductFiltering({ products });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterBrandId, setFilterBrandId] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('name-asc');
+
+  // Apply filtering and sorting to products
+  const filteredProducts = useMemo(() => {
+    // First filter products
+    const filtered = products.filter(product => {
+      const nameMatch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const brandMatch = filterBrandId === 'all' || 
+        (product.brand?.id && product.brand.id === parseInt(filterBrandId));
+      return nameMatch && brandMatch;
+    });
+    
+    // Then sort products
+    return [...filtered].sort((a, b) => {
+      switch(sortBy) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name);
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
+        case 'brand':
+          const brandA = a.brand?.name || '';
+          const brandB = b.brand?.name || '';
+          return brandA.localeCompare(brandB) || a.name.localeCompare(b.name);
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+  }, [products, searchQuery, filterBrandId, sortBy]);
 
   const toggleProductSelection = (productId: number) => {
     const newSelectedProducts = selectedProducts.includes(productId)
@@ -65,6 +87,13 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
     onSelectionChange([]);
   };
 
+  // Clear visible selections - only removes currently visible products
+  const handleClearVisible = () => {
+    const visibleProductIds = filteredProducts.map(p => p.id);
+    const newSelectedProducts = selectedProducts.filter(id => !visibleProductIds.includes(id));
+    onSelectionChange(newSelectedProducts);
+  };
+
   // Prevent unintentional closing when saving
   const handleOpenChange = (open: boolean) => {
     if (!open && isSaving) {
@@ -84,21 +113,17 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="py-4">
-          <div className="mb-4">
-            <p className="text-sm text-muted-foreground">
-              {selectedProducts.length === 0 ? 
-                "No products selected" : 
-                `${selectedProducts.length} product${selectedProducts.length === 1 ? '' : 's'} selected`}
-            </p>
-          </div>
-
+        <div className="py-4 space-y-6">
           <FilterControls
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             filterBrandId={filterBrandId}
             onBrandFilterChange={setFilterBrandId}
             brands={brands}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            selectedCount={selectedProducts.length}
+            totalCount={products.length}
           />
 
           <ProductsTable
@@ -108,35 +133,53 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
           />
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleClearAll}
-            disabled={isSaving || selectedProducts.length === 0}
-          >
-            Clear All
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleSelectAllVisible}
-            disabled={isSaving || filteredProducts.length === 0}
-          >
-            Select All Visible
-          </Button>
-          <Button 
-            onClick={onSave} 
-            disabled={isSaving || !hasChanges}
-            className="min-w-[140px]"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Permissions'
-            )}
-          </Button>
+        <DialogFooter className="flex-wrap gap-2 sm:space-x-0">
+          <div className="flex items-center gap-2 w-full justify-start">
+            <Button 
+              variant="outline" 
+              onClick={handleClearVisible}
+              disabled={isSaving || filteredProducts.filter(p => selectedProducts.includes(p.id)).length === 0}
+              size="sm"
+            >
+              Clear Visible
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleSelectAllVisible}
+              disabled={isSaving || filteredProducts.length === 0}
+              size="sm"
+            >
+              Select Visible
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleClearAll}
+              disabled={isSaving || selectedProducts.length === 0}
+              size="sm"
+            >
+              Clear All
+            </Button>
+          </div>
+          
+          <div className="w-full flex justify-end mt-4 sm:mt-0">
+            <Button 
+              onClick={onSave} 
+              disabled={isSaving || !hasChanges}
+              className="min-w-[140px]"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Save Permissions
+                </>
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
