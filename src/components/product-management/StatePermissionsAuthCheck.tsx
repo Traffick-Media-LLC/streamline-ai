@@ -30,13 +30,13 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
       setIsGuest(true);
       
       // Log this action after setting the guest flag
-      await errorTracker.logStage('guest_access', 'started');
+      await errorTracker.logStage('guest_access', 'start');
       
       toast.success("Continuing as guest with admin privileges", {
         description: "You now have full access to view and modify permissions"
       });
       
-      await errorTracker.logStage('guest_access', 'completed');
+      await errorTracker.logStage('guest_access', 'complete');
     } catch (err) {
       console.error("Error setting guest mode:", err);
       await errorTracker.logError("Failed to enable guest mode", err);
