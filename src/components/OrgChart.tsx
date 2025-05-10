@@ -51,7 +51,7 @@ interface NodeStyle {
 }
 
 const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChartProps) => {
-  const { updateEmployee } = useEmployeeOperations();
+  const { updateEmployee, updateEmployeePosition } = useEmployeeOperations();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<'hierarchical' | 'flat'>('hierarchical');
@@ -63,6 +63,7 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
   const draggedNodeRef = useRef<Node<NodeData> | null>(null);
   const targetNodeRef = useRef<Node<NodeData> | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const positionSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const employeeMap = useMemo(() => {
     return new Map(employees.map(emp => [emp.id, emp]));
@@ -280,23 +281,38 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
         const positionInLevel = currentLevelEmployees.findIndex(e => e.id === emp.id);
         const totalInLevel = currentLevelEmployees.length;
         
-        let xOffset;
-        if (level === 0) {
-          if (topNodes.length <= 3) {
-            if (emp.first_name === 'Patrick' && emp.last_name === 'Mulcahy') {
-              xOffset = 0;
-            } else if (emp.first_name === 'Matthew' && emp.last_name === 'Halvorson') {
-              xOffset = levelWidth;
-            } else if (emp.first_name === 'Chuck' && emp.last_name === 'Melander') {
-              xOffset = -levelWidth;
+        // Use stored positions if available, otherwise calculate default positions
+        let position: XYPosition;
+        if (emp.position_x !== null && emp.position_x !== undefined && 
+            emp.position_y !== null && emp.position_y !== undefined) {
+          position = {
+            x: emp.position_x,
+            y: emp.position_y
+          };
+        } else {
+          let xOffset;
+          if (level === 0) {
+            if (topNodes.length <= 3) {
+              if (emp.first_name === 'Patrick' && emp.last_name === 'Mulcahy') {
+                xOffset = 0;
+              } else if (emp.first_name === 'Matthew' && emp.last_name === 'Halvorson') {
+                xOffset = levelWidth;
+              } else if (emp.first_name === 'Chuck' && emp.last_name === 'Melander') {
+                xOffset = -levelWidth;
+              } else {
+                xOffset = (positionInLevel - (totalInLevel - 1) / 2) * levelWidth;
+              }
             } else {
               xOffset = (positionInLevel - (totalInLevel - 1) / 2) * levelWidth;
             }
           } else {
             xOffset = (positionInLevel - (totalInLevel - 1) / 2) * levelWidth;
           }
-        } else {
-          xOffset = (positionInLevel - (totalInLevel - 1) / 2) * levelWidth;
+          
+          position = { 
+            x: xOffset,
+            y: level * levelHeight
+          };
         }
         
         let nodeStyle: NodeStyle = {
@@ -359,10 +375,7 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
         return {
           id: emp.id,
           type: 'default',
-          position: { 
-            x: xOffset,
-            y: level * levelHeight
-          },
+          position: position,
           data: {
             label,
             employee: emp
@@ -423,6 +436,22 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
       isInitialMount.current = false;
     }
   }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  // Create a debounced function to save positions after dragging stops
+  const saveNodePosition = useCallback((nodeId: string, position: XYPosition) => {
+    if (positionSaveTimeoutRef.current) {
+      clearTimeout(positionSaveTimeoutRef.current);
+    }
+    
+    positionSaveTimeoutRef.current = setTimeout(() => {
+      console.log('Saving position for node:', nodeId, position);
+      updateEmployeePosition.mutate({
+        id: nodeId,
+        position_x: position.x,
+        position_y: position.y
+      });
+    }, 500); // Debounce position updates to avoid too many requests
+  }, [updateEmployeePosition]);
 
   const onNodeDragStart: NodeMouseHandler = useCallback((event, node) => {
     if (!editable || !isAdmin) return;
@@ -498,6 +527,7 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
     }
     
     try {
+      // Check if dropping on another node to update manager
       if (targetNodeRef.current && draggedNodeRef.current.id !== targetNodeRef.current.id) {
         const draggedEmployeeId = draggedNodeRef.current.id;
         const newManagerId = targetNodeRef.current.id;
@@ -526,6 +556,10 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
           description: `${employeeMap.get(draggedEmployeeId)?.first_name} now reports to ${employeeMap.get(newManagerId)?.first_name}`
         });
       }
+      // Otherwise, just save the position
+      else {
+        saveNodePosition(node.id, node.position);
+      }
     } catch (error) {
       console.error("Failed to update reporting relationship:", error);
       toast.error("Failed to update reporting relationship");
@@ -543,10 +577,7 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
         })
       );
     }
-    
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-  }, [editable, isAdmin, employeeMap, updateEmployee, setNodes, initialNodes, initialEdges, setEdges]);
+  }, [editable, isAdmin, employeeMap, updateEmployee, saveNodePosition, setNodes]);
 
   const handleRemoveManager = async (employeeId: string) => {
     try {
