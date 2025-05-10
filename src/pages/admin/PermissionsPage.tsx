@@ -19,6 +19,7 @@ const PermissionsPage: React.FC = () => {
       id: "manual-refresh"
     });
 
+    // Use refreshKey to force a complete re-render of the StatePermissions component
     setRefreshKey(prev => prev + 1);
   }, []);
 

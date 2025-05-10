@@ -18,6 +18,7 @@ interface StateOperationResult {
 
 export const useStatePermissionsManager = () => {
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  const [shouldRefresh, setShouldRefresh] = useState(false);
   
   const { 
     states, 
@@ -75,12 +76,15 @@ export const useStatePermissionsManager = () => {
   const loading = statesLoading || productsLoading || isRefreshing;
   const error = statesError || productsError;
 
+  // Set hasChanges flag when selectedProducts change
   useEffect(() => {
     setHasChanges(true);
   }, [selectedProducts, setHasChanges]);
 
+  // Only fetch products for the selected state when explicitly needed
   useEffect(() => {
     if (lastSaveTimestamp && selectedState) {
+      console.log("Fetching products for state after save:", selectedState.id);
       fetchProductsForState(selectedState.id);
     }
   }, [lastSaveTimestamp, selectedState, fetchProductsForState]);
@@ -127,16 +131,18 @@ export const useStatePermissionsManager = () => {
   });
 
   const forceRefreshData = useCallback(async () => {
-    console.log("Forcing data refresh with cache clearing");
+    console.log("Explicit force refresh requested");
+    setShouldRefresh(true);
     await clearCache();
-    // This was the issue: refreshData is not defined, it should be refreshStateData
     const success = await refreshStateData(true);
+    setShouldRefresh(false);
+    
     if (success) {
       console.log("Data refreshed successfully");
-      return true; // Explicitly return true on success
+      return true;
     } else {
       console.error("Failed to refresh data");
-      return false; // Explicitly return false on failure
+      return false;
     }
   }, [refreshStateData, clearCache]);
 
@@ -164,6 +170,7 @@ export const useStatePermissionsManager = () => {
     hasChanges,
     debugLogs,
     refreshCounter,
-    hasInitialized
+    hasInitialized,
+    shouldRefresh
   };
 };

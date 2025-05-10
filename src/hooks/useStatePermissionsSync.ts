@@ -54,13 +54,13 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
     }
   }, []);
 
-  // Enhanced refresh function with multiple attempts, proper error handling, and cache invalidation
+  // Enhanced refresh function with better throttling and only when necessary
   const performRobustRefresh = useCallback(async (forceRefresh = false) => {
     console.log("Performing robust data refresh...", { forceRefresh });
     
     // Throttle refreshes to prevent too many calls in quick succession
     const currentTime = Date.now();
-    if (!forceRefresh && lastRefreshTimestamp && (currentTime - lastRefreshTimestamp < 1000)) {
+    if (!forceRefresh && lastRefreshTimestamp && (currentTime - lastRefreshTimestamp < 2000)) {
       console.log("Throttling refresh request:", currentTime - lastRefreshTimestamp, "ms since last refresh");
       return true;
     }
@@ -82,23 +82,23 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
       }
       
       // Force invalidate supabase cache by adding timestamp parameter
-      const success = await refreshData(true); // Always use force refresh to ensure fresh data
+      const success = await refreshData(forceRefresh);
       
       if (!success) {
         console.warn(`Refresh attempt ${refreshAttempts + 1} failed`);
         
-        if (refreshAttempts < 4) { // Increased retry attempts
+        if (refreshAttempts < 2 && forceRefresh) { // Only retry for explicit refreshes
           console.log("Scheduling another refresh attempt");
           setRefreshAttempts(prev => prev + 1);
           
-          // Exponential backoff with longer delays
-          const delay = Math.pow(2, refreshAttempts) * 2000; // Increased from 1500 to 2000
+          // Exponential backoff with reasonable delays
+          const delay = Math.pow(1.5, refreshAttempts) * 1000;
           console.log(`Will retry in ${delay}ms`);
           setTimeout(() => performRobustRefresh(true), delay);
           return false;
         } else {
-          console.error("Multiple refresh attempts failed");
           if (forceRefresh) {
+            console.error("Multiple refresh attempts failed");
             toast.error("Failed to refresh data after multiple attempts", {
               description: "Please try the manual refresh button or reload the page"
             });
@@ -113,9 +113,11 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
       }
     } catch (error) {
       console.error("Error during refresh:", error);
-      toast.error("Error refreshing data", {
-        description: "Please check your connection and try again"
-      });
+      if (forceRefresh) {
+        toast.error("Error refreshing data", {
+          description: "Please check your connection and try again"
+        });
+      }
       return false;
     } finally {
       setIsRefreshing(false);
@@ -126,18 +128,6 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
   useEffect(() => {
     setRefreshAttempts(0);
   }, []);
-
-  // Periodic refresh attempt if recent saves have occurred
-  useEffect(() => {
-    if (refreshSuccessCount > 0) {
-      const timer = setTimeout(() => {
-        console.log("Running follow-up refresh to ensure data consistency");
-        performRobustRefresh(true);
-      }, 3000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [refreshSuccessCount, performRobustRefresh]);
 
   return {
     isRefreshing,

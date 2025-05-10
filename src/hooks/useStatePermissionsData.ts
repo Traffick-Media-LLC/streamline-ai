@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -20,9 +21,6 @@ export const useStatePermissionsData = () => {
     try {
       setError(null);
       console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin, isGuest });
-      
-      // Add cache-busting timestamp to ensure fresh data
-      const timestamp = Date.now();
       
       const { data, error } = await supabase
         .from('states')
@@ -56,7 +54,7 @@ export const useStatePermissionsData = () => {
     try {
       console.log("Fetching state products data...");
       
-      // Add cache-busting timestamp to ensure fresh data
+      // Add cache-busting timestamp to ensure fresh data when forced
       const timestamp = Date.now();
       
       const { data, error } = await supabase
@@ -66,11 +64,6 @@ export const useStatePermissionsData = () => {
       
       if (error) throw error;
       console.log("State products data received:", data?.length || 0, "items");
-      
-      // Log the raw data to diagnose any issues
-      if (data && data.length > 0) {
-        console.log("Sample state products data:", data.slice(0, 5));
-      }
       
       // Normalize state products data
       const normalizedData = data?.map(item => ({
@@ -100,7 +93,7 @@ export const useStatePermissionsData = () => {
     console.log(`Directly fetching products for state ID: ${stateId}`);
     
     try {
-      // Add cache-busting parameter to ensure fresh data
+      // Add cache-busting parameter
       const cacheBuster = Date.now();
       
       const { data, error } = await supabase
@@ -121,15 +114,10 @@ export const useStatePermissionsData = () => {
         product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
       })) || [];
       
-      // Log the normalized data for debugging
-      console.log(`Normalized products for state ${stateId}:`, normalizedData.length, "items");
-      
       // Update the state products by replacing any existing entries for this state
       setStateProducts(prev => {
         const otherStateProducts = prev.filter(p => p.state_id !== stateId);
-        const newStateProducts = [...otherStateProducts, ...normalizedData];
-        console.log(`Updated state products array, now contains ${newStateProducts.length} items`);
-        return newStateProducts;
+        return [...otherStateProducts, ...normalizedData];
       });
       
       return normalizedData;
@@ -139,7 +127,7 @@ export const useStatePermissionsData = () => {
     }
   }, []);
 
-  // Refresh data and manage throttling
+  // Refresh data only when explicitly requested
   const refreshData = useCallback(async (force = false) => {
     if (!isAuthenticated && !isGuest) {
       console.log("Not authenticated, skipping state permissions data fetch");
@@ -148,9 +136,9 @@ export const useStatePermissionsData = () => {
       return false;
     }
     
-    // Throttling: only refresh after a certain period
+    // Stronger throttling protection - only allow force refreshes to bypass throttling
     const currentTime = Date.now();
-    if (!force && lastRefreshTime && (currentTime - lastRefreshTime < 1000)) {
+    if (!force && lastRefreshTime && (currentTime - lastRefreshTime < 5000)) {
       console.log("Skipping refresh due to throttling", {
         lastRefresh: new Date(lastRefreshTime).toISOString(),
         timeSinceLast: currentTime - lastRefreshTime
@@ -169,7 +157,6 @@ export const useStatePermissionsData = () => {
     
     try {
       setRefreshCounter(prev => prev + 1);
-      setStateProducts([]);
       
       const statesSuccess = await fetchStates(signal);
       
@@ -196,7 +183,7 @@ export const useStatePermissionsData = () => {
     }
   }, [fetchStates, fetchStateProducts, isAuthenticated, isGuest, lastRefreshTime]);
 
-  // Initialize data
+  // Initialize data only once
   useEffect(() => {
     let isMounted = true;
     let abortController: AbortController | null = null;
@@ -227,7 +214,7 @@ export const useStatePermissionsData = () => {
     };
   }, [isAuthenticated, isAdmin, isGuest, refreshData, hasInitialized]);
 
-  // Automatic retry logic with exponential backoff
+  // Only retry on actual errors, not just when data is loading
   useEffect(() => {
     if (!hasInitialized || !(isAuthenticated || isGuest)) {
       return;

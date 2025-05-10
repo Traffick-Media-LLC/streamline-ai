@@ -36,7 +36,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     hasChanges,
     debugLogs,
     refreshCounter,
-    hasInitialized
+    hasInitialized,
+    shouldRefresh
   } = useStatePermissionsManager();
 
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
@@ -61,38 +62,33 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     console.log("Auth status:", { isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized });
   }, [isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized]);
 
+  // Only refresh after dialog close if there was a save action
   useEffect(() => {
     if (!isDialogOpen && lastUpdateTime) {
+      console.log("Dialog closed after update, refreshing data");
       setLastUpdateTime(null);
+      
       const refreshTimer = setTimeout(() => {
         refreshData().then(success => {
           if (success) {
-            console.log("Data refreshed after dialog close");
+            console.log("Data refreshed after dialog close and save");
           } else {
-            console.error("Failed to refresh data after dialog close");
+            console.error("Failed to refresh data after dialog close and save");
           }
         });
       }, 300);
+      
       return () => clearTimeout(refreshTimer);
     }
   }, [isDialogOpen, lastUpdateTime, refreshData]);
 
-  useEffect(() => {
-    if (isDialogOpen && selectedState) {
-      const refreshInterval = setInterval(() => {
-        console.log("Background refresh triggered");
-        refreshData().catch(err => console.error("Background refresh failed:", err));
-      }, 5000);
-      return () => clearInterval(refreshInterval);
-    }
-  }, [isDialogOpen, selectedState, refreshData]);
-
+  // Remove automatic background refreshes while dialog is open
+  // This was causing unnecessary refreshes that could disrupt the UI state
+  
   const handleSaveWithTracking = async () => {
+    console.log("Save requested, will track update time");
     setLastUpdateTime(Date.now());
     await handleSavePermissions();
-    setTimeout(() => {
-      refreshData();
-    }, 1000);
   };
 
   const handleRefreshClick = async () => {
