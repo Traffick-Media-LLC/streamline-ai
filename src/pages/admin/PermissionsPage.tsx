@@ -1,56 +1,160 @@
-
-import React, { useState } from 'react';
-import StatePermissions from '../../components/product-management/StatePermissions';
-import { Card, CardContent } from "@/components/ui/card";
-import ErrorBoundary from '@/components/ErrorBoundary';
-import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { ProductSelectionDialog } from "./ProductSelectionDialog";
+import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
+import { StatePermissionsProps } from '@/types/statePermissions';
+import { useAuth } from "@/contexts/AuthContext";
+import { StatePermissionsHeader } from "./StatePermissionsHeader";
+import { StatePermissionsContent } from "./StatePermissionsContent";
+import { StatePermissionsDebugPanel } from "./StatePermissionsDebugPanel";
+import { StatePermissionsAuthCheck } from "./StatePermissionsAuthCheck";
 import { toast } from "@/components/ui/sonner";
+import ErrorBoundary from '@/components/ErrorBoundary';
 
-const PermissionsPage: React.FC = () => {
-  const [refreshKey, setRefreshKey] = useState(0);
-  
-  const handleManualRefresh = () => {
-    console.log("Manual page refresh triggered");
-    
-    // Show loading toast
-    toast.loading("Refreshing data...", {
-      id: "manual-refresh"
-    });
-    
-    // Force a complete component refresh by updating the key
-    setRefreshKey(prev => prev + 1);
-    
-    // Dismiss toast after a delay
+const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => {
+  const {
+    states,
+    products,
+    brands,
+    selectedState,
+    selectedProducts,
+    setSelectedProducts,
+    searchQuery,
+    setSearchQuery,
+    viewMode,
+    setViewMode,
+    isDialogOpen,
+    setIsDialogOpen,
+    loading,
+    error,
+    isSaving,
+    handleStateClick,
+    handleSavePermissions,
+    getStateProducts,
+    handleEditState,
+    refreshData,
+    hasChanges,
+    debugLogs,
+    refreshCounter,
+    hasInitialized
+  } = useStatePermissionsManager();
+
+  const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  const [showDebug, setShowDebug] = useState(true);
+  const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
+
+  // Notify parent when data finishes loading
+  useEffect(() => {
+    if (!loading && hasInitialized) {
+      const timeout = setTimeout(() => {
+        onDataLoaded?.();
+      }, 400); // Slight delay for smoother UX
+
+      return () => clearTimeout(timeout);
+    }
+  }, [loading, hasInitialized, onDataLoaded]);
+
+  useEffect(() => {
+    console.log("Auth status:", { isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized });
+  }, [isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized]);
+
+  useEffect(() => {
+    if (!isDialogOpen && lastUpdateTime) {
+      setLastUpdateTime(null);
+      const refreshTimer = setTimeout(() => {
+        refreshData().then(success => {
+          success
+            ? console.log("Data refreshed after dialog close")
+            : console.error("Failed to refresh data after dialog close");
+        });
+      }, 300);
+      return () => clearTimeout(refreshTimer);
+    }
+  }, [isDialogOpen, lastUpdateTime, refreshData]);
+
+  useEffect(() => {
+    if (isDialogOpen && selectedState) {
+      const refreshInterval = setInterval(() => {
+        console.log("Background refresh triggered");
+        refreshData().catch(err => console.error("Background refresh failed:", err));
+      }, 5000);
+      return () => clearInterval(refreshInterval);
+    }
+  }, [isDialogOpen, selectedState, refreshData]);
+
+  const handleSaveWithTracking = async () => {
+    setLastUpdateTime(Date.now());
+    await handleSavePermissions();
     setTimeout(() => {
-      toast.success("Page refreshed", { 
-        id: "manual-refresh",
-        description: "Showing the latest data from the database"
-      });
+      refreshData();
     }, 1000);
   };
 
+  const authCheckComponent = (
+    <StatePermissionsAuthCheck 
+      isAuthenticated={isAuthenticated || isGuest}
+      isAdmin={isAdmin || isGuest}
+      error={error}
+      refreshData={() => {
+        toast.loading("Refreshing data...");
+        refreshData().then(success => {
+          success ? toast.success("Data refreshed successfully") : toast.error("Failed to refresh data");
+        });
+      }}
+    />
+  );
+
+  if ((!isAuthenticated && !isGuest) || (!isAdmin && !isGuest)) {
+    return authCheckComponent;
+  }
+
+  if (error && hasInitialized) {
+    return authCheckComponent;
+  }
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">State Permissions</h1>
-        <Button 
-          variant="outline"
-          onClick={handleManualRefresh}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className="h-4 w-4" /> Force Refresh
-        </Button>
+    <ErrorBoundary>
+      <div>
+        <StatePermissionsHeader 
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          refreshData={refreshData}
+          loading={loading}
+          showDebug={showDebug}
+          setShowDebug={setShowDebug}
+        />
+
+        <StatePermissionsDebugPanel 
+          debugLogs={debugLogs}
+          showDebug={showDebug}
+          setShowDebug={setShowDebug}
+        />
+
+        <StatePermissionsContent 
+          loading={loading}
+          viewMode={viewMode}
+          states={states}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          getStateProducts={getStateProducts}
+          onEditState={handleEditState}
+          handleStateClick={handleStateClick}
+        />
+
+        <ProductSelectionDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          products={products}
+          brands={brands}
+          selectedProducts={selectedProducts}
+          onSelectionChange={setSelectedProducts}
+          onSave={handleSaveWithTracking}
+          isSaving={isSaving}
+          hasChanges={hasChanges}
+          stateName={selectedState?.name}
+        />
       </div>
-      <Card>
-        <CardContent className="pt-6">
-          <ErrorBoundary>
-            <StatePermissions key={refreshKey} />
-          </ErrorBoundary>
-        </CardContent>
-      </Card>
-    </div>
+    </ErrorBoundary>
   );
 };
 
-export default PermissionsPage;
+export default StatePermissions;
