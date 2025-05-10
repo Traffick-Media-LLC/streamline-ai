@@ -104,14 +104,8 @@ const AuthPage = () => {
       console.log("Sign in with Google - Origin:", origin);
       console.log("Sign in with Google - Redirect URL:", redirectTo);
       
-      // Log auth provider settings to help with debugging
-      const { data: authSettings } = await supabase
-        .from('auth_provider_settings')
-        .select('*')
-        .limit(1)
-        .single();
-      
-      console.log("Auth provider settings:", authSettings || "Not available");
+      // Remove the attempt to query auth_provider_settings which doesn't exist
+      // and is causing the TypeScript error
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
