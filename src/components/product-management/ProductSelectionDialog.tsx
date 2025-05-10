@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -104,7 +103,7 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl flex flex-col max-h-[80vh]">
+      <DialogContent className="max-w-4xl flex flex-col h-[80vh]">
         <DialogHeader>
           <DialogTitle>
             {stateName ? 
@@ -114,7 +113,7 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
         </DialogHeader>
 
         {/* Content area with scrolling */}
-        <div className="flex-grow overflow-y-auto py-4">
+        <div className="flex-1 overflow-y-auto py-4">
           <FilterControls
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -135,7 +134,7 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
         </div>
 
         {/* Sticky footer */}
-        <div className="sticky bottom-0 bg-background pt-2 border-t border-border">
+        <div className="mt-auto border-t border-border pt-2 bg-background">
           <DialogFooter className="flex-wrap gap-2 sm:space-x-0">
             <div className="flex items-center gap-2 w-full justify-start">
               <Button 
@@ -189,4 +188,3 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
     </Dialog>
   );
 };
-
