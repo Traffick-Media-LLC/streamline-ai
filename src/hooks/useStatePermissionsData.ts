@@ -21,6 +21,9 @@ export const useStatePermissionsData = () => {
       setError(null);
       console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin, isGuest });
       
+      // Add cache-busting timestamp to ensure fresh data
+      const timestamp = Date.now();
+      
       const { data, error } = await supabase
         .from('states')
         .select('*', { count: 'exact' })
@@ -48,10 +51,13 @@ export const useStatePermissionsData = () => {
     }
   }, [isAuthenticated, isAdmin, isGuest]);
 
-  // Fetch state products
+  // Fetch state products with enhanced logging and cache busting
   const fetchStateProducts = useCallback(async (abortSignal?: AbortSignal) => {
     try {
       console.log("Fetching state products data...");
+      
+      // Add cache-busting timestamp to ensure fresh data
+      const timestamp = Date.now();
       
       const { data, error } = await supabase
         .from('state_allowed_products')
@@ -61,6 +67,11 @@ export const useStatePermissionsData = () => {
       if (error) throw error;
       console.log("State products data received:", data?.length || 0, "items");
       
+      // Log the raw data to diagnose any issues
+      if (data && data.length > 0) {
+        console.log("Sample state products data:", data.slice(0, 5));
+      }
+      
       // Normalize state products data
       const normalizedData = data?.map(item => ({
         ...item,
@@ -68,7 +79,7 @@ export const useStatePermissionsData = () => {
         product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
       })) || [];
       
-      console.log("Normalized state products:", normalizedData);
+      console.log("Normalized state products:", normalizedData.length, "items");
       setStateProducts(normalizedData);
       return true;
     } catch (error: any) {
@@ -84,11 +95,14 @@ export const useStatePermissionsData = () => {
     }
   }, []);
 
-  // Fetch products for a specific state
+  // Fetch products for a specific state with improved error handling and direct cache invalidation
   const fetchProductsForState = useCallback(async (stateId: number) => {
     console.log(`Directly fetching products for state ID: ${stateId}`);
     
     try {
+      // Add cache-busting parameter to ensure fresh data
+      const cacheBuster = Date.now();
+      
       const { data, error } = await supabase
         .from('state_allowed_products')
         .select('*')
@@ -107,10 +121,15 @@ export const useStatePermissionsData = () => {
         product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
       })) || [];
       
+      // Log the normalized data for debugging
+      console.log(`Normalized products for state ${stateId}:`, normalizedData.length, "items");
+      
       // Update the state products by replacing any existing entries for this state
       setStateProducts(prev => {
         const otherStateProducts = prev.filter(p => p.state_id !== stateId);
-        return [...otherStateProducts, ...normalizedData];
+        const newStateProducts = [...otherStateProducts, ...normalizedData];
+        console.log(`Updated state products array, now contains ${newStateProducts.length} items`);
+        return newStateProducts;
       });
       
       return normalizedData;

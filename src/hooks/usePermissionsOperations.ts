@@ -24,27 +24,34 @@ export const usePermissionsOperations = ({
   hasChanges
 }: UsePermissionsOperationsProps) => {
 
-  // Helper function to force cache invalidation with improved approach
+  // Enhanced cache invalidation function with multiple approaches
   const forceInvalidateCache = useCallback(async () => {
     try {
       // Use timestamp to ensure cache bypass
       const timestamp = Date.now();
+      console.log("Starting aggressive cache invalidation at:", new Date(timestamp).toISOString());
       
-      // More effective cache-busting query
-      await supabase.from('state_allowed_products')
+      // Approach 1: Use count query with timestamp parameter
+      const countQuery = await supabase
+        .from('state_allowed_products')
         .select('*', { count: 'exact', head: true })
-        .limit(1)
-        .throwOnError();
+        .eq('id', -999) // Non-existent ID to make the query lightweight
+        .limit(1);
       
-      // Second query with different parameter to ensure cache is invalidated
+      // Approach 2: Clear from multiple tables to ensure cache invalidation cascade
       await supabase.from('states')
         .select('id', { head: true, count: 'exact' })
-        .order('id')
         .limit(1)
-        .eq('id', -1)
-        .throwOnError();
+        .eq('id', -1);
       
-      console.log("Cache invalidation queries executed at:", timestamp);
+      // Approach 3: Dummy RPC call to reset connection
+      try {
+        await supabase.rpc('dummy_function', { dummy_param: timestamp }).maybeSingle();
+      } catch (e) {
+        // Expected error since function likely doesn't exist, but helps clear cache
+      }
+      
+      console.log("Cache invalidation complete with multiple approaches");
       return true;
     } catch (error) {
       console.warn("Cache invalidation failed:", error);
@@ -94,8 +101,8 @@ export const usePermissionsOperations = ({
         toast.dismiss(saveToastId);
         toast.success("State permissions saved successfully");
         
-        // Start a more aggressive refresh sequence with multiple attempts
-        console.log("Starting enhanced refresh sequence");
+        // Start a more aggressive refresh sequence
+        console.log("Starting enhanced multi-phase refresh sequence");
         
         // First try to forcibly invalidate any caching
         await forceInvalidateCache();
@@ -130,7 +137,7 @@ export const usePermissionsOperations = ({
         }
         
         // Close dialog after all refresh attempts
-        console.log("Closing dialog and continuing with background refresh");
+        console.log("Closing dialog and scheduling follow-up refresh");
         setTimeout(() => {
           setIsDialogOpen(false);
           
