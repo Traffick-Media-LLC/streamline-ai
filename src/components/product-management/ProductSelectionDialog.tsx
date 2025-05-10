@@ -104,7 +104,7 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl flex flex-col max-h-[80vh]">
         <DialogHeader>
           <DialogTitle>
             {stateName ? 
@@ -113,7 +113,8 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="py-4 space-y-6">
+        {/* Content area with scrolling */}
+        <div className="flex-grow overflow-y-auto py-4">
           <FilterControls
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -133,55 +134,59 @@ export const ProductSelectionDialog: React.FC<ProductSelectionDialogProps> = ({
           />
         </div>
 
-        <DialogFooter className="flex-wrap gap-2 sm:space-x-0">
-          <div className="flex items-center gap-2 w-full justify-start">
-            <Button 
-              variant="outline" 
-              onClick={handleClearVisible}
-              disabled={isSaving || filteredProducts.filter(p => selectedProducts.includes(p.id)).length === 0}
-              size="sm"
-            >
-              Clear Visible
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleSelectAllVisible}
-              disabled={isSaving || filteredProducts.length === 0}
-              size="sm"
-            >
-              Select Visible
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleClearAll}
-              disabled={isSaving || selectedProducts.length === 0}
-              size="sm"
-            >
-              Clear All
-            </Button>
-          </div>
-          
-          <div className="w-full flex justify-end mt-4 sm:mt-0">
-            <Button 
-              onClick={onSave} 
-              disabled={isSaving || !hasChanges}
-              className="min-w-[140px]"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Save Permissions
-                </>
-              )}
-            </Button>
-          </div>
-        </DialogFooter>
+        {/* Sticky footer */}
+        <div className="sticky bottom-0 bg-background pt-2 border-t border-border">
+          <DialogFooter className="flex-wrap gap-2 sm:space-x-0">
+            <div className="flex items-center gap-2 w-full justify-start">
+              <Button 
+                variant="outline" 
+                onClick={handleClearVisible}
+                disabled={isSaving || filteredProducts.filter(p => selectedProducts.includes(p.id)).length === 0}
+                size="sm"
+              >
+                Clear Visible
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleSelectAllVisible}
+                disabled={isSaving || filteredProducts.length === 0}
+                size="sm"
+              >
+                Select Visible
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleClearAll}
+                disabled={isSaving || selectedProducts.length === 0}
+                size="sm"
+              >
+                Clear All
+              </Button>
+            </div>
+            
+            <div className="w-full flex justify-end mt-4 sm:mt-0">
+              <Button 
+                onClick={onSave} 
+                disabled={isSaving || !hasChanges}
+                className="min-w-[140px]"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Save Permissions
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
 };
+
