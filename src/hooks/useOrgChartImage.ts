@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Json } from "@/integrations/supabase/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface OrgChartImageSettings {
   url: string | null;
@@ -13,34 +14,45 @@ export interface OrgChartImageSettings {
 
 export const useOrgChartImage = () => {
   const queryClient = useQueryClient();
+  const { isAdmin, isAuthenticated, isGuest } = useAuth();
 
   // Fetch the current org chart image settings
   const { data: imageSettings, isLoading, error } = useQuery({
     queryKey: ['orgChartImage'],
     queryFn: async (): Promise<OrgChartImageSettings> => {
-      const { data, error } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('id', 'org_chart_image')
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('id', 'org_chart_image')
+          .single();
 
-      if (error) {
-        console.error("Error fetching org chart image settings:", error);
-        throw error;
-      }
+        if (error) {
+          console.error("Error fetching org chart image settings:", error);
+          throw error;
+        }
 
-      // Properly cast the JSON value to our OrgChartImageSettings type
-      if (!data?.value) {
-        return { url: null, filename: null, updated_at: null };
+        // Properly cast the JSON value to our OrgChartImageSettings type
+        if (!data?.value) {
+          return { url: null, filename: null, updated_at: null };
+        }
+        
+        return data.value as unknown as OrgChartImageSettings;
+      } catch (err) {
+        console.error("Failed to fetch org chart image:", err);
+        throw err;
       }
-      
-      return data.value as unknown as OrgChartImageSettings;
-    }
+    },
+    retry: false // Don't retry on permission errors
   });
 
   // Upload a new org chart image
   const uploadImage = useMutation({
     mutationFn: async (file: File) => {
+      if (!isAuthenticated || (!isAdmin && !isGuest)) {
+        throw new Error("You must be an admin to upload images");
+      }
+
       // Upload the file to storage
       const fileExt = file.name.split('.').pop();
       const fileName = `org_chart_${Date.now()}.${fileExt}`;
@@ -103,6 +115,10 @@ export const useOrgChartImage = () => {
   // Remove the current org chart image
   const removeImage = useMutation({
     mutationFn: async () => {
+      if (!isAuthenticated || (!isAdmin && !isGuest)) {
+        throw new Error("You must be an admin to remove images");
+      }
+      
       if (!imageSettings?.filename) {
         return;
       }
