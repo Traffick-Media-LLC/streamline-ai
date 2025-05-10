@@ -17,12 +17,23 @@
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="/lovable-uploads/b6506a91-7038-4932-bc42-c3c57842098d.png" />
     <link rel="icon" href="/lovable-uploads/3d626fa7-68f1-4ac4-8a5d-f80724b74847.png" type="image/png">
+    
+    <!-- Preload gptengineer.js script to ensure it loads before any other scripts -->
+    <link rel="preload" href="https://cdn.gpteng.co/gptengineer.js" as="script" />
   </head>
 
   <body>
     <div id="root"></div>
-    <!-- Ensure the gptengineer.js script is loaded before the main app script -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Error handling for script loading -->
+    <script>
+      window.addEventListener('error', function(e) {
+        if (e.filename && e.filename.includes('gptengineer.js')) {
+          console.error('Failed to load gptengineer.js script:', e);
+        }
+      });
+    </script>
   </body>
 </html>

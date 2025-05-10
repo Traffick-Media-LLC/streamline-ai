@@ -103,7 +103,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     // First set up the auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
         console.log("Auth state changed:", event, "Session:", newSession?.user?.id);
         
         if (mounted) {
@@ -136,7 +136,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // Then check for existing session
-    supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: existingSession }, error }) => {
+      if (error) {
+        console.error("Error getting session:", error);
+        if (mounted) setLoading(false);
+        return;
+      }
+      
       console.log("Got initial session:", existingSession?.user?.id);
       
       if (mounted) {
@@ -159,12 +165,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
+    // Set a timeout to ensure we're not stuck in a loading state
+    const loadingTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn("Auth loading timeout reached, forcing loading state to false");
+        setLoading(false);
+      }
+    }, 5000);
+
     return () => {
       console.log("Cleaning up auth subscriptions");
       mounted = false;
       subscription.unsubscribe();
+      clearTimeout(loadingTimeout);
     };
-  }, [hasInitializedRole]);
+  }, [hasInitializedRole, loading]);
 
   useEffect(() => {
     // When isGuest changes, update admin status and role accordingly

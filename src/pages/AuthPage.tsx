@@ -48,22 +48,39 @@ const AuthPage = () => {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        console.log("Session found:", session);
-        setUser(session.user);
-      } else {
-        console.log("No active session found");
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Error checking session:", error);
+          return;
+        }
+        
+        if (session?.user) {
+          console.log("Session found:", session);
+          setUser(session.user);
+        } else {
+          console.log("No active session found");
+        }
+      } catch (e) {
+        console.error("Failed to check session:", e);
       }
     };
+    
     checkSession();
 
+    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state change:", event, session);
+      
+      // First do synchronous updates
       setUser(session?.user || null);
+      
+      // Then defer navigation to avoid potential deadlocks
       if (session?.user) {
         console.log("User authenticated:", session.user, "Redirecting to:", from);
-        navigate(from);
+        setTimeout(() => {
+          navigate(from);
+        }, 0);
       } else {
         console.log("No authenticated user");
       }
@@ -77,14 +94,26 @@ const AuthPage = () => {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    console.log("Starting Google sign-in process");
+    
     try {
       // Get the current URL origin (e.g., https://example.com)
       const origin = window.location.origin;
       const redirectTo = `${origin}${from}`;
       
+      console.log("Sign in with Google - Origin:", origin);
       console.log("Sign in with Google - Redirect URL:", redirectTo);
       
-      const { error } = await supabase.auth.signInWithOAuth({
+      // Log auth provider settings to help with debugging
+      const { data: authSettings } = await supabase
+        .from('auth_provider_settings')
+        .select('*')
+        .limit(1)
+        .single();
+      
+      console.log("Auth provider settings:", authSettings || "Not available");
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: redirectTo,
@@ -101,6 +130,8 @@ const AuthPage = () => {
           description: error.message
         });
         setLoading(false);
+      } else {
+        console.log("Google sign in initiated successfully:", data);
       }
     } catch (error) {
       console.error("Unexpected error during sign in:", error);
