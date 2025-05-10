@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
@@ -41,17 +42,20 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
   const [showDebug, setShowDebug] = useState(true);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   // Notify parent when data finishes loading
   useEffect(() => {
-    if (!loading && hasInitialized) {
+    if (!loading && hasInitialized && !dataLoaded) {
+      setDataLoaded(true);
       const timeout = setTimeout(() => {
+        console.log("Calling onDataLoaded callback");
         onDataLoaded?.();
       }, 400); // Slight delay for smoother UX
 
       return () => clearTimeout(timeout);
     }
-  }, [loading, hasInitialized, onDataLoaded]);
+  }, [loading, hasInitialized, onDataLoaded, dataLoaded]);
 
   useEffect(() => {
     console.log("Auth status:", { isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized });
@@ -62,9 +66,11 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
       setLastUpdateTime(null);
       const refreshTimer = setTimeout(() => {
         refreshData().then(success => {
-          success
-            ? console.log("Data refreshed after dialog close")
-            : console.error("Failed to refresh data after dialog close");
+          if (success) {
+            console.log("Data refreshed after dialog close");
+          } else {
+            console.error("Failed to refresh data after dialog close");
+          }
         });
       }, 300);
       return () => clearTimeout(refreshTimer);
@@ -87,6 +93,23 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     setTimeout(() => {
       refreshData();
     }, 1000);
+  };
+
+  const handleRefreshClick = async () => {
+    console.log("Manual refresh requested from header");
+    try {
+      toast.loading("Refreshing data...", { id: "refresh-toast" });
+      const success = await refreshData();
+      if (success) {
+        toast.success("Data refreshed successfully", { id: "refresh-toast" });
+        setDataLoaded(false); // Reset to trigger onDataLoaded callback
+      } else {
+        toast.error("Failed to refresh data", { id: "refresh-toast" });
+      }
+    } catch (error) {
+      console.error("Error during refresh:", error);
+      toast.error("Error occurred during refresh", { id: "refresh-toast" });
+    }
   };
 
   const authCheckComponent = (
@@ -117,7 +140,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
         <StatePermissionsHeader 
           viewMode={viewMode}
           setViewMode={setViewMode}
-          refreshData={refreshData}
+          refreshData={handleRefreshClick}
           loading={loading}
           showDebug={showDebug}
           setShowDebug={setShowDebug}

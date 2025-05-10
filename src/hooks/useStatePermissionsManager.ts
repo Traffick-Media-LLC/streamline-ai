@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { useStatePermissionsData } from './useStatePermissionsData';
 import { useProductsData } from './useProductsData';
@@ -128,13 +129,16 @@ export const useStatePermissionsManager = () => {
   const forceRefreshData = useCallback(async () => {
     console.log("Forcing data refresh with cache clearing");
     await clearCache();
-    const success = await refreshData();
+    // This was the issue: refreshData is not defined, it should be refreshStateData
+    const success = await refreshStateData(true);
     if (success) {
       console.log("Data refreshed successfully");
+      return true; // Explicitly return true on success
     } else {
       console.error("Failed to refresh data");
+      return false; // Explicitly return false on failure
     }
-  }, [refreshData, clearCache]);
+  }, [refreshStateData, clearCache]);
 
   return {
     states,

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import StatePermissions from '../../components/product-management/StatePermissions';
 import { Card, CardContent } from "@/components/ui/card";
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -9,23 +9,26 @@ import { toast } from "@/components/ui/sonner";
 
 const PermissionsPage: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const handleManualRefresh = () => {
+  const handleManualRefresh = useCallback(() => {
     console.log("Manual page refresh triggered");
+    setIsRefreshing(true);
 
     toast.loading("Refreshing data...", {
       id: "manual-refresh"
     });
 
     setRefreshKey(prev => prev + 1);
-  };
+  }, []);
 
-  const handleRefreshComplete = () => {
+  const handleRefreshComplete = useCallback(() => {
+    setIsRefreshing(false);
     toast.success("Page refreshed", { 
       id: "manual-refresh",
       description: "Showing the latest data from the database"
     });
-  };
+  }, []);
 
   return (
     <div>
@@ -35,8 +38,10 @@ const PermissionsPage: React.FC = () => {
           variant="outline"
           onClick={handleManualRefresh}
           className="flex items-center gap-2"
+          disabled={isRefreshing}
         >
-          <RefreshCw className="h-4 w-4" /> Force Refresh
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> 
+          Force Refresh
         </Button>
       </div>
       <Card>
