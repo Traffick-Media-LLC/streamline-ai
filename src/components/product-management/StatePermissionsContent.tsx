@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Loader2 } from "lucide-react";
 import { StatePermissionsMap } from "./StatePermissionsMap";
@@ -35,15 +34,34 @@ export const StatePermissionsContent: React.FC<StatePermissionsContentProps> = (
     );
   }
 
-  return viewMode === 'map' ? (
-    <StatePermissionsMap onStateClick={handleStateClick} />
-  ) : (
-    <StatePermissionsList
-      states={states}
-      searchQuery={searchQuery}
-      onSearchChange={onSearchChange}
-      getStateProducts={getStateProducts}
-      onEditState={onEditState}
-    />
+  if (viewMode === 'map') {
+    return <StatePermissionsMap onStateClick={handleStateClick} />;
+  }
+
+  if (viewMode === 'list') {
+    if (states.length === 0) {
+      return (
+        <div className="text-sm text-muted-foreground text-center mt-10">
+          No states found. Try adjusting your search or check back later.
+        </div>
+      );
+    }
+
+    return (
+      <StatePermissionsList
+        states={states}
+        searchQuery={searchQuery}
+        onSearchChange={onSearchChange}
+        getStateProducts={getStateProducts}
+        onEditState={onEditState}
+      />
+    );
+  }
+
+  // Defensive fallback for unexpected view modes
+  return (
+    <div className="text-sm text-muted-foreground text-center mt-10">
+      Unknown view mode selected.
+    </div>
   );
 };
