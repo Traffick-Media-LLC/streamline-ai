@@ -118,10 +118,10 @@ const OrgChartImageUploader: React.FC = () => {
     <div className="space-y-6">
       {/* Display authentication status */}
       {!isUserAuthenticated && (
-        <Alert variant="warning">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Authentication Warning</AlertTitle>
-          <AlertDescription>
+        <Alert variant="default" className="border-yellow-300 bg-yellow-50">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <AlertTitle className="text-yellow-600">Authentication Warning</AlertTitle>
+          <AlertDescription className="text-yellow-700">
             You appear to be logged in as an admin, but your authentication session may have issues.
             Try signing out and back in if you encounter upload errors.
           </AlertDescription>
