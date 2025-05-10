@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Json } from "@/integrations/supabase/types";
 
 export interface OrgChartImageSettings {
   url: string | null;
@@ -28,7 +29,12 @@ export const useOrgChartImage = () => {
         throw error;
       }
 
-      return data?.value as OrgChartImageSettings;
+      // Properly cast the JSON value to our OrgChartImageSettings type
+      if (!data?.value) {
+        return { url: null, filename: null, updated_at: null };
+      }
+      
+      return data.value as unknown as OrgChartImageSettings;
     }
   });
 
@@ -73,7 +79,7 @@ export const useOrgChartImage = () => {
 
       const { error: updateError } = await supabase
         .from('app_settings')
-        .update({ value: newSettings })
+        .update({ value: newSettings as unknown as Json })
         .eq('id', 'org_chart_image');
 
       if (updateError) {
@@ -120,7 +126,7 @@ export const useOrgChartImage = () => {
 
       const { error: updateError } = await supabase
         .from('app_settings')
-        .update({ value: newSettings })
+        .update({ value: newSettings as unknown as Json })
         .eq('id', 'org_chart_image');
 
       if (updateError) {
