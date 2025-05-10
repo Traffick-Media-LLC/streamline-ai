@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import OrgChartViewer from '@/components/OrgChartViewer';
 
 const EmployeeDirectory: React.FC = () => {
-  const { employees = [], isLoading, error } = useEmployeesData();
+  const { data: employees = [], isLoading, error } = useEmployeesData();
 
   // Check if the org_chart bucket exists and create it if it doesn't
   useEffect(() => {

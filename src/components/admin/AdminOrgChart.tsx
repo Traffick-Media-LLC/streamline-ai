@@ -6,7 +6,7 @@ import { useEmployeesData } from '@/hooks/useEmployeesData';
 import OrgChartViewer from '@/components/OrgChartViewer';
 
 const AdminOrgChart = () => {
-  const { employees, isLoading } = useEmployeesData();
+  const { data: employees, isLoading } = useEmployeesData();
 
   return (
     <div className="space-y-6">

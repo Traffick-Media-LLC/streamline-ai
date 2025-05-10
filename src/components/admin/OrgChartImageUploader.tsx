@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
 import { Upload, Trash2, Image, RefreshCw, Lock } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { useAuth } from "@/contexts/AuthContext";
