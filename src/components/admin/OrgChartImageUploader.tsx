@@ -12,9 +12,12 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const OrgChartImageUploader: React.FC = () => {
   const { imageSettings, isLoading, error, uploadImage, removeImage, isUploading, isRemoving } = useOrgChartImage();
-  const { isAdmin, isAuthenticated } = useAuth();
+  const { isAdmin, isAuthenticated, user, session } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check authentication status
+  const isUserAuthenticated = !!session && isAuthenticated;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -48,6 +51,11 @@ const OrgChartImageUploader: React.FC = () => {
       return;
     }
 
+    if (!isUserAuthenticated) {
+      toast.error("You must be logged in to upload files");
+      return;
+    }
+
     uploadImage(selectedFile);
     setSelectedFile(null);
     
@@ -58,6 +66,10 @@ const OrgChartImageUploader: React.FC = () => {
   };
 
   const handleRemove = () => {
+    if (!isUserAuthenticated) {
+      toast.error("You must be logged in to remove files");
+      return;
+    }
     removeImage();
   };
 
@@ -104,6 +116,18 @@ const OrgChartImageUploader: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Display authentication status */}
+      {!isUserAuthenticated && (
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Authentication Warning</AlertTitle>
+          <AlertDescription>
+            You appear to be logged in as an admin, but your authentication session may have issues.
+            Try signing out and back in if you encounter upload errors.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* File upload section */}
       <Card>
         <CardContent className="pt-6">
@@ -121,7 +145,7 @@ const OrgChartImageUploader: React.FC = () => {
                 />
                 <Button
                   onClick={handleUpload}
-                  disabled={!selectedFile || isUploading}
+                  disabled={!selectedFile || isUploading || !isUserAuthenticated}
                   className="flex items-center gap-2"
                 >
                   {isUploading ? (
@@ -151,7 +175,7 @@ const OrgChartImageUploader: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={handleRemove}
-                    disabled={isRemoving}
+                    disabled={isRemoving || !isUserAuthenticated}
                     className="flex items-center gap-2 text-destructive"
                   >
                     {isRemoving ? (

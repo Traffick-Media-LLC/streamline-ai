@@ -15,7 +15,7 @@ export interface OrgChartImageSettings {
 
 export const useOrgChartImage = () => {
   const queryClient = useQueryClient();
-  const { isAdmin, isAuthenticated } = useAuth();
+  const { isAdmin, isAuthenticated, user, session } = useAuth();
 
   // Fetch the current org chart image settings
   const { data: imageSettings, isLoading, error } = useQuery({
@@ -73,6 +73,13 @@ export const useOrgChartImage = () => {
         throw new Error("Admin privileges required");
       }
 
+      if (!user || !session) {
+        toast.error("Authentication session is missing. Please try logging out and back in.");
+        throw new Error("Authentication session is invalid");
+      }
+
+      console.log("Starting upload with authenticated user:", user.id);
+
       // Upload the file to storage
       const fileExt = file.name.split('.').pop();
       const fileName = `org_chart_${Date.now()}.${fileExt}`;
@@ -87,6 +94,19 @@ export const useOrgChartImage = () => {
 
       if (uploadError) {
         console.error("Error uploading file:", uploadError);
+        
+        // Add more detailed error information for debugging
+        if (uploadError.message.includes('new row violates row-level security policy')) {
+          console.error("RLS Policy Error - Auth Status:", {
+            isAuthenticated,
+            isAdmin, 
+            hasUser: !!user,
+            hasSession: !!session,
+            userId: user?.id
+          });
+          toast.error("Upload failed due to permission issues. Please check your login status.");
+        }
+        
         throw uploadError;
       }
 
@@ -130,6 +150,7 @@ export const useOrgChartImage = () => {
       queryClient.setQueryData(['orgChartImage'], data);
     },
     onError: (error: any) => {
+      console.error("Upload error details:", error);
       toast.error("Failed to update organization chart", {
         description: error.message
       });
