@@ -1,5 +1,5 @@
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { Employee } from "./useEmployeesData";
@@ -66,6 +66,30 @@ export const useEmployeeOperations = () => {
     }
   });
 
+  const updateEmployeePosition = useMutation({
+    mutationFn: async ({ id, position_x, position_y }: { id: string, position_x: number, position_y: number }) => {
+      if (!isAdmin) {
+        throw new Error("Admin privileges required");
+      }
+
+      const { error } = await supabase
+        .from('employees')
+        .update({ position_x, position_y })
+        .eq('id', id);
+
+      if (error) {
+        console.error("Error updating employee position:", error);
+        throw new Error(error.message);
+      }
+      
+      return { id, position_x, position_y };
+    },
+    onError: (error: Error) => {
+      console.error('Error updating employee position:', error);
+      toast.error('Failed to save position');
+    }
+  });
+
   const deleteEmployee = useMutation({
     mutationFn: async (id: string) => {
       if (!isAdmin) {
@@ -95,6 +119,7 @@ export const useEmployeeOperations = () => {
   return {
     createEmployee,
     updateEmployee,
+    updateEmployeePosition,
     deleteEmployee
   };
 };

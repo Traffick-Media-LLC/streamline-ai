@@ -12,6 +12,8 @@ export interface Employee {
   department: string;
   title: string;
   manager_id: string | null;
+  position_x?: number;
+  position_y?: number;
 }
 
 export const useEmployeesData = () => {
