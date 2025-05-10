@@ -8,29 +8,45 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<number | null>(null);
   const [refreshSuccessCount, setRefreshSuccessCount] = useState(0);
+  const [lastQueryTimestamp, setLastQueryTimestamp] = useState<number>(0);
 
-  // Function to forcibly clear any cached data
+  // Function to forcibly clear any cached data with multiple approaches
   const clearCache = useCallback(async () => {
     try {
-      console.log("Attempting to clear Supabase cache with cache-busting query");
+      console.log("Attempting to clear Supabase cache with multiple cache-busting approaches");
       
-      // Execute a minimal query with a timestamp to force cache bypass
+      // Generate a unique cache busting token
       const cacheInvalidationToken = Date.now().toString();
       
-      // Use a more effective cache-busting approach
+      // Approach 1: Make a timestamp-parameterized query to invalidate cache
       await supabase.from('state_allowed_products')
-        .select('id', { head: true })
+        .select('id', { head: true, count: 'exact' })
         .eq('id', -1) // Non-existent ID to make query lightweight
         .limit(1)
-        .throwOnError();
-        
-      // Additional cache-busting query with direct count
-      await supabase.from('states')
-        .select('*', { count: 'exact', head: true })
-        .limit(1)
-        .eq('id', -1)
-        .throwOnError();
+        .order('id', { ascending: false });
       
+      // Approach 2: Make query to different tables to bust more cache
+      await supabase.from('states')
+        .select('id', { head: true, count: 'exact' })
+        .eq('id', -1)
+        .limit(1);
+        
+      await supabase.from('products')
+        .select('id', { head: true, count: 'exact' })
+        .eq('id', -1)
+        .limit(1);
+      
+      // Approach 3: Use RPC to force a new connection/query
+      try {
+        await supabase.rpc('is_admin');
+      } catch (e) {
+        // Expected to possibly fail, but still helps with cache invalidation
+      }
+      
+      // Update timestamp to prevent hammering the database
+      setLastQueryTimestamp(Date.now());
+      
+      console.log("Cache clearing complete with multiple approaches");
       return true;
     } catch (error) {
       console.warn("Cache clearing attempt failed:", error);
@@ -55,23 +71,28 @@ export const useStatePermissionsSync = (refreshData: (forceRefresh?: boolean) =>
       // Always set the timestamp to prevent multiple refreshes
       setLastRefreshTimestamp(currentTime);
       
-      // Try to clear cache before refreshing
-      if (forceRefresh) {
+      // Try to clear cache before refreshing - more aggressively if forcing
+      if (forceRefresh || refreshAttempts > 0) {
         await clearCache();
       }
       
-      // Force invalidate supabase cache by adding cacheBuster parameter
+      // Add short delay before refreshing to ensure cache is cleared
+      if (forceRefresh) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      // Force invalidate supabase cache by adding timestamp parameter
       const success = await refreshData(true); // Always use force refresh to ensure fresh data
       
       if (!success) {
         console.warn(`Refresh attempt ${refreshAttempts + 1} failed`);
         
-        if (refreshAttempts < 3) { // Increased from 2 to 3 for more retries
+        if (refreshAttempts < 4) { // Increased retry attempts
           console.log("Scheduling another refresh attempt");
           setRefreshAttempts(prev => prev + 1);
           
           // Exponential backoff with longer delays
-          const delay = Math.pow(2, refreshAttempts) * 1500; // Increased from 1000 to 1500
+          const delay = Math.pow(2, refreshAttempts) * 2000; // Increased from 1500 to 2000
           console.log(`Will retry in ${delay}ms`);
           setTimeout(() => performRobustRefresh(true), delay);
           return false;

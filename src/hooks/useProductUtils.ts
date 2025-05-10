@@ -9,31 +9,59 @@ export const useProductUtils = (stateProducts: StateProduct[], products: Product
     products.forEach(product => {
       map.set(product.id, product);
     });
+    
+    console.log(`Built products lookup with ${map.size} products`);
     return map;
   }, [products]);
 
-  // Create a memoized lookup for state products by state ID
+  // Create a memoized lookup for state products by state ID with improved normalization
   const stateProductsMap = useMemo(() => {
     const map = new Map<number, number[]>();
     
-    stateProducts.forEach(stateProduct => {
-      if (stateProduct.state_id && stateProduct.product_id) {
-        const stateId = typeof stateProduct.state_id === 'string' 
-          ? parseInt(stateProduct.state_id, 10) 
-          : stateProduct.state_id;
-          
-        const productId = typeof stateProduct.product_id === 'string' 
-          ? parseInt(stateProduct.product_id, 10) 
-          : stateProduct.product_id;
-        
-        if (!map.has(stateId)) {
-          map.set(stateId, []);
+    console.log(`Building state products map from ${stateProducts.length} state product entries`);
+    
+    // First pass: normalize data and log any issues
+    const normalizedStateProducts = stateProducts.map(stateProduct => {
+      let stateId = stateProduct.state_id;
+      let productId = stateProduct.product_id;
+      
+      // Ensure state_id is a number
+      if (typeof stateId === 'string') {
+        stateId = parseInt(stateId, 10);
+        if (isNaN(stateId)) {
+          console.warn(`Invalid state_id format: ${stateProduct.state_id}`);
+          return null;
         }
-        
-        const currentProducts = map.get(stateId) || [];
-        if (!currentProducts.includes(productId)) {
-          map.set(stateId, [...currentProducts, productId]);
+      }
+      
+      // Ensure product_id is a number
+      if (typeof productId === 'string') {
+        productId = parseInt(productId, 10);
+        if (isNaN(productId)) {
+          console.warn(`Invalid product_id format: ${stateProduct.product_id}`);
+          return null;
         }
+      }
+      
+      if (!stateId || !productId) {
+        console.warn(`Skipping invalid state product entry:`, stateProduct);
+        return null;
+      }
+      
+      return { stateId, productId };
+    }).filter((item): item is { stateId: number; productId: number } => item !== null);
+    
+    console.log(`Normalized ${normalizedStateProducts.length} valid state product entries`);
+    
+    // Second pass: build the map
+    normalizedStateProducts.forEach(({ stateId, productId }) => {
+      if (!map.has(stateId)) {
+        map.set(stateId, []);
+      }
+      
+      const currentProducts = map.get(stateId) || [];
+      if (!currentProducts.includes(productId)) {
+        map.set(stateId, [...currentProducts, productId]);
       }
     });
     
@@ -48,6 +76,11 @@ export const useProductUtils = (stateProducts: StateProduct[], products: Product
 
   // Get products for a specific state with enhanced logging for better debugging
   const getStateProducts = useCallback((stateId: number): Product[] => {
+    if (typeof stateId !== 'number') {
+      console.error(`Invalid stateId type: ${typeof stateId}, value: ${stateId}`);
+      return [];
+    }
+    
     const productIds = stateProductsMap.get(stateId) || [];
     
     // Debug: Log detailed information about the product retrieval
@@ -69,5 +102,23 @@ export const useProductUtils = (stateProducts: StateProduct[], products: Product
     return stateProducts;
   }, [stateProductsMap, productsById]);
 
-  return { getStateProducts };
+  // Get a list of all states that have products
+  const getStatesWithProducts = useCallback((): number[] => {
+    return Array.from(stateProductsMap.keys());
+  }, [stateProductsMap]);
+
+  // Check if a state has any products
+  const stateHasProducts = useCallback((stateId: number): boolean => {
+    if (!stateProductsMap.has(stateId)) {
+      return false;
+    }
+    const products = stateProductsMap.get(stateId) || [];
+    return products.length > 0;
+  }, [stateProductsMap]);
+
+  return { 
+    getStateProducts,
+    getStatesWithProducts,
+    stateHasProducts
+  };
 };

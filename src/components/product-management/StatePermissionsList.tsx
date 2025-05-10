@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { State, Product } from '@/types/statePermissions';
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/components/ui/sonner";
 
 interface StatePermissionsListProps {
   states: State[];
@@ -26,15 +27,30 @@ export const StatePermissionsList: React.FC<StatePermissionsListProps> = ({
     state.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Debug logging to track state products
+  // Debug logging to track state products and ensure data is loaded properly
   useEffect(() => {
     if (states.length > 0) {
-      // Log a sample of states and their products for debugging
-      const sampleStates = states.slice(0, 3);
-      sampleStates.forEach(state => {
-        const products = getStateProducts(state.id);
-        console.log(`State ${state.name} (ID: ${state.id}) has ${products.length} products`);
+      console.log(`StatePermissionsList: Loaded ${states.length} states`);
+      
+      // Log all states and their products for debugging
+      states.forEach(state => {
+        try {
+          const products = getStateProducts(state.id);
+          console.log(`State ${state.name} (ID: ${state.id}) has ${products.length} products`);
+        } catch (err) {
+          console.error(`Error getting products for state ${state.name}:`, err);
+        }
       });
+      
+      // Check for states with no products
+      const statesWithNoProducts = states.filter(state => {
+        const products = getStateProducts(state.id);
+        return products.length === 0;
+      });
+      
+      console.log(`Found ${statesWithNoProducts.length} states with no products`);
+    } else {
+      console.log('StatePermissionsList: No states loaded yet');
     }
   }, [states, getStateProducts]);
 
@@ -58,8 +74,19 @@ export const StatePermissionsList: React.FC<StatePermissionsListProps> = ({
         <TableBody>
           {filteredStates.length > 0 ? (
             filteredStates.map((state) => {
-              const allowedProducts = getStateProducts(state.id);
-              console.log(`Rendering state ${state.name} (ID: ${state.id}) with ${allowedProducts.length} products`);
+              let allowedProducts: Product[] = [];
+              
+              try {
+                allowedProducts = getStateProducts(state.id);
+                console.log(`Rendering state ${state.name} (ID: ${state.id}) with ${allowedProducts.length} products`);
+              } catch (err) {
+                console.error(`Error rendering products for state ${state.name}:`, err);
+                toast.error(`Error loading products for ${state.name}`, {
+                  id: `state-error-${state.id}`,
+                  duration: 3000
+                });
+                allowedProducts = [];
+              }
 
               return (
                 <TableRow key={state.id}>
