@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { Upload, Trash2, Image, RefreshCw, Lock } from "lucide-react";
+import { Upload, Trash2, Image, RefreshCw, Lock, FileText } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
@@ -25,9 +25,9 @@ const OrgChartImageUploader: React.FC = () => {
 
     const file = files[0];
     
-    // Check if the file is an image
-    if (!file.type.startsWith('image/')) {
-      toast.error("Please select an image file");
+    // Check if the file is an image or PDF
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      toast.error("Please select an image file or PDF document");
       setSelectedFile(null);
       return;
     }
@@ -68,14 +68,21 @@ const OrgChartImageUploader: React.FC = () => {
         <Lock className="h-4 w-4" />
         <AlertTitle>Admin Access Required</AlertTitle>
         <AlertDescription>
-          You need administrator privileges to manage the organization chart image.
+          You need administrator privileges to manage the organization chart.
           {imageSettings?.url && (
             <div className="mt-4">
-              <img 
-                src={imageSettings.url} 
-                alt="Current Organization Chart" 
-                className="w-full max-h-[400px] object-contain border rounded-md mt-2" 
-              />
+              {imageSettings.fileType === 'pdf' ? (
+                <div className="border rounded-md p-4 bg-muted/30 flex flex-col items-center justify-center">
+                  <FileText className="h-12 w-12 mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">PDF Organization Chart (click to view)</p>
+                </div>
+              ) : (
+                <img 
+                  src={imageSettings.url} 
+                  alt="Current Organization Chart" 
+                  className="w-full max-h-[400px] object-contain border rounded-md mt-2" 
+                />
+              )}
             </div>
           )}
         </AlertDescription>
@@ -102,11 +109,11 @@ const OrgChartImageUploader: React.FC = () => {
         <CardContent className="pt-6">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Upload Organization Chart Image</label>
+              <label className="block text-sm font-medium mb-2">Upload Organization Chart</label>
               <div className="flex items-end gap-2">
                 <Input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   onChange={handleFileChange}
                   disabled={isUploading}
                   ref={fileInputRef}
@@ -131,11 +138,11 @@ const OrgChartImageUploader: React.FC = () => {
                 </Button>
               </div>
               <p className="text-xs mt-1 text-muted-foreground">
-                Recommended: PNG or JPEG image with organization chart structure (max 10MB)
+                Accepted formats: PNG, JPEG image or PDF document (max 10MB)
               </p>
             </div>
 
-            {/* Current image section */}
+            {/* Current file section */}
             <div>
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-sm font-medium">Current Organization Chart</h3>
@@ -152,7 +159,7 @@ const OrgChartImageUploader: React.FC = () => {
                     ) : (
                       <Trash2 className="h-4 w-4" />
                     )}
-                    Remove Image
+                    Remove
                   </Button>
                 )}
               </div>
@@ -163,19 +170,35 @@ const OrgChartImageUploader: React.FC = () => {
                 </div>
               ) : imageSettings?.url ? (
                 <div className="border rounded-md overflow-hidden">
-                  <img 
-                    src={imageSettings.url} 
-                    alt="Organization Chart" 
-                    className="w-full max-h-[600px] object-contain bg-muted"
-                  />
+                  {imageSettings.fileType === 'pdf' ? (
+                    <div className="h-[400px] bg-muted/10 flex flex-col items-center justify-center p-4">
+                      <FileText className="h-16 w-16 mb-3 opacity-50" />
+                      <p className="text-muted-foreground mb-4">PDF Organization Chart</p>
+                      <a 
+                        href={imageSettings.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-sm text-blue-600 hover:underline"
+                      >
+                        Open PDF
+                      </a>
+                    </div>
+                  ) : (
+                    <img 
+                      src={imageSettings.url} 
+                      alt="Organization Chart" 
+                      className="w-full max-h-[600px] object-contain bg-muted"
+                    />
+                  )}
                   <div className="p-2 bg-muted text-xs text-muted-foreground">
                     Updated: {imageSettings.updated_at ? new Date(imageSettings.updated_at).toLocaleString() : 'N/A'}
+                    {imageSettings.fileType === 'pdf' && " • PDF document"}
                   </div>
                 </div>
               ) : (
                 <div className="h-[200px] border rounded-md flex items-center justify-center bg-muted/30 text-muted-foreground flex-col gap-2">
                   <Image className="h-10 w-10 opacity-20" />
-                  <p>No organization chart image uploaded</p>
+                  <p>No organization chart uploaded</p>
                 </div>
               )}
             </div>

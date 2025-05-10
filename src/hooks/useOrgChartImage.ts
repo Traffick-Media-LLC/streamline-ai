@@ -10,6 +10,7 @@ export interface OrgChartImageSettings {
   url: string | null;
   filename: string | null;
   updated_at: string | null;
+  fileType: "image" | "pdf" | null;
 }
 
 export const useOrgChartImage = () => {
@@ -31,7 +32,7 @@ export const useOrgChartImage = () => {
           // Handle permission errors gracefully
           if (error.code === 'PGRST301' || error.message.includes('permission denied')) {
             console.log('Reading org chart as non-admin user');
-            return { url: null, filename: null, updated_at: null };
+            return { url: null, filename: null, updated_at: null, fileType: null };
           }
           
           console.error("Error fetching org chart image settings:", error);
@@ -40,13 +41,22 @@ export const useOrgChartImage = () => {
 
         // Properly cast the JSON value to our OrgChartImageSettings type
         if (!data?.value) {
-          return { url: null, filename: null, updated_at: null };
+          return { url: null, filename: null, updated_at: null, fileType: null };
         }
         
-        return data.value as unknown as OrgChartImageSettings;
+        // Handle legacy data that might not have fileType
+        const settings = data.value as unknown as OrgChartImageSettings;
+        if (settings && settings.url && !settings.fileType) {
+          // Infer file type from URL if it's not set
+          const isImage = settings.url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i);
+          const isPdf = settings.url.match(/\.(pdf)$/i);
+          settings.fileType = isPdf ? "pdf" : "image";
+        }
+        
+        return settings;
       } catch (error) {
         console.error("Error fetching org chart image:", error);
-        return { url: null, filename: null, updated_at: null };
+        return { url: null, filename: null, updated_at: null, fileType: null };
       }
     },
     // Don't attempt to refetch if there was a permission error
@@ -76,7 +86,7 @@ export const useOrgChartImage = () => {
         });
 
       if (uploadError) {
-        console.error("Error uploading image:", uploadError);
+        console.error("Error uploading file:", uploadError);
         throw uploadError;
       }
 
@@ -92,11 +102,15 @@ export const useOrgChartImage = () => {
           .remove([imageSettings.filename]);
       }
 
+      // Determine file type
+      const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
+
       // Update the app_settings with the new image info
       const newSettings: OrgChartImageSettings = {
         url: publicUrl,
         filename: filePath,
         updated_at: new Date().toISOString(),
+        fileType: fileType,
       };
 
       const { error: updateError } = await supabase
@@ -112,11 +126,11 @@ export const useOrgChartImage = () => {
       return newSettings;
     },
     onSuccess: (data) => {
-      toast.success("Organization chart image updated successfully");
+      toast.success("Organization chart updated successfully");
       queryClient.setQueryData(['orgChartImage'], data);
     },
     onError: (error: any) => {
-      toast.error("Failed to update organization chart image", {
+      toast.error("Failed to update organization chart", {
         description: error.message
       });
     }
@@ -140,7 +154,7 @@ export const useOrgChartImage = () => {
         .remove([imageSettings.filename]);
 
       if (deleteError) {
-        console.error("Error deleting image:", deleteError);
+        console.error("Error deleting file:", deleteError);
         throw deleteError;
       }
 
@@ -149,6 +163,7 @@ export const useOrgChartImage = () => {
         url: null,
         filename: null,
         updated_at: new Date().toISOString(),
+        fileType: null,
       };
 
       const { error: updateError } = await supabase
@@ -164,11 +179,11 @@ export const useOrgChartImage = () => {
       return newSettings;
     },
     onSuccess: (data) => {
-      toast.success("Organization chart image removed successfully");
+      toast.success("Organization chart removed successfully");
       queryClient.setQueryData(['orgChartImage'], data);
     },
     onError: (error: any) => {
-      toast.error("Failed to remove organization chart image", {
+      toast.error("Failed to remove organization chart", {
         description: error.message
       });
     }
