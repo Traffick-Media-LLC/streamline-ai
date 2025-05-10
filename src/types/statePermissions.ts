@@ -25,6 +25,7 @@ export interface Brand {
 
 export interface StatePermissionsProps {
   onStateClick?: (stateName: string) => void;
+  onDataLoaded?: () => void;
 }
 
 export interface SavePermissionResult {
