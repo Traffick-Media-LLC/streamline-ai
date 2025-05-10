@@ -44,11 +44,13 @@ export const usePermissionsOperations = ({
         .limit(1)
         .eq('id', -1);
       
-      // Approach 3: Dummy RPC call to reset connection
+      // Approach 3: Using is_admin() function instead of a non-existent dummy_function
+      // This is a safer approach as we know this function exists in the database
       try {
-        await supabase.rpc('dummy_function', { dummy_param: timestamp }).maybeSingle();
+        await supabase.rpc('is_admin').maybeSingle();
       } catch (e) {
-        // Expected error since function likely doesn't exist, but helps clear cache
+        // Expected error in some cases, but helps clear cache
+        console.log("Cache invalidation call completed");
       }
       
       console.log("Cache invalidation complete with multiple approaches");
