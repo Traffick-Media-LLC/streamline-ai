@@ -1,220 +1,48 @@
 
-import { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { useEmployeesData, Employee } from "@/hooks/useEmployeesData";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Search } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import OrgChart from "@/components/OrgChart";
-import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import { toast } from "@/components/ui/sonner";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info } from "lucide-react";
+import React, { useEffect } from 'react';
+import { useEmployeesData } from '@/hooks/useEmployeesData';
+import { supabase } from '@/integrations/supabase/client';
+import OrgChartViewer from '@/components/OrgChartViewer';
 
-const EmployeeDirectory = () => {
-  const { data: employees, isLoading, error } = useEmployeesData();
-  const [searchTerm, setSearchTerm] = useState("");
-  const { isAuthenticated, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
+const EmployeeDirectory: React.FC = () => {
+  const { employees = [], isLoading, error } = useEmployeesData();
 
+  // Check if the org_chart bucket exists and create it if it doesn't
   useEffect(() => {
-    // Only redirect after auth state has been determined
-    if (!authLoading && !isAuthenticated) {
-      console.log('User not authenticated, redirecting to auth page');
-      navigate('/auth');
-    }
-  }, [isAuthenticated, navigate, authLoading]);
-
-  const filteredEmployees = employees?.filter((employee) => {
-    const searchTermLower = searchTerm.toLowerCase();
-    return (
-      employee.first_name.toLowerCase().includes(searchTermLower) ||
-      employee.last_name.toLowerCase().includes(searchTermLower) ||
-      employee.department.toLowerCase().includes(searchTermLower) ||
-      employee.email.toLowerCase().includes(searchTermLower)
-    );
-  });
-
-  // Show guidance toast when component mounts
-  useEffect(() => {
-    if (employees && employees.length > 0) {
-      // Check if there's a proper hierarchy
-      const hasHierarchy = employees.some(emp => emp.manager_id !== null);
-      
-      if (!hasHierarchy) {
-        toast.info("Organization chart may be incomplete", {
-          description: "Your employee data doesn't have a clear reporting structure. Try adding manager relationships."
-        });
+    const initOrgChartStorage = async () => {
+      try {
+        // Try to get public URL, which will fail if bucket doesn't exist
+        const { data } = await supabase.storage.getBucket('org_chart');
+        if (!data) {
+          console.log('Creating org_chart storage bucket');
+          await supabase.storage.createBucket('org_chart', {
+            public: true,
+            fileSizeLimit: 10485760, // 10MB
+          });
+        }
+      } catch (error) {
+        console.log('Initializing org_chart storage bucket...');
+        try {
+          await supabase.storage.createBucket('org_chart', {
+            public: true,
+            fileSizeLimit: 10485760, // 10MB
+          });
+        } catch (err) {
+          console.error('Error creating org_chart bucket:', err);
+        }
       }
-    }
-  }, [employees]);
+    };
 
-  // If still loading auth, show a loading indicator
-  if (authLoading) {
-    return (
-      <div className="container mx-auto py-8 px-4 flex items-center justify-center min-h-[60vh]">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  // If not authenticated, redirect happens in the useEffect
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto py-8 px-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center text-red-500">
-              Error loading employee data. Please try again later.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+    initOrgChartStorage();
+  }, []);
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold">Employee Directory</CardTitle>
-          <div className="relative mt-4">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Display alert if no manager relationships exist */}
-          {employees && employees.length > 0 && !employees.some(emp => emp.manager_id !== null) && (
-            <Alert className="mb-4">
-              <Info className="h-4 w-4" />
-              <AlertTitle>No Reporting Structure</AlertTitle>
-              <AlertDescription>
-                The organization chart is displaying in flat mode because no manager relationships are defined.
-              </AlertDescription>
-            </Alert>
-          )}
-        
-          <Tabs defaultValue="table">
-            <TabsList className="mb-4">
-              <TabsTrigger value="table">Table View</TabsTrigger>
-              <TabsTrigger value="org">Org Chart</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="table">
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Department</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredEmployees?.map((employee) => (
-                        <TableRow key={employee.id}>
-                          <TableCell className="font-medium">
-                            {employee.first_name} {employee.last_name}
-                          </TableCell>
-                          <TableCell>{employee.department}</TableCell>
-                          <TableCell>{employee.title}</TableCell>
-                          <TableCell>
-                            <a
-                              href={`mailto:${employee.email}`}
-                              className="text-blue-600 hover:underline"
-                            >
-                              {employee.email}
-                            </a>
-                          </TableCell>
-                          <TableCell>
-                            {employee.phone ? (
-                              <a
-                                href={`tel:${employee.phone}`}
-                                className="text-blue-600 hover:underline"
-                              >
-                                {employee.phone}
-                              </a>
-                            ) : (
-                              "-"
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                navigator.clipboard.writeText(employee.email);
-                                toast.success("Email copied to clipboard");
-                              }}
-                            >
-                              Copy Email
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {filteredEmployees?.length === 0 && (
-                    <div className="text-center py-4 text-gray-500">
-                      No employees found
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="org">
-              <ErrorBoundary>
-                {isLoading ? (
-                  <div className="h-[600px] flex items-center justify-center">
-                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                  </div>
-                ) : (
-                  employees && employees.length > 0 ? (
-                    <OrgChart employees={employees} />
-                  ) : (
-                    <div className="text-center py-4 text-gray-500">
-                      No employee data available
-                    </div>
-                  )
-                )}
-              </ErrorBoundary>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-6">Employee Directory</h1>
+
+      <div className="p-1">
+        <OrgChartViewer employees={employees} />
+      </div>
     </div>
   );
 };

@@ -4,12 +4,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { Upload, Trash2, Image, RefreshCw } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Upload, Trash2, Image, RefreshCw, Lock } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
+import { useAuth } from "@/contexts/AuthContext";
 
 const OrgChartImageUploader: React.FC = () => {
   const { imageSettings, isLoading, error, uploadImage, removeImage, isUploading, isRemoving } = useOrgChartImage();
+  const { isAdmin, isAuthenticated } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,9 +60,33 @@ const OrgChartImageUploader: React.FC = () => {
     removeImage();
   };
 
+  // If user is not an admin, show a permissions error
+  if (!isAuthenticated || !isAdmin) {
+    return (
+      <Alert>
+        <Lock className="h-4 w-4" />
+        <AlertTitle>Admin Access Required</AlertTitle>
+        <AlertDescription>
+          You need administrator privileges to manage the organization chart image.
+          {imageSettings?.url && (
+            <div className="mt-4">
+              <img 
+                src={imageSettings.url} 
+                alt="Current Organization Chart" 
+                className="w-full max-h-[400px] object-contain border rounded-md mt-2" 
+              />
+            </div>
+          )}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   if (error) {
     return (
       <Alert variant="destructive">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
         <AlertDescription>
           Error loading organization chart: {error.message}
         </AlertDescription>
