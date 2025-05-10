@@ -37,18 +37,30 @@ export const useProductUtils = (stateProducts: StateProduct[], products: Product
       }
     });
     
+    // Debug log the state products map
+    console.log(`Built state products map with ${map.size} states`);
+    map.forEach((productIds, stateId) => {
+      console.log(`State ${stateId} has ${productIds.length} products`);
+    });
+    
     return map;
   }, [stateProducts]);
 
-  // Get products for a specific state with logging for debugging
+  // Get products for a specific state with enhanced logging for better debugging
   const getStateProducts = useCallback((stateId: number): Product[] => {
     const productIds = stateProductsMap.get(stateId) || [];
     
-    // Debug: Log the product IDs found for this state
+    // Debug: Log detailed information about the product retrieval
     console.log(`Getting products for state ${stateId}. Found ${productIds.length} product IDs:`, productIds);
     
     const stateProducts = productIds
-      .map(id => productsById.get(id))
+      .map(id => {
+        const product = productsById.get(id);
+        if (!product) {
+          console.warn(`Product ID ${id} not found in products lookup for state ${stateId}`);
+        }
+        return product;
+      })
       .filter((product): product is Product => !!product);
     
     // Debug: Log the products found for this state

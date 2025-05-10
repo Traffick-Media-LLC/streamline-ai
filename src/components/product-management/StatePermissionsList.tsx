@@ -59,6 +59,7 @@ export const StatePermissionsList: React.FC<StatePermissionsListProps> = ({
           {filteredStates.length > 0 ? (
             filteredStates.map((state) => {
               const allowedProducts = getStateProducts(state.id);
+              console.log(`Rendering state ${state.name} (ID: ${state.id}) with ${allowedProducts.length} products`);
 
               return (
                 <TableRow key={state.id}>
