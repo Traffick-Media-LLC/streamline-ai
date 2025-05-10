@@ -44,6 +44,16 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
   const [showDebug, setShowDebug] = useState(true);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [viewChangeCounter, setViewChangeCounter] = useState(0);
+
+  // Track view changes to force refresh
+  useEffect(() => {
+    if (viewMode === 'map') {
+      // When switching to map view, increment view change counter to trigger refresh
+      setViewChangeCounter(prev => prev + 1);
+      console.log("Switched to map view, triggering refresh");
+    }
+  }, [viewMode]);
 
   // Notify parent when data finishes loading
   useEffect(() => {
@@ -72,6 +82,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
         refreshData().then(success => {
           if (success) {
             console.log("Data refreshed after dialog close and save");
+            // Force map view refresh by incrementing viewChangeCounter
+            setViewChangeCounter(prev => prev + 1);
           } else {
             console.error("Failed to refresh data after dialog close and save");
           }
@@ -81,9 +93,6 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
       return () => clearTimeout(refreshTimer);
     }
   }, [isDialogOpen, lastUpdateTime, refreshData]);
-
-  // Remove automatic background refreshes while dialog is open
-  // This was causing unnecessary refreshes that could disrupt the UI state
   
   const handleSaveWithTracking = async () => {
     console.log("Save requested, will track update time");
@@ -99,6 +108,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
       if (success) {
         toast.success("Data refreshed successfully", { id: "refresh-toast" });
         setDataLoaded(false); // Reset to trigger onDataLoaded callback
+        // Force refresh by incrementing viewChangeCounter
+        setViewChangeCounter(prev => prev + 1);
       } else {
         toast.error("Failed to refresh data", { id: "refresh-toast" });
       }
@@ -157,6 +168,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
           getStateProducts={getStateProducts}
           onEditState={handleEditState}
           handleStateClick={handleStateClick}
+          refreshCounter={refreshCounter || viewChangeCounter} // Pass either the refreshCounter or viewChangeCounter
         />
 
         <ProductSelectionDialog

@@ -1,5 +1,5 @@
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import { Product, StateProduct } from '@/types/statePermissions';
 
 export const useProductUtils = (stateProducts: StateProduct[], products: Product[]) => {
@@ -13,6 +13,21 @@ export const useProductUtils = (stateProducts: StateProduct[], products: Product
     console.log(`Built products lookup with ${map.size} products`);
     return map;
   }, [products]);
+
+  // Detect and log when products are updated
+  useEffect(() => {
+    console.log(`Products updated: ${products.length} products available`);
+  }, [products]);
+
+  // Detect and log when state products are updated
+  useEffect(() => {
+    console.log(`State products updated: ${stateProducts.length} state-product relationships available`);
+    
+    // Log the first 5 state products to help with debugging
+    if (stateProducts.length > 0) {
+      console.log("Sample state products:", stateProducts.slice(0, 5));
+    }
+  }, [stateProducts]);
 
   // Create a memoized lookup for state products by state ID with improved normalization
   const stateProductsMap = useMemo(() => {
@@ -84,7 +99,7 @@ export const useProductUtils = (stateProducts: StateProduct[], products: Product
     const productIds = stateProductsMap.get(stateId) || [];
     
     // Debug: Log detailed information about the product retrieval
-    console.log(`Getting products for state ${stateId}. Found ${productIds.length} product IDs:`, productIds);
+    console.log(`Getting products for state ${stateId}. Found ${productIds.length} product IDs`);
     
     const stateProducts = productIds
       .map(id => {
@@ -116,9 +131,15 @@ export const useProductUtils = (stateProducts: StateProduct[], products: Product
     return products.length > 0;
   }, [stateProductsMap]);
 
+  // Get count of states with products
+  const getStatesWithProductsCount = useCallback((): number => {
+    return Array.from(stateProductsMap.keys()).length;
+  }, [stateProductsMap]);
+
   return { 
     getStateProducts,
     getStatesWithProducts,
-    stateHasProducts
+    stateHasProducts,
+    getStatesWithProductsCount
   };
 };

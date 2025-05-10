@@ -13,6 +13,7 @@ interface StatePermissionsListProps {
   onSearchChange: (query: string) => void;
   getStateProducts: (stateId: number) => Product[];
   onEditState: (state: State) => void;
+  refreshTrigger?: number;
 }
 
 export const StatePermissionsList: React.FC<StatePermissionsListProps> = ({
@@ -20,12 +21,20 @@ export const StatePermissionsList: React.FC<StatePermissionsListProps> = ({
   searchQuery,
   onSearchChange,
   getStateProducts,
-  onEditState
+  onEditState,
+  refreshTrigger
 }) => {
   // Filter states based on search query
   const filteredStates = states.filter(state => 
     state.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Handle refresh trigger changes
+  useEffect(() => {
+    if (refreshTrigger) {
+      console.log("List view refresh triggered:", refreshTrigger);
+    }
+  }, [refreshTrigger]);
 
   // Debug logging to track state products and ensure data is loaded properly
   useEffect(() => {
@@ -52,7 +61,7 @@ export const StatePermissionsList: React.FC<StatePermissionsListProps> = ({
     } else {
       console.log('StatePermissionsList: No states loaded yet');
     }
-  }, [states, getStateProducts]);
+  }, [states, getStateProducts, refreshTrigger]); // Add refreshTrigger dependency
 
   return (
     <div>

@@ -1,12 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import USAMap from '../components/USAMap';
 import { supabase } from "@/integrations/supabase/client";
 import { StateData } from '../data/stateData';
 import { useQuery } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { toast } from "@/components/ui/sonner";
 
 async function fetchStateProducts(stateName: string) {
+  console.log(`Fetching products for state: ${stateName}`);
+  
   const {
     data: products,
     error
@@ -21,6 +24,7 @@ async function fetchStateProducts(stateName: string) {
         name
       )
     `).eq('states.name', stateName);
+    
   if (error) {
     console.error('Error fetching state products:', error);
     return {
@@ -28,6 +32,8 @@ async function fetchStateProducts(stateName: string) {
     };
   }
 
+  console.log(`Received ${products.length} products for state: ${stateName}`);
+  
   const brandProducts = products.reduce((acc: {
     brandName: string;
     products: string[];
@@ -45,6 +51,7 @@ async function fetchStateProducts(stateName: string) {
     }
     return acc;
   }, []);
+  
   return {
     allowedProducts: brandProducts
   };
@@ -55,15 +62,28 @@ const MapPage = () => {
     name: string;
     data: StateData;
   } | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const isMobile = useIsMobile();
 
   const {
-    data: stateData
+    data: stateData,
+    error,
+    refetch
   } = useQuery({
-    queryKey: ['stateProducts', selectedState?.name],
+    queryKey: ['stateProducts', selectedState?.name, refreshTrigger],
     queryFn: () => selectedState ? fetchStateProducts(selectedState.name) : null,
     enabled: !!selectedState
   });
+  
+  // Function to manually refresh data
+  const refreshData = useCallback(() => {
+    if (selectedState) {
+      console.log(`Manually refreshing data for ${selectedState.name}`);
+      setRefreshTrigger(prev => prev + 1);
+      return refetch();
+    }
+    return Promise.resolve();
+  }, [selectedState, refetch]);
 
   const handleStateClick = (stateName: string) => {
     console.log("State clicked:", stateName);
@@ -75,8 +95,17 @@ const MapPage = () => {
     });
   };
 
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      console.error("Error fetching state data:", error);
+      toast.error(`Error loading data for ${selectedState?.name}`);
+    }
+  }, [error, selectedState]);
+
   useEffect(() => {
     if (stateData && selectedState) {
+      console.log(`Updating state data for ${selectedState.name} with ${stateData.allowedProducts.length} brand categories`);
       setSelectedState(prev => prev ? {
         ...prev,
         data: stateData
@@ -103,7 +132,15 @@ const MapPage = () => {
           <div className={`${isMobile ? 'w-full' : 'w-1/2 overflow-y-auto'} animate-fade-in`} 
                style={!isMobile ? { maxHeight: 'calc(100vh - 12rem)' } : undefined}>
             <div className="p-6 border border-gray-200 rounded-lg shadow-sm">
-              <h2 className="text-2xl font-semibold mb-4">{selectedState.name}</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-semibold">{selectedState.name}</h2>
+                <button 
+                  onClick={refreshData}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Refresh
+                </button>
+              </div>
               <div>
                 <h3 className="text-lg font-medium mb-2">Allowed Products by Brand:</h3>
                 {selectedState.data.allowedProducts.length > 0 ? (

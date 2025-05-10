@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Loader2 } from "lucide-react";
 import { StatePermissionsMap } from "./StatePermissionsMap";
@@ -13,6 +14,7 @@ interface StatePermissionsContentProps {
   getStateProducts: (stateId: number) => Product[];
   onEditState: (state: State) => void;
   handleStateClick: (stateName: string) => void;
+  refreshCounter?: number; // Add refresh counter
 }
 
 export const StatePermissionsContent: React.FC<StatePermissionsContentProps> = ({
@@ -23,7 +25,8 @@ export const StatePermissionsContent: React.FC<StatePermissionsContentProps> = (
   onSearchChange,
   getStateProducts,
   onEditState,
-  handleStateClick
+  handleStateClick,
+  refreshCounter
 }) => {
   if (loading) {
     return (
@@ -35,7 +38,7 @@ export const StatePermissionsContent: React.FC<StatePermissionsContentProps> = (
   }
 
   if (viewMode === 'map') {
-    return <StatePermissionsMap onStateClick={handleStateClick} />;
+    return <StatePermissionsMap onStateClick={handleStateClick} refreshTrigger={refreshCounter} />;
   }
 
   if (viewMode === 'list') {
@@ -54,6 +57,7 @@ export const StatePermissionsContent: React.FC<StatePermissionsContentProps> = (
         onSearchChange={onSearchChange}
         getStateProducts={getStateProducts}
         onEditState={onEditState}
+        refreshTrigger={refreshCounter}
       />
     );
   }
