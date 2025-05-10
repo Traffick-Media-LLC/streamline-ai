@@ -52,34 +52,45 @@ export const logEvent = async (log: EventLog): Promise<void> => {
           log.metadata || {});
     }
 
-    // Store log in database with enhanced categorization
-    try {
-      const { error } = await supabase
-        .from('chat_logs')
-        .insert({
-          request_id: log.requestId,
-          user_id: log.userId,
-          chat_id: log.chatId,
-          event_type: log.eventType,
-          component: log.component,
-          category: category,
-          message: log.message,
-          duration_ms: log.durationMs,
-          metadata: log.metadata || {},
-          severity: log.severity || 'info',
-          timestamp: new Date(timestamp).toISOString(),
-          client_info: {
-            userAgent: navigator.userAgent,
-            url: window.location.href,
-            screenSize: `${window.innerWidth}x${window.innerHeight}`
-          }
-        });
+    // Check if we're authenticated before attempting to write to the database
+    const { data: { session } } = await supabase.auth.getSession();
+    const isAuthenticated = !!session;
 
-      if (error) {
-        console.error('Failed to store chat log:', error);
+    // Only attempt to store in database if authenticated or a guest session flag is present in localStorage
+    const isGuest = localStorage.getItem('isGuestSession') === 'true';
+    
+    if (isAuthenticated || isGuest) {
+      try {
+        const { error } = await supabase
+          .from('chat_logs')
+          .insert({
+            request_id: log.requestId,
+            user_id: log.userId || null,
+            chat_id: log.chatId,
+            event_type: log.eventType,
+            component: log.component,
+            category: category,
+            message: log.message,
+            duration_ms: log.durationMs,
+            metadata: log.metadata || {},
+            severity: log.severity || 'info',
+            timestamp: new Date(timestamp).toISOString(),
+            client_info: {
+              userAgent: navigator.userAgent,
+              url: window.location.href,
+              screenSize: `${window.innerWidth}x${window.innerHeight}`
+            }
+          });
+
+        if (error) {
+          console.error('Failed to store chat log:', error);
+        }
+      } catch (dbError) {
+        console.error('Database error in logEvent:', dbError);
       }
-    } catch (dbError) {
-      console.error('Database error in logEvent:', dbError);
+    } else {
+      // We're not authenticated, so just log to console with a note
+      console.info(`${logPrefix}: [Not logged to DB - not authenticated]`);
     }
   } catch (e) {
     console.error('Error in logEvent:', e);

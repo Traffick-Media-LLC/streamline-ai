@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,11 +35,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGuest, setIsGuest] = useState(false);
+  const [isGuest, setIsGuest] = useState(() => {
+    // Initialize from localStorage if available
+    return localStorage.getItem('isGuestSession') === 'true';
+  });
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   // Track if we've tried to fetch role once already to avoid loops
   const [hasInitializedRole, setHasInitializedRole] = useState(false);
+
+  // Update localStorage when isGuest changes
+  useEffect(() => {
+    localStorage.setItem('isGuestSession', isGuest ? 'true' : 'false');
+  }, [isGuest]);
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -202,6 +209,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsGuest(false);
       setIsAdmin(false);
       setUserRole(null);
+      localStorage.removeItem('isGuestSession');
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
@@ -136,11 +135,25 @@ const AuthPage = () => {
     }
   };
 
-  const handleGuestAccess = () => {
-    setIsGuest(true);
-    toast.success("Continuing as guest with admin access");
-    console.log("Guest mode enabled, redirecting to:", from);
-    navigate(from);
+  const handleGuestAccess = async () => {
+    try {
+      // First set the flag in localStorage directly for immediate effect
+      localStorage.setItem('isGuestSession', 'true');
+      
+      // Then update context state
+      setIsGuest(true);
+      
+      toast.success("Continuing as guest with admin access");
+      console.log("Guest mode enabled, redirecting to:", from);
+      
+      // Wait a moment before redirecting to ensure state is properly updated
+      setTimeout(() => {
+        navigate(from);
+      }, 100);
+    } catch (error) {
+      console.error("Error enabling guest mode:", error);
+      toast.error("Failed to enable guest mode");
+    }
   };
 
   if (isAuthenticated) {

@@ -5,6 +5,7 @@ import { AlertTriangle, RefreshCw, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
+import { ErrorTracker } from "@/utils/logging";
 
 interface StatePermissionsAuthCheckProps {
   isAuthenticated: boolean;
@@ -21,12 +22,25 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
 }) => {
   const { setIsGuest } = useAuth();
 
-  const handleContinueAsGuest = () => {
-    console.log("Continuing as guest with admin privileges");
-    setIsGuest(true);
-    toast.success("Continuing as guest with admin privileges", {
-      description: "You now have full access to view and modify permissions"
-    });
+  const handleContinueAsGuest = async () => {
+    const errorTracker = new ErrorTracker('StatePermissionsAuthCheck');
+    try {
+      console.log("Continuing as guest with admin privileges");
+      // Set the guest flag before we initialize any logging
+      setIsGuest(true);
+      
+      // Log this action after setting the guest flag
+      await errorTracker.logStage('guest_access', 'started');
+      
+      toast.success("Continuing as guest with admin privileges", {
+        description: "You now have full access to view and modify permissions"
+      });
+      
+      await errorTracker.logStage('guest_access', 'completed');
+    } catch (err) {
+      console.error("Error setting guest mode:", err);
+      await errorTracker.logError("Failed to enable guest mode", err);
+    }
   };
 
   // Authentication check
