@@ -1,3 +1,4 @@
+
 import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -59,6 +60,13 @@ const App = () => {
             <BrowserRouter>
               <div className="min-h-screen flex flex-col">
                 <Routes>
+                  {/* Auth route - Explicitly NOT protected */}
+                  <Route path="/auth" element={
+                    <Suspense fallback={<PageLoader />}>
+                      <AuthPage />
+                    </Suspense>
+                  } />
+                  
                   {/* Admin routes with AdminLayout */}
                   <Route 
                     path="/admin/*" 
@@ -90,7 +98,6 @@ const App = () => {
                         <main className="flex-1">
                           <Suspense fallback={<PageLoader />}>
                             <Routes>
-                              <Route path="/auth" element={<AuthPage />} />
                               <Route 
                                 path="/" 
                                 element={

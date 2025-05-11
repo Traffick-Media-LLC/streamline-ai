@@ -14,6 +14,9 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   const { isAuthenticated, loading, user, isAdmin, userRole, isGuest } = useAuth();
   const [authChecked, setAuthChecked] = useState(false);
   const location = useLocation();
+  
+  // Prevent redirect loops by checking if we're already on the auth page
+  const isAuthPage = location.pathname === "/auth";
 
   console.log("ProtectedRoute check:", { 
     isAuthenticated, 
@@ -23,7 +26,8 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     requiredRole,
     userRole,
     userId: user?.id,
-    path: location.pathname
+    path: location.pathname,
+    isAuthPage
   });
 
   // Wait for auth to be checked before making a decision
@@ -42,8 +46,8 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     );
   }
 
-  // If not authenticated (and not in guest mode), redirect to auth
-  if (!isAuthenticated && !isGuest) {
+  // If not authenticated (and not in guest mode), redirect to auth - BUT only if not already on auth page
+  if (!isAuthenticated && !isGuest && !isAuthPage) {
     console.log("Not authenticated, redirecting to auth page");
     // Add current path as state to redirect back after login
     return <Navigate to="/auth" state={{ from: location.pathname }} />;
