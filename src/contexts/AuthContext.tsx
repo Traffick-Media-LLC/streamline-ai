@@ -1,8 +1,9 @@
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
+import { useUserRole } from "@/hooks/use-user-role";
 
 type AppRole = 'basic' | 'admin';
 
@@ -40,70 +41,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Initialize from localStorage if available
     return localStorage.getItem('isGuestSession') === 'true';
   });
-  const [userRole, setUserRole] = useState<AppRole | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  // Track if we've tried to fetch role once already to avoid loops
-  const [hasInitializedRole, setHasInitializedRole] = useState(false);
 
   // Update localStorage when isGuest changes
   useEffect(() => {
     localStorage.setItem('isGuestSession', isGuest ? 'true' : 'false');
   }, [isGuest]);
 
-  const fetchUserRole = async (userId: string) => {
-    try {
-      console.log("Fetching role for user:", userId);
-      
-      // Call the is_admin RPC function directly
-      const { data: isAdminResult, error: adminCheckError } = await supabase.rpc('is_admin');
-      
-      if (adminCheckError) {
-        console.error('Error checking admin status:', adminCheckError);
-      } else {
-        console.log("Is admin check result:", isAdminResult);
-        setIsAdmin(!!isAdminResult); // Ensure boolean conversion
-      }
-      
-      // Then fetch the actual role
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error fetching user role:', error);
-        toast.error("Failed to fetch user role");
-        setUserRole('basic');
-        return;
-      }
-      
-      console.log("User role data:", data);
-      
-      if (data?.role) {
-        const role = data.role as AppRole;
-        console.log("Setting user role to:", role);
-        setUserRole(role);
-        
-        // Double-check admin status from role
-        if (role === 'admin' && !isAdmin) {
-          console.log("Setting admin status from role");
-          setIsAdmin(true);
-        }
-      } else {
-        console.log("No role found, setting to basic");
-        setUserRole('basic');
-      }
-      
-      setHasInitializedRole(true);
-    } catch (error) {
-      console.error('Error in fetchUserRole:', error);
-      toast.error("Failed to fetch user role");
-      setUserRole('basic');
-      setIsAdmin(false);
-      setHasInitializedRole(true);
-    }
-  };
+  const { userRole, isAdmin, loading: roleLoading } = useUserRole(user?.id, isGuest);
 
   useEffect(() => {
     console.log("Auth provider initializing");
@@ -118,26 +62,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const newUser = newSession?.user ?? null;
           setSession(newSession);
           setUser(newUser);
-          
-          // Reset role initializaton flag when session changes
-          if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-            setHasInitializedRole(false);
-          }
-          
-          if (newUser && !hasInitializedRole) {
-            // Use setTimeout to prevent potential auth deadlocks
-            setTimeout(() => {
-              if (mounted) {
-                fetchUserRole(newUser.id);
-              }
-            }, 10);
-          } else if (!newUser && !isGuest) {
-            // If logged out and not in guest mode, clear role status
-            setUserRole(null);
-            setIsAdmin(false);
-            setHasInitializedRole(true);
-          }
-          
           setLoading(false);
         }
       }
@@ -160,18 +84,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const existingUser = existingSession?.user ?? null;
           setSession(existingSession);
           setUser(existingUser);
-          
-          if (existingUser && !hasInitializedRole) {
-            // Use setTimeout to avoid blocking issues
-            setTimeout(async () => {
-              if (mounted) {
-                await fetchUserRole(existingUser.id);
-              }
-            }, 10);
-          } else {
-            setHasInitializedRole(true);
-          }
-          
           setLoading(false);
         }
       } catch (err) {
@@ -197,29 +109,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       subscription.unsubscribe();
       clearTimeout(loadingTimeout);
     };
-  }, [hasInitializedRole, loading, isGuest]);
-
-  useEffect(() => {
-    // When isGuest changes, update admin status and role accordingly
-    if (isGuest) {
-      console.log("Guest mode enabled - granting admin privileges");
-      setIsAdmin(true);
-      setUserRole('admin');
-      setLoading(false);
-      setHasInitializedRole(true);
-    } else if (!user) {
-      // Only reset admin status if not logged in
-      console.log("Guest mode disabled - reverting to authenticated status");
-      setIsAdmin(false);
-      setUserRole(null);
-    }
-  }, [isGuest, user]);
+  }, [loading]);
 
   const signOut = async () => {
     try {
       setIsGuest(false);
-      setIsAdmin(false);
-      setUserRole(null);
       localStorage.removeItem('isGuestSession');
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
@@ -239,7 +133,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         session,
         user,
         signOut,
-        loading: loading && !isActuallyAuthenticated,
+        loading: loading || (roleLoading && !isActuallyAuthenticated),
         isAuthenticated: isActuallyAuthenticated,
         isGuest,
         setIsGuest,
