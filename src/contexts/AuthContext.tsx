@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -143,34 +144,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // Then check for existing session
-    supabase.auth.getSession().then(async ({ data: { session: existingSession }, error }) => {
-      if (error) {
-        console.error("Error getting session:", error);
-        if (mounted) setLoading(false);
-        return;
-      }
-      
-      console.log("Got initial session:", existingSession?.user?.id);
-      
-      if (mounted) {
-        const existingUser = existingSession?.user ?? null;
-        setSession(existingSession);
-        setUser(existingUser);
+    const getSessionPromise = async () => {
+      try {
+        const { data: { session: existingSession }, error } = await supabase.auth.getSession();
         
-        if (existingUser && !hasInitializedRole) {
-          // Use setTimeout to avoid blocking issues
-          setTimeout(async () => {
-            if (mounted) {
-              await fetchUserRole(existingUser.id);
-            }
-          }, 10);
-        } else {
-          setHasInitializedRole(true);
+        if (error) {
+          console.error("Error getting session:", error);
+          if (mounted) setLoading(false);
+          return;
         }
         
-        setLoading(false);
+        console.log("Got initial session:", existingSession?.user?.id);
+        
+        if (mounted) {
+          const existingUser = existingSession?.user ?? null;
+          setSession(existingSession);
+          setUser(existingUser);
+          
+          if (existingUser && !hasInitializedRole) {
+            // Use setTimeout to avoid blocking issues
+            setTimeout(async () => {
+              if (mounted) {
+                await fetchUserRole(existingUser.id);
+              }
+            }, 10);
+          } else {
+            setHasInitializedRole(true);
+          }
+          
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Failed to get session:", err);
+        if (mounted) setLoading(false);
       }
-    });
+    };
+
+    // Start session checking
+    getSessionPromise();
 
     // Set a timeout to ensure we're not stuck in a loading state
     const loadingTimeout = setTimeout(() => {
@@ -186,7 +197,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       subscription.unsubscribe();
       clearTimeout(loadingTimeout);
     };
-  }, [hasInitializedRole, loading]);
+  }, [hasInitializedRole, loading, isGuest]);
 
   useEffect(() => {
     // When isGuest changes, update admin status and role accordingly

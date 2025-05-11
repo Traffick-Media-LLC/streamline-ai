@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
@@ -9,6 +10,7 @@ import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { Animated } from "@/components/ui/animated";
 import { Card } from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,7 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, setIsGuest } = useAuth();
+  const isMobile = useIsMobile();
   
   // Get the redirect path from location state or default to home
   const from = location.state?.from || "/";
@@ -103,18 +106,22 @@ const AuthPage = () => {
       console.log("Sign in with Google - Origin:", origin);
       console.log("Sign in with Google - Redirect URL:", redirectTo);
       
-      // Remove the attempt to query auth_provider_settings which doesn't exist
-      // and is causing the TypeScript error
+      // Mobile-specific adjustments for Google sign-in
+      const options = {
+        redirectTo: redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent'
+        }
+      };
+      
+      // Log additional information for debugging
+      console.log("Device is mobile:", isMobile);
+      console.log("Google sign-in options:", JSON.stringify(options));
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: {
-          redirectTo: redirectTo,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent'
-          }
-        }
+        options: options
       });
       
       if (error) {
@@ -165,14 +172,14 @@ const AuthPage = () => {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <Animated type="fade" className="w-full">
-          <Card className="p-8 shadow-lg border-0">
+          <Card className="p-4 md:p-8 shadow-lg border-0">
             <div className="flex flex-col items-center text-center">
               <Animated type="scale" delay={0.2}>
                 <Logo />
               </Animated>
               
               <Animated type="slide-up" delay={0.3} className="mt-6">
-                <h1 className="text-3xl font-bold tracking-tight">Sign in to the Streamline Group Portal</h1>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Sign in to the Streamline Group Portal</h1>
               </Animated>
               
               <Animated type="fade" delay={0.4}>
