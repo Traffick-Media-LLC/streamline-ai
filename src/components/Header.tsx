@@ -1,3 +1,4 @@
+
 import { Link, useNavigate } from "react-router-dom";
 import Logo from "./Logo";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +17,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { MoreHorizontal } from "lucide-react";
+import HamburgerMenu from "./HamburgerMenu";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const Header = () => {
   const { isAuthenticated, isAdmin, user, signOut } = useAuth();
@@ -23,6 +26,7 @@ const Header = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const isMobile = useIsMobile();
   
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -72,75 +76,82 @@ const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
         <Logo />
-        <NavigationMenu className="mx-6">
-          <NavigationMenuList>
-            <NavigationMenuItem>
-              <Link 
-                to="/" 
-                className={cn(
-                  navigationMenuTriggerStyle(), 
-                  "text-black hover:text-black/80"
-                )}
-              >
-                Home
-              </Link>
-            </NavigationMenuItem>
-            
-            <NavigationMenuItem>
-              <Link 
-                to="/map" 
-                className={cn(
-                  navigationMenuTriggerStyle(), 
-                  "text-black hover:text-black/80"
-                )}
-              >
-                State Map
-              </Link>
-            </NavigationMenuItem>
-            
-            {isAuthenticated && (
+        
+        {!isMobile && (
+          <NavigationMenu className="mx-6">
+            <NavigationMenuList>
               <NavigationMenuItem>
                 <Link 
-                  to="/chat" 
+                  to="/" 
                   className={cn(
                     navigationMenuTriggerStyle(), 
                     "text-black hover:text-black/80"
                   )}
                 >
-                  AI Chat
+                  Home
                 </Link>
               </NavigationMenuItem>
-            )}
-
-            {isAuthenticated && (
+              
               <NavigationMenuItem>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      className={cn(
-                        navigationMenuTriggerStyle(),
-                        "text-black hover:text-black/80"
-                      )}
-                    >
-                      <MoreHorizontal className="h-4 w-4 mr-1" />
-                      More
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[200px] bg-white">
-                    <DropdownMenuItem asChild>
-                      <Link to="/employees" className="w-full">
-                        Employee Directory
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Link 
+                  to="/map" 
+                  className={cn(
+                    navigationMenuTriggerStyle(), 
+                    "text-black hover:text-black/80"
+                  )}
+                >
+                  State Map
+                </Link>
               </NavigationMenuItem>
-            )}
-          </NavigationMenuList>
-        </NavigationMenu>
+              
+              {isAuthenticated && (
+                <NavigationMenuItem>
+                  <Link 
+                    to="/chat" 
+                    className={cn(
+                      navigationMenuTriggerStyle(), 
+                      "text-black hover:text-black/80"
+                    )}
+                  >
+                    AI Chat
+                  </Link>
+                </NavigationMenuItem>
+              )}
+
+              {isAuthenticated && (
+                <NavigationMenuItem>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className={cn(
+                          navigationMenuTriggerStyle(),
+                          "text-black hover:text-black/80"
+                        )}
+                      >
+                        <MoreHorizontal className="h-4 w-4 mr-1" />
+                        More
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[200px] bg-white">
+                      <DropdownMenuItem asChild>
+                        <Link to="/employees" className="w-full">
+                          Employee Directory
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </NavigationMenuItem>
+              )}
+            </NavigationMenuList>
+          </NavigationMenu>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
+          {isMobile && (
+            <HamburgerMenu />
+          )}
+          
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -163,7 +174,10 @@ const Header = () => {
                   </span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="text-black">
+              <DropdownMenuContent 
+                align="end" 
+                className="text-black bg-white z-50 min-w-[200px]"
+              >
                 <DropdownMenuItem asChild>
                   <Link to="/profile" className="text-black hover:text-black/80">Profile</Link>
                 </DropdownMenuItem>
