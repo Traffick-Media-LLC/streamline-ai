@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarRail, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarInset, useSidebar } from "@/components/ui/sidebar";
@@ -6,6 +7,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbS
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 // Separate component that uses the useSidebar hook
 const AdminLayoutContent = () => {
@@ -102,6 +104,14 @@ const AdminLayoutContent = () => {
   
   const breadcrumbs = getBreadcrumbs();
   
+  // Helper function to determine if a group should be open
+  const isGroupOpen = (item: any) => {
+    if (item.children) {
+      return item.children.some((child: any) => location.pathname === child.path);
+    }
+    return false;
+  };
+  
   return (
     <div className="flex w-full min-h-screen bg-background">
       <Sidebar>
@@ -135,30 +145,33 @@ const AdminLayoutContent = () => {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ) : (
-                  <SidebarGroup defaultOpen={item.children.some(child => location.pathname === child.path)}>
-                    <SidebarGroupLabel>
+                  <Collapsible defaultOpen={isGroupOpen(item)}>
+                    <CollapsibleTrigger className="flex items-center w-full px-2 py-2 rounded-md hover:bg-accent hover:text-accent-foreground">
                       <item.icon className="mr-2 h-5 w-5" />
-                      {item.title}
-                    </SidebarGroupLabel>
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {item.children.map(child => (
-                          <SidebarMenuItem key={child.path}>
-                            <SidebarMenuButton 
-                              asChild 
-                              tooltip={child.title} 
-                              isActive={location.pathname === child.path}
-                            >
-                              <NavLink to={child.path} className="flex items-center w-full">
-                                <child.icon className="mr-2 h-5 w-5" />
-                                <span>{child.title}</span>
-                              </NavLink>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
+                      <span className="flex-1">{item.title}</span>
+                      <ChevronRight className="h-4 w-4 transition-transform duration-200 collapsible-trigger-icon" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="ml-4 pl-2 border-l">
+                        <SidebarMenu>
+                          {item.children.map(child => (
+                            <SidebarMenuItem key={child.path}>
+                              <SidebarMenuButton 
+                                asChild 
+                                tooltip={child.title} 
+                                isActive={location.pathname === child.path}
+                              >
+                                <NavLink to={child.path} className="flex items-center w-full">
+                                  <child.icon className="mr-2 h-5 w-5" />
+                                  <span>{child.title}</span>
+                                </NavLink>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
               </React.Fragment>
             ))}
