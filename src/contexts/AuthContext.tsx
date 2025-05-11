@@ -4,6 +4,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useUserRole } from "@/hooks/use-user-role";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type AppRole = 'basic' | 'admin';
 
@@ -41,6 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Initialize from localStorage if available
     return localStorage.getItem('isGuestSession') === 'true';
   });
+  const isMobile = useIsMobile();
 
   // Update localStorage when isGuest changes
   useEffect(() => {
@@ -50,7 +52,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { userRole, isAdmin, loading: roleLoading } = useUserRole(user?.id, isGuest);
 
   useEffect(() => {
-    console.log("Auth provider initializing");
+    console.log("Auth provider initializing", isMobile ? "(mobile)" : "(desktop)");
     let mounted = true;
     
     // First set up the auth state change listener
@@ -101,7 +103,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.warn("Auth loading timeout reached, forcing loading state to false");
         setLoading(false);
       }
-    }, 5000);
+    }, 3000); // Reduced timeout for mobile
 
     return () => {
       console.log("Cleaning up auth subscriptions");
@@ -109,7 +111,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       subscription.unsubscribe();
       clearTimeout(loadingTimeout);
     };
-  }, [loading]);
+  }, [loading, isMobile]);
 
   const signOut = async () => {
     try {

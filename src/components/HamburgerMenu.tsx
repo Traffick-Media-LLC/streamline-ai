@@ -10,9 +10,11 @@ import {
 } from "@/components/ui/sheet";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const HamburgerMenu = () => {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, signOut } = useAuth();
+  const isMobile = useIsMobile();
   
   return (
     <Sheet>
@@ -21,7 +23,7 @@ const HamburgerMenu = () => {
           <Menu className="h-6 w-6" />
         </Button>
       </SheetTrigger>
-      <SheetContent>
+      <SheetContent className={isMobile ? "w-[85%]" : "w-[300px]"}>
         <SheetHeader>
           <SheetTitle>Menu</SheetTitle>
         </SheetHeader>
@@ -48,6 +50,17 @@ const HamburgerMenu = () => {
               Products
             </Link>
           )}
+          <div className="mt-2 pt-2 border-t">
+            {isAuthenticated && (
+              <Button 
+                variant="ghost" 
+                onClick={signOut} 
+                className="text-lg hover:text-primary transition-colors w-full justify-start px-0"
+              >
+                Sign Out
+              </Button>
+            )}
+          </div>
         </nav>
       </SheetContent>
     </Sheet>

@@ -9,6 +9,7 @@ import AuthForm from "@/components/auth/AuthForm";
 import AuthHeader from "@/components/auth/AuthHeader";
 import PreloadHome from "@/components/auth/PreloadHome";
 import { useAuthSession } from "@/hooks/use-auth-session";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
@@ -16,6 +17,7 @@ const AuthPage = () => {
   const location = useLocation();
   const { isAuthenticated, setIsGuest } = useAuth();
   const { user } = useAuthSession();
+  const isMobile = useIsMobile();
   
   // Get the redirect path from location state or default to home
   const from = location.state?.from || "/";
@@ -29,12 +31,12 @@ const AuthPage = () => {
       setIsGuest(true);
       
       toast.success("Continuing as guest with admin access");
-      console.log("Guest mode enabled, redirecting to:", from);
+      console.log("Guest mode enabled, redirecting to:", from, "isMobile:", isMobile);
       
       // Wait a moment before redirecting to ensure state is properly updated
       setTimeout(() => {
         navigate(from);
-      }, 100);
+      }, 300);
     } catch (error) {
       console.error("Error enabling guest mode:", error);
       toast.error("Failed to enable guest mode");
@@ -42,7 +44,7 @@ const AuthPage = () => {
   };
 
   if (isAuthenticated || user) {
-    console.log("Already authenticated, redirecting to:", from);
+    console.log("Already authenticated, redirecting to:", from, "isMobile:", isMobile);
     return <Navigate to={from} />;
   }
 

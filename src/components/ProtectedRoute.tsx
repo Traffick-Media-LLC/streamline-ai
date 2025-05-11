@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ShieldAlert } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   const { isAuthenticated, loading, user, isAdmin, userRole, isGuest } = useAuth();
   const [authChecked, setAuthChecked] = useState(false);
   const location = useLocation();
+  const isMobile = useIsMobile();
   
   // Prevent redirect loops by checking if we're already on the auth page
   const isAuthPage = location.pathname === "/auth";
@@ -27,7 +29,8 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     userRole,
     userId: user?.id,
     path: location.pathname,
-    isAuthPage
+    isAuthPage,
+    isMobile
   });
 
   // Wait for auth to be checked before making a decision

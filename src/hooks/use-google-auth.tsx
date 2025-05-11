@@ -19,6 +19,7 @@ export const useGoogleAuth = (redirectTo: string) => {
       
       console.log("Sign in with Google - Origin:", origin);
       console.log("Sign in with Google - Redirect URL:", fullRedirectTo);
+      console.log("Device is mobile:", isMobile);
       
       // Mobile-specific adjustments for Google sign-in
       const options = {
@@ -26,11 +27,11 @@ export const useGoogleAuth = (redirectTo: string) => {
         queryParams: {
           access_type: 'offline',
           prompt: 'consent'
-        }
+        },
+        skipBrowserRedirect: false // Ensure browser is redirected properly
       };
       
       // Log additional information for debugging
-      console.log("Device is mobile:", isMobile);
       console.log("Google sign-in options:", JSON.stringify(options));
       
       const { data, error } = await supabase.auth.signInWithOAuth({
