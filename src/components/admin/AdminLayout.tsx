@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
-import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarRail, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarInset, useSidebar } from "@/components/ui/sidebar";
+import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarTrigger, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarRail, SidebarInset, useSidebar } from "@/components/ui/sidebar";
 import { LayoutDashboard, Package, Users, BookText, Briefcase, Map, FileBarChart, ChevronRight, ArrowLeft, Menu } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { useAuth } from "@/contexts/AuthContext";
@@ -131,7 +131,7 @@ const AdminLayoutContent = () => {
       <Sidebar>
         <SidebarHeader className="border-b p-4">
           <div className="text-xl font-semibold text-primary">Admin Portal</div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground truncate">
             {user?.email}
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -198,20 +198,20 @@ const AdminLayoutContent = () => {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset className="p-6">
+      <SidebarInset className="p-4 sm:p-6">
         <div className="flex flex-col w-full">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-2 mb-2 w-full sm:mb-0 sm:w-auto">
               {(state === "collapsed" || isMobile) && (
-                <Button variant="ghost" size="icon" className="flex md:hidden" asChild>
+                <Button variant="ghost" size="icon" className="flex sm:flex" asChild>
                   <SidebarTrigger>
                     <Menu className="h-5 w-5" />
                     <span className="sr-only">Toggle Menu</span>
                   </SidebarTrigger>
                 </Button>
               )}
-              <Breadcrumb>
-                <BreadcrumbList>
+              <Breadcrumb className="overflow-x-auto">
+                <BreadcrumbList className="whitespace-nowrap">
                   {breadcrumbs.map((crumb, index) => (
                     <React.Fragment key={index}>
                       <BreadcrumbItem>

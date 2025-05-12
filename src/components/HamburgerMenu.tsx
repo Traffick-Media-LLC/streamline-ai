@@ -40,21 +40,21 @@ const HamburgerMenu = () => {
           <Menu className="h-6 w-6" />
         </Button>
       </SheetTrigger>
-      <SheetContent className={isMobile ? "w-[85vw]" : "w-[300px]"} side="left">
-        <SheetHeader>
+      <SheetContent className={isMobile ? "w-[85vw] p-4" : "w-[300px]"} side="left">
+        <SheetHeader className="mb-4">
           <SheetTitle>Menu</SheetTitle>
         </SheetHeader>
-        <nav className="flex flex-col gap-4 mt-6">
+        <nav className="flex flex-col gap-2">
           <Link 
             to="/" 
-            className="text-lg hover:text-primary transition-colors px-2 py-3"
+            className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
             onClick={handleLinkClick}
           >
             Home
           </Link>
           <Link 
             to="/map" 
-            className="text-lg hover:text-primary transition-colors px-2 py-3"
+            className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
             onClick={handleLinkClick}
           >
             State Map
@@ -62,7 +62,7 @@ const HamburgerMenu = () => {
           {isAuthenticated && (
             <Link 
               to="/chat" 
-              className="text-lg hover:text-primary transition-colors px-2 py-3"
+              className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
               onClick={handleLinkClick}
             >
               AI Chat
@@ -71,7 +71,7 @@ const HamburgerMenu = () => {
           {isAuthenticated && (
             <Link 
               to="/employees" 
-              className="text-lg hover:text-primary transition-colors px-2 py-3"
+              className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
               onClick={handleLinkClick}
             >
               Employee Directory
@@ -80,7 +80,7 @@ const HamburgerMenu = () => {
           {isAdmin && (
             <Link 
               to="/admin" 
-              className="text-lg hover:text-primary transition-colors px-2 py-3"
+              className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
               onClick={handleLinkClick}
             >
               Admin Dashboard
@@ -89,18 +89,18 @@ const HamburgerMenu = () => {
           {isAuthenticated && (
             <Link 
               to="/profile" 
-              className="text-lg hover:text-primary transition-colors px-2 py-3"
+              className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
               onClick={handleLinkClick}
             >
               My Profile
             </Link>
           )}
-          <div className="mt-2 pt-2 border-t">
+          <div className="mt-4 pt-4 border-t">
             {isAuthenticated && (
               <Button 
                 variant="ghost" 
                 onClick={handleSignOut} 
-                className="text-lg hover:text-primary transition-colors w-full justify-start px-2 py-3"
+                className="text-base hover:text-primary transition-colors w-full justify-start px-3 py-3 rounded-md hover:bg-accent"
               >
                 Sign Out
               </Button>
