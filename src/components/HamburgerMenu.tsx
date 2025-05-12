@@ -8,15 +8,21 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const HamburgerMenu = () => {
   const { isAuthenticated, isAdmin, signOut } = useAuth();
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+  
+  // Close menu when location changes
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
   
   const handleLinkClick = () => {
     setIsOpen(false);

@@ -13,8 +13,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 const AdminLayoutContent = () => {
   const location = useLocation();
   const { user } = useAuth();
-  const { state } = useSidebar();
+  const { state, setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
+  
+  // Close sidebar when location changes on mobile
+  React.useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [location.pathname, isMobile, setOpenMobile]);
   
   const adminNav = [
     {
@@ -112,6 +119,13 @@ const AdminLayoutContent = () => {
     return false;
   };
   
+  // Handle navigation click - close sidebar on mobile
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+  
   return (
     <div className="flex w-full min-h-screen bg-background">
       <Sidebar>
@@ -138,7 +152,7 @@ const AdminLayoutContent = () => {
                       tooltip={item.title} 
                       isActive={item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path)}
                     >
-                      <NavLink to={item.path} className="flex items-center w-full">
+                      <NavLink to={item.path} className="flex items-center w-full" onClick={handleNavClick}>
                         <item.icon className="mr-2 h-5 w-5" />
                         <span>{item.title}</span>
                       </NavLink>
@@ -161,7 +175,7 @@ const AdminLayoutContent = () => {
                                 tooltip={child.title} 
                                 isActive={location.pathname === child.path}
                               >
-                                <NavLink to={child.path} className="flex items-center w-full">
+                                <NavLink to={child.path} className="flex items-center w-full" onClick={handleNavClick}>
                                   <child.icon className="mr-2 h-5 w-5" />
                                   <span>{child.title}</span>
                                 </NavLink>
