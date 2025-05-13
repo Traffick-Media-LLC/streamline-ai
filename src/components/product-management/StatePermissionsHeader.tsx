@@ -1,11 +1,9 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { MapPin, List, RefreshCw, Bug, Loader2 } from "lucide-react";
+import { List, RefreshCw, Bug, Loader2 } from "lucide-react";
 
 interface StatePermissionsHeaderProps {
-  viewMode: 'map' | 'list';
-  setViewMode: (mode: 'map' | 'list') => void;
   refreshData: () => void;
   loading: boolean;
   showDebug: boolean;
@@ -13,8 +11,6 @@ interface StatePermissionsHeaderProps {
 }
 
 export const StatePermissionsHeader: React.FC<StatePermissionsHeaderProps> = ({
-  viewMode,
-  setViewMode,
   refreshData,
   loading,
   showDebug,
@@ -25,16 +21,7 @@ export const StatePermissionsHeader: React.FC<StatePermissionsHeaderProps> = ({
       <h2 className="text-2xl font-semibold">Manage State Permissions</h2>
       <div className="flex gap-4">
         <Button 
-          variant={viewMode === 'map' ? 'default' : 'outline'} 
-          onClick={() => setViewMode('map')}
-          disabled={loading}
-        >
-          <MapPin className="mr-2 h-4 w-4" />
-          Map View
-        </Button>
-        <Button 
-          variant={viewMode === 'list' ? 'default' : 'outline'} 
-          onClick={() => setViewMode('list')}
+          variant="default"
           disabled={loading}
         >
           <List className="mr-2 h-4 w-4" />

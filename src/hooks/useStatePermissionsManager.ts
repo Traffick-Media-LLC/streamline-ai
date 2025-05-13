@@ -48,8 +48,7 @@ export const useStatePermissionsManager = () => {
   const { 
     searchQuery, 
     setSearchQuery, 
-    viewMode, 
-    setViewMode, 
+    viewMode,
     isDialogOpen, 
     setIsDialogOpen 
   } = useStateUIControls();
@@ -88,6 +87,17 @@ export const useStatePermissionsManager = () => {
       fetchProductsForState(selectedState.id);
     }
   }, [lastSaveTimestamp, selectedState, fetchProductsForState]);
+
+  // Fetch Alabama's products specifically on initialization
+  useEffect(() => {
+    if (hasInitialized && states.length > 0 && !loading) {
+      const alabama = states.find(state => state.name === 'Alabama');
+      if (alabama) {
+        console.log("Specifically fetching Alabama's products on initialization");
+        fetchProductsForState(alabama.id);
+      }
+    }
+  }, [hasInitialized, states, loading, fetchProductsForState]);
 
   useEffect(() => {
     console.log("StatePermissionsManager - Auth status check:", { 
@@ -139,12 +149,20 @@ export const useStatePermissionsManager = () => {
     
     if (success) {
       console.log("Data refreshed successfully");
+      
+      // After general refresh, explicitly fetch Alabama's products
+      const alabama = states.find(state => state.name === 'Alabama');
+      if (alabama) {
+        console.log("Explicitly refreshing Alabama products after general refresh");
+        await fetchProductsForState(alabama.id);
+      }
+      
       return true;
     } else {
       console.error("Failed to refresh data");
       return false;
     }
-  }, [refreshStateData, clearCache]);
+  }, [refreshStateData, clearCache, states, fetchProductsForState]);
 
   return {
     states,
@@ -156,7 +174,6 @@ export const useStatePermissionsManager = () => {
     searchQuery,
     setSearchQuery,
     viewMode,
-    setViewMode,
     isDialogOpen,
     setIsDialogOpen,
     loading,
@@ -171,6 +188,7 @@ export const useStatePermissionsManager = () => {
     debugLogs,
     refreshCounter,
     hasInitialized,
-    shouldRefresh
+    shouldRefresh,
+    fetchProductsForState
   };
 };

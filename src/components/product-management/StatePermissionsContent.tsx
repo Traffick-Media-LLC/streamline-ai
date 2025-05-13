@@ -1,31 +1,26 @@
 
 import React from 'react';
 import { Loader2 } from "lucide-react";
-import { StatePermissionsMap } from "./StatePermissionsMap";
 import { StatePermissionsList } from "./StatePermissionsList";
 import { State, Product } from '@/types/statePermissions';
 
 interface StatePermissionsContentProps {
   loading: boolean;
-  viewMode: 'map' | 'list';
   states: State[];
   searchQuery: string;
   onSearchChange: (query: string) => void;
   getStateProducts: (stateId: number) => Product[];
   onEditState: (state: State) => void;
-  handleStateClick: (stateName: string) => void;
-  refreshCounter?: number; // Add refresh counter
+  refreshCounter?: number;
 }
 
 export const StatePermissionsContent: React.FC<StatePermissionsContentProps> = ({
   loading,
-  viewMode,
   states,
   searchQuery,
   onSearchChange,
   getStateProducts,
   onEditState,
-  handleStateClick,
   refreshCounter
 }) => {
   if (loading) {
@@ -37,35 +32,22 @@ export const StatePermissionsContent: React.FC<StatePermissionsContentProps> = (
     );
   }
 
-  if (viewMode === 'map') {
-    return <StatePermissionsMap onStateClick={handleStateClick} refreshTrigger={refreshCounter} />;
-  }
-
-  if (viewMode === 'list') {
-    if (states.length === 0) {
-      return (
-        <div className="text-sm text-muted-foreground text-center mt-10">
-          No states found. Try adjusting your search or check back later.
-        </div>
-      );
-    }
-
+  if (states.length === 0) {
     return (
-      <StatePermissionsList
-        states={states}
-        searchQuery={searchQuery}
-        onSearchChange={onSearchChange}
-        getStateProducts={getStateProducts}
-        onEditState={onEditState}
-        refreshTrigger={refreshCounter}
-      />
+      <div className="text-sm text-muted-foreground text-center mt-10">
+        No states found. Try adjusting your search or check back later.
+      </div>
     );
   }
 
-  // Defensive fallback for unexpected view modes
   return (
-    <div className="text-sm text-muted-foreground text-center mt-10">
-      Unknown view mode selected.
-    </div>
+    <StatePermissionsList
+      states={states}
+      searchQuery={searchQuery}
+      onSearchChange={onSearchChange}
+      getStateProducts={getStateProducts}
+      onEditState={onEditState}
+      refreshTrigger={refreshCounter}
+    />
   );
 };

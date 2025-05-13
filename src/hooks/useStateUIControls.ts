@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 export const useStateUIControls = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
+  const [viewMode] = useState<'list'>('list');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
 
@@ -11,7 +11,6 @@ export const useStateUIControls = () => {
     searchQuery,
     setSearchQuery,
     viewMode,
-    setViewMode,
     isDialogOpen,
     setIsDialogOpen,
     showDebug,
