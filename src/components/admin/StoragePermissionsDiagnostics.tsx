@@ -9,9 +9,27 @@ import { RefreshCw, CheckCircle, AlertCircle, Info } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ensureBucketAccess } from "@/utils/storage/ensureBucketAccess";
 
+// Define proper types for the admin results object
+interface AdminCheckResults {
+  isAdmin: boolean;
+  rpcError?: string;
+  rpcAdminCheck?: boolean;
+}
+
+interface DiagnosticsResults {
+  timestamp: string;
+  user: { id: string; email: string } | null;
+  adminStatus: AdminCheckResults;
+  bucketAccess: {
+    success: boolean;
+    error?: any;
+    message?: string;
+  };
+}
+
 const StoragePermissionsDiagnostics: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<Record<string, any> | null>(null);
+  const [results, setResults] = useState<DiagnosticsResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { isAdmin, isAuthenticated, user } = useAuth();
   
@@ -26,7 +44,7 @@ const StoragePermissionsDiagnostics: React.FC = () => {
     
     try {
       // Step 1: Check admin status
-      const adminResults = { isAdmin };
+      const adminResults: AdminCheckResults = { isAdmin };
       
       // Step 2: Verify admin with RPC call
       const { data: adminCheck, error: adminError } = await supabase.rpc('is_admin');
@@ -90,7 +108,7 @@ const StoragePermissionsDiagnostics: React.FC = () => {
           
           {results && (
             <div className="space-y-3">
-              <Alert variant={results.bucketAccess?.success ? "default" : "warning"}>
+              <Alert variant={results.bucketAccess?.success ? "default" : "destructive"}>
                 {results.bucketAccess?.success 
                   ? <CheckCircle className="h-4 w-4 text-green-500" /> 
                   : <AlertCircle className="h-4 w-4" />}
