@@ -33,7 +33,6 @@ export const useOrgChartImage = () => {
           hasUser: !!user,
           hasSession: !!session,
           sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
-          sessionProvider: session?.provider,
           userMetadata: user?.user_metadata,
         },
         severity: 'info',

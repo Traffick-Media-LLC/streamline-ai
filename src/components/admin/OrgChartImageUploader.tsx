@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { useAuth } from "@/contexts/AuthContext";
 import { logEvent, generateRequestId } from "@/utils/logging";
+import { supabase } from "@/integrations/supabase/client";
 
 const OrgChartImageUploader: React.FC = () => {
   const { imageSettings, isLoading, error, uploadImage, removeImage, isUploading, isRemoving } = useOrgChartImage();
@@ -40,7 +40,6 @@ const OrgChartImageUploader: React.FC = () => {
           } : null,
           sessionDetails: session ? {
             expiresAt: new Date(session.expires_at * 1000).toISOString(),
-            provider: session.provider
           } : null
         },
         severity: 'info'
@@ -53,7 +52,6 @@ const OrgChartImageUploader: React.FC = () => {
         `User ID: ${user?.id || 'none'}`,
         `Session Valid: ${!!session}`,
         session ? `Session Expires: ${new Date(session.expires_at * 1000).toLocaleString()}` : '',
-        session ? `Auth Provider: ${session.provider}` : ''
       ].filter(Boolean).join('\n');
 
       setSessionDebugInfo(authDebugInfo);
@@ -231,7 +229,7 @@ const OrgChartImageUploader: React.FC = () => {
     <div className="space-y-6">
       {/* Display authentication status */}
       {!isUserAuthenticated && (
-        <Alert variant="default" className="border-yellow-300 bg-yellow-50">
+        <Alert variant="warning" className="border-yellow-300 bg-yellow-50">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertTitle className="text-yellow-600">Authentication Warning</AlertTitle>
           <AlertDescription className="text-yellow-700">
