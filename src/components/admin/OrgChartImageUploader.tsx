@@ -70,7 +70,7 @@ const OrgChartImageUploader: React.FC = () => {
               eventType: 'bucket_access_check',
               component: 'OrgChartImageUploader',
               message: 'Error checking bucket access',
-              metadata: { error: bucketError.message, code: bucketError.code },
+              metadata: { error: bucketError.message, errorMessage: bucketError.message },
               severity: 'warning'
             });
           } else {
@@ -229,7 +229,7 @@ const OrgChartImageUploader: React.FC = () => {
     <div className="space-y-6">
       {/* Display authentication status */}
       {!isUserAuthenticated && (
-        <Alert variant="warning" className="border-yellow-300 bg-yellow-50">
+        <Alert className="border-yellow-300 bg-yellow-50">
           <AlertTriangle className="h-4 w-4 text-yellow-600" />
           <AlertTitle className="text-yellow-600">Authentication Warning</AlertTitle>
           <AlertDescription className="text-yellow-700">
@@ -240,7 +240,7 @@ const OrgChartImageUploader: React.FC = () => {
       )}
       
       {/* Debug info section */}
-      <Alert variant="default" className="bg-blue-50 border-blue-200">
+      <Alert className="bg-blue-50 border-blue-200">
         <Info className="h-4 w-4 text-blue-600" />
         <AlertTitle className="text-blue-600">Authentication Diagnostics</AlertTitle>
         <AlertDescription>
@@ -294,11 +294,11 @@ const OrgChartImageUploader: React.FC = () => {
                 <h3 className="text-sm font-medium">Current Organization Chart</h3>
                 {imageSettings?.url && (
                   <Button
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
                     onClick={handleRemove}
                     disabled={isRemoving || !isUserAuthenticated}
-                    className="flex items-center gap-2 text-destructive"
+                    className="flex items-center gap-2"
                   >
                     {isRemoving ? (
                       <RefreshCw className="h-4 w-4 animate-spin" />
@@ -350,7 +350,7 @@ const OrgChartImageUploader: React.FC = () => {
             </div>
             
             {/* Technical info for admins */}
-            <Alert variant="outline" className="mt-4">
+            <Alert className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Technical Information</AlertTitle>
               <AlertDescription className="text-xs">

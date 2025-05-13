@@ -264,7 +264,7 @@ export const useOrgChartImage = () => {
         category: 'network'
       });
 
-      console.log("Starting upload with authenticated user:", user.id);
+      console.log("Starting upload with authenticated user:", user?.id);
 
       // Check bucket existence first and log the result
       try {
@@ -272,7 +272,7 @@ export const useOrgChartImage = () => {
         
         await logEvent({
           requestId: uploadRequestId,
-          userId: user.id,
+          userId: user?.id,
           eventType: 'bucket_check',
           component: 'useOrgChartImage',
           message: bucketError ? 'Bucket check failed' : 'Bucket check successful',
@@ -293,7 +293,7 @@ export const useOrgChartImage = () => {
           'useOrgChartImage',
           'Error checking storage bucket',
           error,
-          { userId: user.id },
+          { userId: user?.id },
           'warning'
         );
       }
@@ -433,7 +433,7 @@ export const useOrgChartImage = () => {
         if (uploadError.message.includes('new row violates row-level security policy')) {
           await logEvent({
             requestId: uploadRequestId,
-            userId: user.id,
+            userId: user?.id,
             eventType: 'rls_policy_violation',
             component: 'useOrgChartImage',
             message: 'RLS Policy Error during file upload',
@@ -442,11 +442,10 @@ export const useOrgChartImage = () => {
               isAdmin, 
               hasUser: !!user,
               hasSession: !!session,
-              userId: user.id,
+              userId: user?.id,
               fileType: file.type,
               fileSize: file.size,
-              errorMessage: uploadError.message,
-              errorCode: uploadError.code
+              errorMessage: uploadError.message
             },
             severity: 'error',
             category: 'auth'
@@ -459,7 +458,7 @@ export const useOrgChartImage = () => {
             
             await logEvent({
               requestId: uploadRequestId,
-              userId: user.id,
+              userId: user?.id,
               eventType: 'admin_check_during_error',
               component: 'useOrgChartImage',
               message: 'Checked admin status during error',
@@ -475,7 +474,7 @@ export const useOrgChartImage = () => {
               'useOrgChartImage',
               'Error checking policies during upload failure',
               error,
-              { userId: user.id },
+              { userId: user?.id },
               'warning'
             );
           }
@@ -490,7 +489,7 @@ export const useOrgChartImage = () => {
             {
               fileType: file.type,
               fileSize: file.size,
-              userId: user.id,
+              userId: user?.id,
               isAdmin,
               hasSession: !!session
             },
@@ -504,7 +503,7 @@ export const useOrgChartImage = () => {
       
       await logEvent({
         requestId: uploadRequestId,
-        userId: user.id,
+        userId: user?.id,
         eventType: 'file_uploaded',
         component: 'useOrgChartImage',
         message: 'File uploaded successfully',
@@ -541,7 +540,7 @@ export const useOrgChartImage = () => {
 
       await logEvent({
         requestId: uploadRequestId,
-        userId: user.id,
+        userId: user?.id,
         eventType: 'updating_settings',
         component: 'useOrgChartImage',
         message: 'Updating app settings with new file info',
@@ -564,7 +563,7 @@ export const useOrgChartImage = () => {
           'Error updating org chart image settings',
           updateError,
           {
-            userId: user.id,
+            userId: user?.id,
             isAdmin,
             newSettings
           },
@@ -577,7 +576,7 @@ export const useOrgChartImage = () => {
 
       await logEvent({
         requestId: uploadRequestId,
-        userId: user.id,
+        userId: user?.id,
         eventType: 'upload_complete',
         component: 'useOrgChartImage',
         message: 'Org chart upload and settings update completed successfully',
