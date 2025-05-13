@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -139,7 +140,7 @@ export const useOrgChartImage = () => {
 
         if (error) {
           // Handle permission errors gracefully
-          if (error.code === 'PGRST301' || error.message.includes('permission denied')) {
+          if (error.message.includes('permission denied')) {
             await logEvent({
               requestId: uploadRequestId,
               userId: user?.id,
@@ -208,7 +209,7 @@ export const useOrgChartImage = () => {
     },
     // Don't attempt to refetch if there was a permission error
     retry: (failureCount, error: any) => {
-      return !(error.code === 'PGRST301' || error.message?.includes('permission denied')) && failureCount < 2;
+      return !error.message?.includes('permission denied') && failureCount < 2;
     }
   });
 
@@ -380,8 +381,7 @@ export const useOrgChartImage = () => {
                 hasUser: !!user,
                 hasSession: !!session,
                 userId: user.id,
-                errorMessage: testUploadError.message,
-                errorCode: testUploadError.code
+                errorMessage: testUploadError.message
               },
               severity: 'error',
               category: 'auth'
