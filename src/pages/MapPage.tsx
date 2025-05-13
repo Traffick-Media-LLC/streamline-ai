@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import USAMap from '../components/USAMap';
 import { supabase } from "@/integrations/supabase/client";
 import { StateData } from '../data/stateData';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from "@/components/ui/sonner";
 
@@ -62,28 +62,32 @@ const MapPage = () => {
     name: string;
     data: StateData;
   } | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
 
   const {
     data: stateData,
     error,
     refetch
   } = useQuery({
-    queryKey: ['stateProducts', selectedState?.name, refreshTrigger],
+    queryKey: ['stateProducts', selectedState?.name],
     queryFn: () => selectedState ? fetchStateProducts(selectedState.name) : null,
-    enabled: !!selectedState
+    enabled: !!selectedState,
+    staleTime: 1000 * 30, // 30 seconds - more responsive for user interaction
+    onError: () => {
+      toast.error(`Error loading data for ${selectedState?.name}`);
+    }
   });
   
   // Function to manually refresh data
   const refreshData = useCallback(() => {
     if (selectedState) {
       console.log(`Manually refreshing data for ${selectedState.name}`);
-      setRefreshTrigger(prev => prev + 1);
+      queryClient.invalidateQueries({ queryKey: ['stateProducts', selectedState.name] });
       return refetch();
     }
     return Promise.resolve();
-  }, [selectedState, refetch]);
+  }, [selectedState, refetch, queryClient]);
 
   const handleStateClick = (stateName: string) => {
     console.log("State clicked:", stateName);
@@ -99,9 +103,8 @@ const MapPage = () => {
   useEffect(() => {
     if (error) {
       console.error("Error fetching state data:", error);
-      toast.error(`Error loading data for ${selectedState?.name}`);
     }
-  }, [error, selectedState]);
+  }, [error]);
 
   useEffect(() => {
     if (stateData && selectedState) {

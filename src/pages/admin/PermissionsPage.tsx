@@ -1,60 +1,44 @@
 
-import React, { useState, useCallback } from 'react';
-import StatePermissions from '../../components/product-management/StatePermissions';
+import React, { useState } from 'react';
+import StatePermissions from '@/components/product-management/StatePermissions';
 import { Card, CardContent } from "@/components/ui/card";
-import ErrorBoundary from '@/components/ErrorBoundary';
-import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
-import { toast } from "@/components/ui/sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CircleCheck, Loader2 } from "lucide-react";
 
 const PermissionsPage: React.FC = () => {
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  const handleManualRefresh = useCallback(() => {
-    console.log("Manual page refresh triggered");
-    setIsRefreshing(true);
-
-    toast.loading("Refreshing data...", {
-      id: "manual-refresh"
-    });
-
-    // Use refreshKey to force a complete re-render of the StatePermissions component
-    setRefreshKey(prev => prev + 1);
-  }, []);
-
-  const handleRefreshComplete = useCallback(() => {
-    setIsRefreshing(false);
-    toast.success("Page refreshed", { 
-      id: "manual-refresh",
-      description: "Showing the latest data from the database"
-    });
-  }, []);
+  const handleDataLoaded = () => {
+    console.log("State permissions data loaded");
+    setIsDataLoaded(true);
+  };
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex items-center mb-6">
         <h1 className="text-3xl font-bold">State Permissions</h1>
-        <Button 
-          variant="outline"
-          onClick={handleManualRefresh}
-          className="flex items-center gap-2"
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> 
-          Force Refresh
-        </Button>
+        {isDataLoaded ? (
+          <CircleCheck className="ml-2 h-5 w-5 text-green-500" />
+        ) : (
+          <Loader2 className="ml-2 h-5 w-5 animate-spin text-muted-foreground" />
+        )}
       </div>
-      <Card>
-        <CardContent className="pt-6">
-          <ErrorBoundary>
-            <StatePermissions 
-              key={refreshKey}
-              onDataLoaded={handleRefreshComplete}
-            />
-          </ErrorBoundary>
-        </CardContent>
-      </Card>
+
+      <Tabs defaultValue="state-products">
+        <TabsList className="mb-4">
+          <TabsTrigger value="state-products">State Product Permissions</TabsTrigger>
+          <TabsTrigger value="documentation" disabled>
+            Documentation
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="state-products">
+          <Card>
+            <CardContent className="pt-6">
+              <StatePermissions onDataLoaded={handleDataLoaded} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

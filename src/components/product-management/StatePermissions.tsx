@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
-import { useStatePermissionsManager } from "@/hooks/useStatePermissionsManager";
+import { useStatePermissionsDataQuery } from "@/hooks/useStatePermissionsDataQuery";
+import { useProductsData } from "@/hooks/useProductsData";
+import { useStateProductMapping } from "@/hooks/useStateProductMapping";
 import { StatePermissionsProps } from '@/types/statePermissions';
 import { useAuth } from "@/contexts/AuthContext";
 import { StatePermissionsHeader } from "./StatePermissionsHeader";
@@ -14,48 +16,31 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => {
   const {
     states,
-    products,
-    brands,
-    selectedState,
-    selectedProducts,
-    setSelectedProducts,
-    searchQuery,
-    setSearchQuery,
-    viewMode,
-    isDialogOpen,
-    setIsDialogOpen,
+    stateProducts,
     loading,
     error,
-    isSaving,
-    handleStateClick,
-    handleSavePermissions,
-    getStateProducts,
-    handleEditState,
     refreshData,
-    hasChanges,
-    debugLogs,
-    refreshCounter,
     hasInitialized,
-    fetchProductsForState
-  } = useStatePermissionsManager();
+    refreshCounter,
+    saveStatePermissions,
+    isSaving,
+  } = useStatePermissionsDataQuery();
 
+  const { products, brands } = useProductsData();
+  const { getStateProducts } = useStateProductMapping(stateProducts, products);
   const { isAuthenticated, isAdmin, isGuest } = useAuth();
-  const [showDebug, setShowDebug] = useState(true);
-  const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Ensure all states with products are preloaded properly
-  useEffect(() => {
-    if (states.length > 0 && hasInitialized && !loading) {
-      console.log("Ensuring all states have proper data loaded...");
-      // Prefetch Alabama specifically to ensure it has products
-      const alabama = states.find(state => state.name === 'Alabama');
-      if (alabama) {
-        console.log("Pre-fetching products for Alabama (ID:", alabama.id, ")");
-        fetchProductsForState(alabama.id);
-      }
-    }
-  }, [states, hasInitialized, loading, fetchProductsForState]);
+  // UI state
+  const [showDebug, setShowDebug] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedState, setSelectedState] = useState<{ id: number; name: string } | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
+  const [debugLogs] = useState<string[]>([]); // Simplified for refactor
 
   // Notify parent when data finishes loading
   useEffect(() => {
@@ -70,10 +55,6 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     }
   }, [loading, hasInitialized, onDataLoaded, dataLoaded]);
 
-  useEffect(() => {
-    console.log("Auth status:", { isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized });
-  }, [isAuthenticated, isAdmin, isGuest, refreshCounter, hasInitialized]);
-
   // Only refresh after dialog close if there was a save action
   useEffect(() => {
     if (!isDialogOpen && lastUpdateTime) {
@@ -81,7 +62,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
       setLastUpdateTime(null);
       
       const refreshTimer = setTimeout(() => {
-        refreshData().then(success => {
+        refreshData(true).then(success => {
           if (success) {
             console.log("Data refreshed after dialog close and save");
           } else {
@@ -93,28 +74,76 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
       return () => clearTimeout(refreshTimer);
     }
   }, [isDialogOpen, lastUpdateTime, refreshData]);
-  
-  const handleSaveWithTracking = async () => {
-    console.log("Save requested, will track update time");
-    setLastUpdateTime(Date.now());
-    await handleSavePermissions();
+
+  // Handle state selection
+  const handleStateClick = (stateName: string) => {
+    console.log("handleStateClick called with state:", stateName);
+    const state = states.find(s => s.name === stateName);
+    
+    if (state) {
+      setSelectedState(state);
+      const stateProducts = getStateProducts(state.id);
+      setSelectedProducts(stateProducts.map(p => p.id));
+      setHasChanges(false);
+      setIsDialogOpen(true);
+      return { success: true, stateId: state.id };
+    }
+    
+    return { success: false };
   };
 
+  // Handle edit state
+  const handleEditState = (state: { id: number; name: string }) => {
+    console.log("handleEditState called with state:", state.name);
+    setSelectedState(state);
+    const stateProducts = getStateProducts(state.id);
+    setSelectedProducts(stateProducts.map(p => p.id));
+    setHasChanges(false);
+    setIsDialogOpen(true);
+    return { success: true, stateId: state.id };
+  };
+
+  // Handle save permissions
+  const handleSavePermissions = async () => {
+    if (!selectedState) {
+      toast.error("No state selected");
+      return;
+    }
+    
+    console.log("Saving permissions for state:", selectedState.name, "Products:", selectedProducts);
+    
+    if (!hasChanges) {
+      console.log("No changes detected, skipping save");
+      toast.info("No changes to save");
+      setIsDialogOpen(false);
+      return;
+    }
+
+    setLastUpdateTime(Date.now());
+    
+    try {
+      const success = await saveStatePermissions(selectedState.id, selectedProducts);
+      
+      if (success) {
+        setHasChanges(false);
+        setIsDialogOpen(false);
+      }
+    } catch (error) {
+      console.error("Error saving permissions:", error);
+    }
+  };
+
+  // Handle manual refresh
   const handleRefreshClick = async () => {
     console.log("Manual refresh requested from header");
+    toast.loading("Refreshing data...", { id: "refresh-toast" });
+    
     try {
-      toast.loading("Refreshing data...", { id: "refresh-toast" });
-      const success = await refreshData();
+      const success = await refreshData(true);
+      
       if (success) {
         toast.success("Data refreshed successfully", { id: "refresh-toast" });
         setDataLoaded(false); // Reset to trigger onDataLoaded callback
-        
-        // Explicitly refresh Alabama's products
-        const alabama = states.find(state => state.name === 'Alabama');
-        if (alabama) {
-          console.log("Explicitly refreshing Alabama products");
-          await fetchProductsForState(alabama.id);
-        }
       } else {
         toast.error("Failed to refresh data", { id: "refresh-toast" });
       }
@@ -131,7 +160,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
       error={error}
       refreshData={() => {
         toast.loading("Refreshing data...");
-        refreshData().then(success => {
+        refreshData(true).then(success => {
           success ? toast.success("Data refreshed successfully") : toast.error("Failed to refresh data");
         });
       }}
@@ -178,8 +207,11 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
           products={products}
           brands={brands}
           selectedProducts={selectedProducts}
-          onSelectionChange={setSelectedProducts}
-          onSave={handleSaveWithTracking}
+          onSelectionChange={(selection) => {
+            setSelectedProducts(selection);
+            setHasChanges(true);
+          }}
+          onSave={handleSavePermissions}
           isSaving={isSaving}
           hasChanges={hasChanges}
           stateName={selectedState?.name}

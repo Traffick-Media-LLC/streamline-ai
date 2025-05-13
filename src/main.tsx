@@ -1,21 +1,15 @@
 
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-import './index.css';
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './lib/react-query-client'
+import App from './App'
+import './index.css'
 
-// Create a root for React to render into
-const root = document.getElementById('root');
-
-// Make sure the root element exists before rendering
-if (root) {
-  const reactRoot = createRoot(root);
-  
-  reactRoot.render(
-    <React.StrictMode>
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
       <App />
-    </React.StrictMode>
-  );
-} else {
-  console.error('Root element not found, cannot mount React application');
-}
+    </QueryClientProvider>
+  </React.StrictMode>,
+)
