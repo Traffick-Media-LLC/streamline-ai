@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -267,38 +266,6 @@ export const useOrgChartImage = () => {
 
       console.log("Starting upload with authenticated user:", user?.id);
 
-      // Check bucket existence first and log the result
-      try {
-        const { data: bucketData, error: bucketError } = await supabase.storage.getBucket('org_chart');
-        
-        await logEvent({
-          requestId: uploadRequestId,
-          userId: user?.id,
-          eventType: 'bucket_check',
-          component: 'useOrgChartImage',
-          message: bucketError ? 'Bucket check failed' : 'Bucket check successful',
-          metadata: { 
-            bucketExists: !!bucketData,
-            bucketError: bucketError?.message,
-            bucketData
-          },
-          severity: bucketError ? 'warning' : 'info'
-        });
-        
-        if (bucketError) {
-          console.error("Error checking storage bucket:", bucketError);
-        }
-      } catch (error) {
-        await logError(
-          uploadRequestId,
-          'useOrgChartImage',
-          'Error checking storage bucket',
-          error,
-          { userId: user?.id },
-          'warning'
-        );
-      }
-
       // Verify access permissions
       try {
         // Test write permission with a small test file
@@ -328,6 +295,8 @@ export const useOrgChartImage = () => {
             'error',
             'auth'
           );
+          toast.error("Session verification failed. Please try logging out and back in.");
+          throw new Error("Session verification failed");
         } else {
           await logEvent({
             requestId: uploadRequestId,
@@ -387,6 +356,9 @@ export const useOrgChartImage = () => {
               category: 'auth'
             });
           }
+          
+          toast.error("Storage permission test failed. You may not have permission to upload files.");
+          throw new Error(`Storage permission test failed: ${testUploadError.message}`);
         } else {
           await logEvent({
             requestId: uploadRequestId,
@@ -412,6 +384,7 @@ export const useOrgChartImage = () => {
           { userId: user.id },
           'error'
         );
+        throw error;
       }
 
       // Upload the actual file to storage
@@ -450,34 +423,6 @@ export const useOrgChartImage = () => {
             severity: 'error',
             category: 'auth'
           });
-          
-          // Try to diagnose RLS issues by checking policies
-          try {
-            // This will only work if the user has permissions to the storage schema
-            const { data: policies, error: policiesError } = await supabase.rpc('is_admin');
-            
-            await logEvent({
-              requestId: uploadRequestId,
-              userId: user?.id,
-              eventType: 'admin_check_during_error',
-              component: 'useOrgChartImage',
-              message: 'Checked admin status during error',
-              metadata: { 
-                adminCheckResult: policies,
-                adminCheckError: policiesError?.message
-              },
-              severity: 'info'
-            });
-          } catch (error) {
-            await logError(
-              uploadRequestId,
-              'useOrgChartImage',
-              'Error checking policies during upload failure',
-              error,
-              { userId: user?.id },
-              'warning'
-            );
-          }
           
           toast.error("Upload failed due to permission issues. Please check your login status.");
         } else {
