@@ -14,9 +14,30 @@ export const queryClient = new QueryClient({
 
 // Utility function to invalidate product-related queries
 export const invalidateProductQueries = () => {
+  console.log("Invalidating all product-related queries");
+  
+  // First remove queries to force a complete refresh
+  queryClient.removeQueries({ queryKey: ['stateProducts'] });
+  queryClient.removeQueries({ queryKey: ['products'] });
+  queryClient.removeQueries({ queryKey: ['brands'] });
+  
+  // Then refetch them
   return Promise.all([
-    queryClient.invalidateQueries({ queryKey: ['products'] }),
-    queryClient.invalidateQueries({ queryKey: ['stateProducts'] }),
-    queryClient.invalidateQueries({ queryKey: ['brands'] })
+    queryClient.refetchQueries({ queryKey: ['products'], type: 'all' }),
+    queryClient.refetchQueries({ queryKey: ['stateProducts'], type: 'all' }),
+    queryClient.refetchQueries({ queryKey: ['brands'], type: 'all' })
   ]);
+};
+
+// Utility function for force reset all cache
+export const resetAllProductQueries = async () => {
+  console.log("Resetting all product-related query cache");
+  queryClient.removeQueries({ queryKey: ['stateProducts'] });
+  queryClient.removeQueries({ queryKey: ['products'] });
+  queryClient.removeQueries({ queryKey: ['brands'] });
+  
+  // Add a small delay to ensure cache is cleared
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  return true;
 };

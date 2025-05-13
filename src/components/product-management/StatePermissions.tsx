@@ -26,9 +26,11 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     loading,
     error,
     refreshData,
+    clearCache,
     hasInitialized,
     refreshCounter,
     saveStatePermissions,
+    fetchProductsForState,
     isSaving,
   } = useStatePermissionsDataQuery();
 
@@ -48,38 +50,53 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
   const [debugLogs] = useState<LogEntry[]>([]); // Properly typed as LogEntry[] instead of string[]
 
-  // Notify parent when data finishes loading
+  // Force refresh after data load
   useEffect(() => {
     if (!loading && hasInitialized && !dataLoaded) {
-      setDataLoaded(true);
-      const timeout = setTimeout(() => {
+      console.log("Initial data load complete, performing refresh");
+      
+      // Delay the refresh slightly to allow UI to render
+      const timeout = setTimeout(async () => {
+        await refreshData(true);
+        setDataLoaded(true);
         console.log("Calling onDataLoaded callback");
         onDataLoaded?.();
-      }, 400); // Slight delay for smoother UX
+      }, 400);
 
       return () => clearTimeout(timeout);
     }
-  }, [loading, hasInitialized, onDataLoaded, dataLoaded]);
+  }, [loading, hasInitialized, onDataLoaded, dataLoaded, refreshData]);
 
-  // Only refresh after dialog close if there was a save action
+  // Refresh after dialog close if there was a save action
   useEffect(() => {
     if (!isDialogOpen && lastUpdateTime) {
       console.log("Dialog closed after update, refreshing data");
       setLastUpdateTime(null);
       
-      const refreshTimer = setTimeout(() => {
-        refreshData(true).then(success => {
-          if (success) {
-            console.log("Data refreshed after dialog close and save");
-          } else {
-            console.error("Failed to refresh data after dialog close and save");
+      const refreshTimer = setTimeout(async () => {
+        // First clear cache
+        if (clearCache) {
+          await clearCache();
+        }
+        
+        // Then force refresh
+        const success = await refreshData(true);
+        if (success) {
+          console.log("Data refreshed after dialog close and save");
+          
+          // Specifically fetch the products for the state that was just updated
+          if (selectedState) {
+            console.log(`Specifically refreshing data for ${selectedState.name}`);
+            await fetchProductsForState(selectedState.id);
           }
-        });
+        } else {
+          console.error("Failed to refresh data after dialog close and save");
+        }
       }, 300);
       
       return () => clearTimeout(refreshTimer);
     }
-  }, [isDialogOpen, lastUpdateTime, refreshData]);
+  }, [isDialogOpen, lastUpdateTime, refreshData, clearCache, selectedState, fetchProductsForState]);
 
   // Handle state selection
   const handleStateClick = (stateName: string) => {
@@ -88,8 +105,13 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     
     if (state) {
       setSelectedState(state);
-      const stateProducts = getStateProducts(state.id);
-      setSelectedProducts(stateProducts.map(p => p.id));
+      
+      // Directly fetch the products for this state to ensure fresh data
+      fetchProductsForState(state.id).then(stateProducts => {
+        console.log(`Got ${stateProducts.length} products for ${stateName}`);
+        setSelectedProducts(stateProducts.map(p => p.id));
+      });
+      
       setHasChanges(false);
       setIsDialogOpen(true);
       return { success: true, stateId: state.id };
@@ -102,14 +124,19 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
   const handleEditState = (state: { id: number; name: string }) => {
     console.log("handleEditState called with state:", state.name);
     setSelectedState(state);
-    const stateProducts = getStateProducts(state.id);
-    setSelectedProducts(stateProducts.map(p => p.id));
+    
+    // Directly fetch the products for this state to ensure fresh data
+    fetchProductsForState(state.id).then(stateProducts => {
+      console.log(`Got ${stateProducts.length} products for ${state.name}`);
+      setSelectedProducts(stateProducts.map(p => p.id));
+    });
+    
     setHasChanges(false);
     setIsDialogOpen(true);
     return { success: true, stateId: state.id };
   };
 
-  // Handle save permissions
+  // Handle save permissions with robust refresh
   const handleSavePermissions = async () => {
     if (!selectedState) {
       toast.error("No state selected");
@@ -128,11 +155,21 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     setLastUpdateTime(Date.now());
     
     try {
+      // First clear the cache
+      if (clearCache) {
+        await clearCache();
+      }
+      
+      // Then save the permissions
       const success = await saveStatePermissions(selectedState.id, selectedProducts);
       
       if (success) {
         setHasChanges(false);
+        
+        // Close dialog and refresh will be triggered by the effect
         setIsDialogOpen(false);
+      } else {
+        toast.error("Failed to save permissions");
       }
     } catch (error) {
       console.error("Error saving permissions:", error);
@@ -145,6 +182,12 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     toast.loading("Refreshing data...", { id: "refresh-toast" });
     
     try {
+      // Clear cache first
+      if (clearCache) {
+        await clearCache();
+      }
+      
+      // Then force refresh
       const success = await refreshData(true);
       
       if (success) {

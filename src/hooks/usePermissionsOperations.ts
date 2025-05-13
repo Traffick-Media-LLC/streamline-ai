@@ -3,6 +3,8 @@ import { useCallback } from 'react';
 import { State } from '@/types/statePermissions';
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { invalidateProductQueries } from "@/lib/react-query-client";
+import { useQueryClient } from '@tanstack/react-query';
 
 interface UsePermissionsOperationsProps {
   saveStatePermissions: (stateId: number, productIds: number[]) => Promise<boolean>;
@@ -12,6 +14,7 @@ interface UsePermissionsOperationsProps {
   setIsDialogOpen: (open: boolean) => void;
   setHasChanges: (hasChanges: boolean) => void;
   hasChanges: boolean;
+  clearCache?: () => Promise<boolean>;
 }
 
 export const usePermissionsOperations = ({
@@ -21,8 +24,10 @@ export const usePermissionsOperations = ({
   selectedProducts,
   setIsDialogOpen,
   setHasChanges,
-  hasChanges
+  hasChanges,
+  clearCache
 }: UsePermissionsOperationsProps) => {
+  const queryClient = useQueryClient();
 
   // Enhanced cache invalidation function with multiple approaches
   const forceInvalidateCache = useCallback(async () => {
@@ -30,27 +35,25 @@ export const usePermissionsOperations = ({
       // Use timestamp to ensure cache bypass
       const timestamp = Date.now();
       console.log("Starting aggressive cache invalidation at:", new Date(timestamp).toISOString());
+
+      // First use any provided clearCache function
+      if (clearCache) {
+        await clearCache();
+      }
       
-      // Approach 1: Use count query with timestamp parameter
+      // Then use the global utility function
+      await invalidateProductQueries();
+      
+      // Approach 1: Use count query with timestamp parameter to force a fresh fetch
       const countQuery = await supabase
         .from('state_allowed_products')
         .select('*', { count: 'exact', head: true })
         .eq('id', -999) // Non-existent ID to make the query lightweight
         .limit(1);
       
-      // Approach 2: Clear from multiple tables to ensure cache invalidation cascade
-      await supabase.from('states')
-        .select('id', { head: true, count: 'exact' })
-        .limit(1)
-        .eq('id', -1);
-      
-      // Approach 3: Using is_admin() function instead of a non-existent function
-      try {
-        await supabase.rpc('is_admin').maybeSingle();
-      } catch (e) {
-        // Expected error in some cases, but helps clear cache
-        console.log("Cache invalidation call completed");
-      }
+      // Approach 2: Clear and reset query cache for the specific keys
+      queryClient.resetQueries({ queryKey: ['stateProducts'] });
+      queryClient.resetQueries({ queryKey: ['products'] });
       
       console.log("Cache invalidation complete with multiple approaches");
       return true;
@@ -58,7 +61,7 @@ export const usePermissionsOperations = ({
       console.warn("Cache invalidation failed:", error);
       return false;
     }
-  }, []);
+  }, [clearCache, queryClient]);
 
   const handleSavePermissions = useCallback(async () => {
     if (!selectedState) {
@@ -87,8 +90,8 @@ export const usePermissionsOperations = ({
     toast.loading("Saving state permissions...", { id: saveToastId });
 
     try {
-      // Record timestamp before save to ensure we don't refresh with stale data
-      const saveStartTime = Date.now();
+      // First try to forcibly invalidate any caching
+      await forceInvalidateCache();
       
       const success = await saveStatePermissions(stateId, selectedProducts);
       
@@ -99,45 +102,37 @@ export const usePermissionsOperations = ({
         setHasChanges(false);
         
         // First update the toast to show success
-        toast.dismiss(saveToastId);
-        toast.success("State permissions saved successfully");
-        
-        // Start a more targeted refresh sequence
-        console.log("Starting enhanced multi-phase refresh sequence");
-        
-        // First try to forcibly invalidate any caching
-        await forceInvalidateCache();
-        
-        // Phase 1: Short delay to allow database to settle
-        await new Promise(resolve => setTimeout(resolve, 300));
+        toast.success("State permissions saved successfully", { id: saveToastId });
         
         // Close dialog before performing the refresh
         setIsDialogOpen(false);
         
-        // Phase 2: First refresh attempt with force flag
-        console.log("Executing forced refresh after save");
-        let refreshSuccess = await performRobustRefresh(true);
+        // Short delay to allow UI updates
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Do another cache invalidation
+        await forceInvalidateCache();
+        
+        // Now force refresh all data
+        const refreshSuccess = await performRobustRefresh(true);
         
         if (!refreshSuccess) {
-          console.log("First refresh failed, trying again with longer delay");
+          console.log("Refresh after save wasn't successful, trying again...");
+          // Wait a bit longer before retrying
           await new Promise(resolve => setTimeout(resolve, 800));
           
-          // Try cache invalidation again
+          // Final attempt
           await forceInvalidateCache();
-          
-          // Second attempt with longer wait and force flag
-          refreshSuccess = await performRobustRefresh(true);
+          await performRobustRefresh(true);
         }
         
       } else {
         console.error("Save failed");
-        toast.dismiss(saveToastId);
-        toast.error("Failed to save permissions");
+        toast.error("Failed to save permissions", { id: saveToastId });
       }
     } catch (error: any) {
       console.error("Exception during save:", error);
-      toast.dismiss(saveToastId);
-      toast.error(`Error saving permissions: ${error.message}`);
+      toast.error(`Error saving permissions: ${error.message}`, { id: saveToastId });
     }
   }, [
     selectedState, 

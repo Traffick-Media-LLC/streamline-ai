@@ -108,43 +108,91 @@ export const useStatePermissionsDataQuery = () => {
     }
   });
 
-  // Function to fetch products for a specific state
+  // Function to fetch products for a specific state - using direct query like the map does
   const fetchProductsForState = async (stateId: number) => {
     try {
       console.log(`Directly fetching products for state ID: ${stateId}`);
       
       const { data, error } = await supabase
         .from('state_allowed_products')
-        .select('*')
+        .select(`
+          product_id,
+          state_id,
+          products (
+            id,
+            name,
+            brand_id,
+            brands (
+              id, 
+              name,
+              logo_url
+            )
+          )
+        `)
         .eq('state_id', stateId);
         
       if (error) throw error;
       
       console.log(`Direct state ${stateId} products query returned:`, data?.length || 0, "items");
+      console.log("Sample data:", data && data.length > 0 ? data[0] : "No data");
       
-      // Normalize state products data
+      // Transform into the format expected by the application
       return data?.map(item => ({
-        ...item,
-        state_id: typeof item.state_id === 'string' ? parseInt(item.state_id, 10) : item.state_id,
-        product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
+        id: item.product_id,
+        state_id: item.state_id,
+        name: item.products?.name || 'Unknown Product',
+        brand_id: item.products?.brand_id || 0,
+        brand: item.products?.brands || null
       })) || [];
     } catch (error) {
       console.error(`Error fetching products for state ${stateId}:`, error);
-      return null;
+      return [];
     }
   };
 
-  // Force refresh all data
+  // Force refresh all data with an aggressive approach
   const refreshData = async (force = false) => {
     if (force) {
-      // Force immediate refetch of both queries
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: ['states'], type: 'active' }),
-        queryClient.refetchQueries({ queryKey: ['stateProducts'], type: 'active' })
-      ]);
+      console.log("Forcing refresh of state products data");
       
-      return true;
+      // Clear all cache first
+      queryClient.removeQueries({ queryKey: ['stateProducts'] });
+      
+      // Wait a moment for cache clearing
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      try {
+        // Force immediate refetch with network-only policy
+        await Promise.all([
+          queryClient.refetchQueries({ 
+            queryKey: ['states'], 
+            type: 'all', 
+            fetchPolicy: 'network-only' 
+          }),
+          queryClient.refetchQueries({ 
+            queryKey: ['stateProducts'], 
+            type: 'all', 
+            fetchPolicy: 'network-only' 
+          })
+        ]);
+        
+        console.log("State products data successfully refreshed");
+        return true;
+      } catch (error) {
+        console.error("Failed to refresh state products data:", error);
+        return false;
+      }
     }
+    return true;
+  };
+
+  // Function to clear cache more aggressively
+  const clearCache = async () => {
+    console.log("Aggressively clearing state products cache");
+    queryClient.removeQueries({ queryKey: ['stateProducts'] });
+    queryClient.removeQueries({ queryKey: ['states'] });
+    // Add a small delay to ensure cache is cleared before any new queries
+    await new Promise(resolve => setTimeout(resolve, 200));
     return true;
   };
 
@@ -156,6 +204,7 @@ export const useStatePermissionsDataQuery = () => {
       String(statesQuery.error) : 
       stateProductsQuery.error ? String(stateProductsQuery.error) : null,
     refreshData,
+    clearCache,
     hasInitialized: statesQuery.isFetched && stateProductsQuery.isFetched,
     refreshCounter: statesQuery.dataUpdatedAt + stateProductsQuery.dataUpdatedAt, // Used as a trigger for components
     saveStatePermissions: (stateId: number, productIds: number[]) => 
