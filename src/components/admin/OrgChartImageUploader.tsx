@@ -1,25 +1,104 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/sonner";
-import { Upload, Trash2, Image, RefreshCw, Lock, FileText } from "lucide-react";
+import { Upload, Trash2, Image, RefreshCw, Lock, FileText, Info, AlertCircle } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { useAuth } from "@/contexts/AuthContext";
+import { logEvent, generateRequestId } from "@/utils/logging";
 
 const OrgChartImageUploader: React.FC = () => {
   const { imageSettings, isLoading, error, uploadImage, removeImage, isUploading, isRemoving } = useOrgChartImage();
   const { isAdmin, isAuthenticated, user, session } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sessionDebugInfo, setSessionDebugInfo] = useState<string | null>(null);
+  const componentRequestId = generateRequestId();
+
+  // Log component mount with auth state
+  useEffect(() => {
+    const logInitialState = async () => {
+      await logEvent({
+        requestId: componentRequestId,
+        userId: user?.id,
+        eventType: 'uploader_mounted',
+        component: 'OrgChartImageUploader',
+        message: 'Org chart uploader component mounted',
+        metadata: {
+          isAuthenticated,
+          isAdmin,
+          hasUser: !!user,
+          hasSession: !!session,
+          userDetails: user ? {
+            id: user.id,
+            email: user.email,
+            metadata: user.user_metadata
+          } : null,
+          sessionDetails: session ? {
+            expiresAt: new Date(session.expires_at * 1000).toISOString(),
+            provider: session.provider
+          } : null
+        },
+        severity: 'info'
+      });
+
+      // Generate debug info for troubleshooting
+      const authDebugInfo = [
+        `Authenticated: ${isAuthenticated}`,
+        `Admin: ${isAdmin}`,
+        `User ID: ${user?.id || 'none'}`,
+        `Session Valid: ${!!session}`,
+        session ? `Session Expires: ${new Date(session.expires_at * 1000).toLocaleString()}` : '',
+        session ? `Auth Provider: ${session.provider}` : ''
+      ].filter(Boolean).join('\n');
+
+      setSessionDebugInfo(authDebugInfo);
+
+      // Validate storage permissions directly
+      if (user && session) {
+        try {
+          const { data: bucketInfo, error: bucketError } = await supabase.storage.getBucket('org_chart');
+          
+          if (bucketError) {
+            console.error("Error getting bucket info:", bucketError);
+            
+            await logEvent({
+              requestId: componentRequestId,
+              userId: user?.id,
+              eventType: 'bucket_access_check',
+              component: 'OrgChartImageUploader',
+              message: 'Error checking bucket access',
+              metadata: { error: bucketError.message, code: bucketError.code },
+              severity: 'warning'
+            });
+          } else {
+            await logEvent({
+              requestId: componentRequestId,
+              userId: user?.id,
+              eventType: 'bucket_access_success',
+              component: 'OrgChartImageUploader',
+              message: 'Successfully verified bucket access',
+              metadata: { bucketInfo },
+              severity: 'info'
+            });
+          }
+        } catch (error) {
+          console.error("Unexpected error checking bucket:", error);
+        }
+      }
+    };
+
+    logInitialState();
+  }, [isAdmin, isAuthenticated, user, session, componentRequestId]);
 
   // Check authentication status
   const isUserAuthenticated = !!session && isAuthenticated;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) {
       setSelectedFile(null);
@@ -42,10 +121,24 @@ const OrgChartImageUploader: React.FC = () => {
       return;
     }
 
+    await logEvent({
+      requestId: componentRequestId,
+      userId: user?.id,
+      eventType: 'file_selected',
+      component: 'OrgChartImageUploader',
+      message: 'File selected for upload',
+      metadata: {
+        fileType: file.type,
+        fileSize: file.size,
+        fileName: file.name
+      },
+      severity: 'info'
+    });
+
     setSelectedFile(file);
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!selectedFile) {
       toast.error("Please select a file first");
       return;
@@ -56,12 +149,32 @@ const OrgChartImageUploader: React.FC = () => {
       return;
     }
 
-    uploadImage(selectedFile);
-    setSelectedFile(null);
-    
-    // Reset the file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    await logEvent({
+      requestId: componentRequestId,
+      userId: user?.id,
+      eventType: 'upload_initiated',
+      component: 'OrgChartImageUploader',
+      message: 'User initiated upload',
+      metadata: {
+        fileType: selectedFile.type,
+        fileSize: selectedFile.size,
+        fileName: selectedFile.name,
+        isAdmin,
+        isAuthenticated
+      },
+      severity: 'info'
+    });
+
+    try {
+      uploadImage(selectedFile);
+      setSelectedFile(null);
+      
+      // Reset the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error("Error initiating upload:", error);
     }
   };
 
@@ -127,6 +240,17 @@ const OrgChartImageUploader: React.FC = () => {
           </AlertDescription>
         </Alert>
       )}
+      
+      {/* Debug info section */}
+      <Alert variant="default" className="bg-blue-50 border-blue-200">
+        <Info className="h-4 w-4 text-blue-600" />
+        <AlertTitle className="text-blue-600">Authentication Diagnostics</AlertTitle>
+        <AlertDescription>
+          <div className="font-mono text-xs text-blue-700 whitespace-pre-wrap mt-2 p-2 bg-blue-50 rounded border border-blue-100">
+            {sessionDebugInfo || "Loading session information..."}
+          </div>
+        </AlertDescription>
+      </Alert>
 
       {/* File upload section */}
       <Card>
@@ -226,6 +350,21 @@ const OrgChartImageUploader: React.FC = () => {
                 </div>
               )}
             </div>
+            
+            {/* Technical info for admins */}
+            <Alert variant="outline" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Technical Information</AlertTitle>
+              <AlertDescription className="text-xs">
+                <div className="space-y-1 mt-2">
+                  <p>User ID: {user?.id || 'Not authenticated'}</p>
+                  <p>Admin Status: {isAdmin ? 'Confirmed' : 'Not Admin'}</p>
+                  <p>Session Valid: {isUserAuthenticated ? 'Yes' : 'No'}</p>
+                  <p>Component Request ID: {componentRequestId}</p>
+                  <p>Check console logs for detailed error information</p>
+                </div>
+              </AlertDescription>
+            </Alert>
           </div>
         </CardContent>
       </Card>

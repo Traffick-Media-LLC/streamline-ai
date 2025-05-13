@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Users, BookText, BarChart, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
