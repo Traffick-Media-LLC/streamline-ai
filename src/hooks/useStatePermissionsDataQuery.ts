@@ -166,13 +166,11 @@ export const useStatePermissionsDataQuery = () => {
         await Promise.all([
           queryClient.refetchQueries({ 
             queryKey: ['states'], 
-            type: 'all', 
-            fetchPolicy: 'network-only' 
+            type: 'all' 
           }),
           queryClient.refetchQueries({ 
             queryKey: ['stateProducts'], 
-            type: 'all', 
-            fetchPolicy: 'network-only' 
+            type: 'all' 
           })
         ]);
         
