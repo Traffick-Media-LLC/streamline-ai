@@ -121,9 +121,6 @@ const MapPage = () => {
         <div className={`transition-all duration-300 ease-in-out ${
           selectedState && !isMobile ? 'w-1/2 sticky top-24' : 'w-full'
         }`}>
-          <p className="text-center mb-4 text-muted-foreground">
-            Click on a state to view its allowed products
-          </p>
           <USAMap 
             onStateClick={handleStateClick} 
             isStateSelected={!!selectedState}
