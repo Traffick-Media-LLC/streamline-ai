@@ -74,8 +74,10 @@ const MapPage = () => {
     queryFn: () => selectedState ? fetchStateProducts(selectedState.name) : null,
     enabled: !!selectedState,
     staleTime: 1000 * 30, // 30 seconds - more responsive for user interaction
-    onError: () => {
-      toast.error(`Error loading data for ${selectedState?.name}`);
+    meta: {
+      onError: () => {
+        toast.error(`Error loading data for ${selectedState?.name}`);
+      }
     }
   });
   

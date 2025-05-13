@@ -13,6 +13,12 @@ import { StatePermissionsAuthCheck } from "./StatePermissionsAuthCheck";
 import { toast } from "@/components/ui/sonner";
 import ErrorBoundary from '@/components/ErrorBoundary';
 
+interface LogEntry {
+  level: string;
+  message: string;
+  data?: any;
+}
+
 const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => {
   const {
     states,
@@ -40,7 +46,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
   const [hasChanges, setHasChanges] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<number | null>(null);
-  const [debugLogs] = useState<string[]>([]); // Simplified for refactor
+  const [debugLogs] = useState<LogEntry[]>([]); // Properly typed as LogEntry[] instead of string[]
 
   // Notify parent when data finishes loading
   useEffect(() => {

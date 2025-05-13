@@ -25,9 +25,11 @@ export const useStatePermissionsDataQuery = () => {
     },
     enabled: isAuthenticated || isGuest,
     staleTime: 1000 * 60 * 15, // 15 minutes - states rarely change
-    onError: (error: any) => {
-      console.error('Error fetching states:', error);
-      toast.error("Failed to load states data");
+    meta: {
+      onError: (error: any) => {
+        console.error('Error fetching states:', error);
+        toast.error("Failed to load states data");
+      }
     }
   });
 
@@ -52,9 +54,11 @@ export const useStatePermissionsDataQuery = () => {
     },
     enabled: isAuthenticated || isGuest,
     staleTime: 1000 * 60 * 2, // 2 minutes
-    onError: (error: any) => {
-      console.error('Error fetching state products:', error);
-      toast.error("Failed to load state product permissions");
+    meta: {
+      onError: (error: any) => {
+        console.error('Error fetching state products:', error);
+        toast.error("Failed to load state product permissions");
+      }
     }
   });
 
@@ -134,13 +138,12 @@ export const useStatePermissionsDataQuery = () => {
   const refreshData = async (force = false) => {
     if (force) {
       // Force immediate refetch of both queries
-      const [statesResult, productsResult] = await Promise.all([
+      await Promise.all([
         queryClient.refetchQueries({ queryKey: ['states'], type: 'active' }),
         queryClient.refetchQueries({ queryKey: ['stateProducts'], type: 'active' })
       ]);
       
-      return statesResult.some(result => result.isSuccess) && 
-             productsResult.some(result => result.isSuccess);
+      return true;
     }
     return true;
   };

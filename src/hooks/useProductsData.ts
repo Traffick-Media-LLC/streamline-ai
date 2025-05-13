@@ -57,9 +57,11 @@ export const useProductsData = () => {
     queryFn: fetchProducts,
     enabled: isAuthenticated && isAdmin,
     staleTime: 1000 * 60 * 2, // 2 minutes
-    onError: (error: any) => {
-      console.error('Error fetching products:', error);
-      toast.error("Failed to load products");
+    meta: {
+      onError: (error: any) => {
+        console.error('Error fetching products:', error);
+        toast.error("Failed to load products");
+      }
     }
   });
 
@@ -69,9 +71,11 @@ export const useProductsData = () => {
     queryFn: fetchBrands,
     enabled: isAuthenticated && isAdmin,
     staleTime: 1000 * 60 * 5, // 5 minutes
-    onError: (error: any) => {
-      console.error('Error fetching brands:', error);
-      toast.error("Failed to load brands");
+    meta: {
+      onError: (error: any) => {
+        console.error('Error fetching brands:', error);
+        toast.error("Failed to load brands");
+      }
     }
   });
 
