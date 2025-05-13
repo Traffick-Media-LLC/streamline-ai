@@ -34,8 +34,13 @@ const USAMap: React.FC<USAMapProps> = ({
                 const stateName = geo.properties.name;
                 const stateAbbr = stateAbbreviations[stateName] || '';
                 const isCurrentStateSelected = selectedState === stateName;
-                const centroid = geo.properties.centroid || 
-                                [parseFloat(geo.properties.longitude), parseFloat(geo.properties.latitude)];
+                
+                // Safely handle centroid data
+                const hasCentroid = geo.centroid || 
+                     (geo.properties.centroid && 
+                      Array.isArray(geo.properties.centroid) && 
+                      geo.properties.centroid.length >= 2);
+                      
                 const isSmallState = smallStates.includes(stateName);
                 
                 return (
@@ -57,7 +62,7 @@ const USAMap: React.FC<USAMapProps> = ({
                             pressed: { outline: "none", cursor: "pointer" }
                           }}
                         />
-                        {stateAbbr && !isSmallState && (
+                        {stateAbbr && !isSmallState && geo.centroid && Array.isArray(geo.centroid) && geo.centroid.length >= 2 && (
                           <g>
                             <text
                               x={geo.centroid[0]}
@@ -93,10 +98,15 @@ const USAMap: React.FC<USAMapProps> = ({
           <Geographies geography={geoUrl}>
             {({ geographies }) =>
               geographies
-                .filter(geo => smallStates.includes(geo.properties.name))
+                .filter(geo => smallStates.includes(geo.properties.name) && geo.centroid && Array.isArray(geo.centroid) && geo.centroid.length >= 2)
                 .map(geo => {
                   const stateName = geo.properties.name;
                   const stateAbbr = stateAbbreviations[stateName] || '';
+                  
+                  // Only proceed if we have valid centroid coordinates
+                  if (!geo.centroid || !Array.isArray(geo.centroid) || geo.centroid.length < 2) {
+                    return null;
+                  }
                   
                   return (
                     <Annotation
