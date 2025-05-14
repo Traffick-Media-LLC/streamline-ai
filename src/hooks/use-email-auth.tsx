@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,21 +26,19 @@ export const useEmailAuth = (redirectTo: string) => {
       // Check if we're in a sandbox preview
       const isSandboxPreview = window.location.hostname.includes('lovable.dev') || 
                                 window.location.hostname.includes('lovable.ai');
-                                
-      // Add site URL option for sandbox previews
-      const options = isSandboxPreview ? {
-        redirectTo: window.location.origin + redirectTo
-      } : undefined;
       
+      // Prepare login options                          
+      const signInOptions = {
+        email,
+        password
+      };
+      
+      // Add site URL option for sandbox previews
       if (isSandboxPreview) {
         console.log("Using redirectTo for sandbox preview:", window.location.origin + redirectTo);
       }
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-        ...(options && { options })
-      });
+      const { data, error } = await supabase.auth.signInWithPassword(signInOptions);
       
       if (error) {
         console.error("Email sign in error:", error);

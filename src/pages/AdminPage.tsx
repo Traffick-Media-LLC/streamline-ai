@@ -50,16 +50,16 @@ const AdminPage: React.FC = () => {
     <>
       {showPermissionDiagnostics && (
         <div className="container mx-auto px-4 py-4">
-          <Alert className={`mb-4 ${!isAdmin || !permissionCheckResult?.isAdmin ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
+          <Alert className={`mb-4 ${!isAdmin || !(permissionCheckResult?.isAdmin) ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
             <div className="flex items-center gap-2">
               {isChecking ? (
                 <div className="h-5 w-5 rounded-full border-2 border-t-transparent border-blue-500 animate-spin"></div>
-              ) : !isAdmin || !permissionCheckResult?.isAdmin ? (
+              ) : !isAdmin || !(permissionCheckResult?.isAdmin) ? (
                 <AlertCircle className="h-5 w-5 text-yellow-600" />
               ) : (
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
               )}
-              <AlertTitle className={!isAdmin || !permissionCheckResult?.isAdmin ? "text-yellow-700" : "text-green-700"}>
+              <AlertTitle className={!isAdmin || !(permissionCheckResult?.isAdmin) ? "text-yellow-700" : "text-green-700"}>
                 Admin Permission Diagnostics
               </AlertTitle>
             </div>
@@ -75,7 +75,7 @@ const AdminPage: React.FC = () => {
                 )}
                 {permissionCheckResult?.error && (
                   <p className="text-red-500">
-                    Error: {permissionCheckResult.error.message || JSON.stringify(permissionCheckResult.error)}
+                    Error: {permissionCheckResult.error}
                   </p>
                 )}
               </div>
