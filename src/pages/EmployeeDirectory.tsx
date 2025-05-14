@@ -1,14 +1,13 @@
 
 import React, { useEffect } from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
-import { supabase } from '@/integrations/supabase/client';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import OrgChartViewer from '@/components/OrgChartViewer';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { logError, logEvent, generateRequestId } from '@/utils/logging';
 import { useAuth } from '@/contexts/AuthContext';
 import { ensureBucketAccess } from '@/utils/storage/ensureBucketAccess';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const EmployeeDirectory: React.FC = () => {
@@ -73,51 +72,60 @@ const EmployeeDirectory: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">Employee Directory</h1>
 
-      <Card>
+      {/* Employee Table */}
+      <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Directory</CardTitle>
+          <CardTitle>Employee Directory</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="list" className="w-full">
-            <TabsList>
-              <TabsTrigger value="list">Employee List</TabsTrigger>
-              <TabsTrigger value="chart">Organization Chart</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="list" className="pt-4">
-              {isLoading ? (
-                <div className="h-[400px] flex items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                </div>
-              ) : (
-                <div className="space-y-4">
+          {isLoading ? (
+            <div className="h-[200px] flex items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {employees && employees.length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {employees.map((employee) => (
-                        <Card key={employee.id}>
-                          <CardContent className="p-4">
-                            <div className="font-medium">{employee.first_name} {employee.last_name}</div>
-                            <div className="text-sm text-muted-foreground">{employee.title}</div>
-                            <div className="text-sm text-muted-foreground">{employee.department}</div>
-                            <div className="text-sm">{employee.email}</div>
-                            {employee.phone && <div className="text-sm">{employee.phone}</div>}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                    employees.map((employee) => (
+                      <TableRow key={employee.id}>
+                        <TableCell className="font-medium">{employee.first_name} {employee.last_name}</TableCell>
+                        <TableCell>{employee.title}</TableCell>
+                        <TableCell>{employee.department}</TableCell>
+                        <TableCell>{employee.email}</TableCell>
+                        <TableCell>{employee.phone || '-'}</TableCell>
+                      </TableRow>
+                    ))
                   ) : (
-                    <div className="text-center p-8 text-muted-foreground">
-                      No employees found
-                    </div>
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                        No employees found
+                      </TableCell>
+                    </TableRow>
                   )}
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="chart" className="pt-4">
-              <OrgChartViewer employees={employees} />
-            </TabsContent>
-          </Tabs>
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Organization Chart Viewer (separate) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Organization Chart</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <OrgChartViewer />
         </CardContent>
       </Card>
     </div>
