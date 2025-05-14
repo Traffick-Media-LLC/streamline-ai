@@ -1,5 +1,6 @@
 
 import { useChatContext } from "../contexts/ChatContext";
+import { Message } from "../types/chat"; // Add this import
 import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
