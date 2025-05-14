@@ -1,7 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { logEvent, logError, generateRequestId } from "@/utils/logging";
-import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 export interface PermissionCheckResult {
   success: boolean;
@@ -31,6 +31,44 @@ export async function checkAdminPermissions(userId: string | undefined): Promise
       metadata: {},
       severity: 'info'
     });
+    
+    // First verify session is valid
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      await logError(
+        requestId,
+        'checkAdminPermissions',
+        'Error checking session',
+        sessionError,
+        { userId },
+        'warning'
+      );
+      
+      return {
+        success: false,
+        isAdmin: false,
+        error: sessionError,
+        details: { reason: 'Invalid session' }
+      };
+    }
+    
+    if (!session) {
+      await logEvent({
+        requestId,
+        userId,
+        eventType: 'admin_check_no_session',
+        component: 'checkAdminPermissions',
+        message: 'No active session found',
+        severity: 'warning'
+      });
+      
+      return {
+        success: false,
+        isAdmin: false,
+        details: { reason: 'No active session' }
+      };
+    }
     
     // Check is_admin function
     const { data: isAdminResult, error: adminCheckError } = await supabase.rpc('is_admin');
