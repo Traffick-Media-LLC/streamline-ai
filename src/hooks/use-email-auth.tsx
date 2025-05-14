@@ -1,0 +1,94 @@
+
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+export const useEmailAuth = (redirectTo: string) => {
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    console.log("Starting email sign-in process");
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) {
+        console.error("Email sign in error:", error);
+        setLoading(false);
+        return { success: false, error: error.message };
+      } 
+      
+      console.log("Email sign in successful:", data);
+      toast.success("Signed in successfully!");
+      navigate(redirectTo);
+      return { success: true };
+    } catch (error: any) {
+      console.error("Unexpected error during sign in:", error);
+      setLoading(false);
+      return { success: false, error: error.message || "An unexpected error occurred" };
+    }
+  };
+
+  const signup = async (email: string, password: string) => {
+    setLoading(true);
+    console.log("Starting email sign-up process");
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin + redirectTo
+        }
+      });
+      
+      if (error) {
+        console.error("Email sign up error:", error);
+        setLoading(false);
+        return { success: false, error: error.message };
+      } 
+      
+      console.log("Sign up successful:", data);
+      
+      // If email confirmation is enabled, show success message but don't redirect
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        toast.success("Account already exists", {
+          description: "Try logging in instead"
+        });
+        setLoading(false);
+        return { success: false, error: "Account already exists" };
+      }
+      
+      if (data.user && !data.session) {
+        toast.success("Account created! Please check your email to confirm your account.", {
+          duration: 6000
+        });
+        setLoading(false);
+        return { success: true };
+      }
+      
+      // If email confirmation is not enabled, redirect to the app
+      toast.success("Account created successfully!");
+      navigate(redirectTo);
+      return { success: true };
+    } catch (error: any) {
+      console.error("Unexpected error during sign up:", error);
+      setLoading(false);
+      return { success: false, error: error.message || "An unexpected error occurred" };
+    }
+  };
+
+  return {
+    login,
+    signup,
+    loading
+  };
+};

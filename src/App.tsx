@@ -19,6 +19,7 @@ const ChatPage = lazy(() => import("./pages/ChatPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
+const Auth2Page = lazy(() => import("./pages/Auth2Page"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const KnowledgeManager = lazy(() => import("./components/KnowledgeManager"));
 const EmployeeDirectory = lazy(() => import("./pages/EmployeeDirectory"));
@@ -60,10 +61,15 @@ const App = () => {
             <BrowserRouter>
               <div className="min-h-screen flex flex-col">
                 <Routes>
-                  {/* Auth route - Explicitly NOT protected */}
+                  {/* Auth routes - Explicitly NOT protected */}
                   <Route path="/auth" element={
                     <Suspense fallback={<PageLoader />}>
                       <AuthPage />
+                    </Suspense>
+                  } />
+                  <Route path="/auth2" element={
+                    <Suspense fallback={<PageLoader />}>
+                      <Auth2Page />
                     </Suspense>
                   } />
                   
