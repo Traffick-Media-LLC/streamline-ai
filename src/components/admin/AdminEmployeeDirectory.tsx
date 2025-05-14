@@ -1,174 +1,51 @@
 
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
+import React from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
-import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
-import { 
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
-} from "@/components/ui/table";
-import { Search, Trash2, Plus } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import OrgChart from "@/components/OrgChart";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import { toast } from "@/components/ui/sonner";
-import EmployeeFormDialog from './EmployeeFormDialog';
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import OrgChartViewer from '@/components/OrgChartViewer';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 
 const AdminEmployeeDirectory = () => {
-  const { data: employees, isLoading, error, refetch } = useEmployeesData();
-  const { deleteEmployee } = useEmployeeOperations();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [employeeToEdit, setEmployeeToEdit] = useState<any>(null);
-  const { isAdmin } = useAuth();
-
-  const filteredEmployees = employees?.filter((employee) => {
-    const searchTermLower = searchTerm.toLowerCase();
-    return (
-      employee.first_name.toLowerCase().includes(searchTermLower) ||
-      employee.last_name.toLowerCase().includes(searchTermLower) ||
-      employee.department.toLowerCase().includes(searchTermLower) ||
-      employee.email.toLowerCase().includes(searchTermLower)
-    );
-  });
-
-  const handleDeleteEmployee = async () => {
-    if (!employeeToDelete) return;
-
-    try {
-      await deleteEmployee.mutateAsync(employeeToDelete);
-      setEmployeeToDelete(null);
-      refetch();
-    } catch (error) {
-      console.error('Error deleting employee:', error);
-    }
-  };
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center text-red-500">
-            Error loading employee data. Please try again later.
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
+  const { data: employees, isLoading } = useEmployeesData();
+  const { imageSettings } = useOrgChartImage();
+  
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Employee Directory</h1>
+    <div className="space-y-6 container py-6">
       <Card>
-        <CardHeader className="pb-2">
-          <div className="flex justify-between items-center">
-            <CardTitle>Manage Employees</CardTitle>
-            {isAdmin && (
-              <Button 
-                onClick={() => setShowAddDialog(true)}
-                size="sm"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Employee
-              </Button>
-            )}
-          </div>
-          <div className="relative mt-4">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+        <CardHeader>
+          <CardTitle>Employee Directory</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="table">
-            <TabsList className="mb-4">
-              <TabsTrigger value="table">Table View</TabsTrigger>
-              <TabsTrigger value="org">Org Chart</TabsTrigger>
+          <Tabs defaultValue="list" className="w-full">
+            <TabsList>
+              <TabsTrigger value="list">Employee List</TabsTrigger>
+              <TabsTrigger value="chart">Organization Chart</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="table">
+            <TabsContent value="list" className="pt-4">
               {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
+                <div className="h-[400px] flex items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
                 </div>
               ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Department</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>Manager</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredEmployees?.map((employee) => (
-                        <TableRow key={employee.id}>
-                          <TableCell className="font-medium">
-                            {employee.first_name} {employee.last_name}
-                          </TableCell>
-                          <TableCell>{employee.department}</TableCell>
-                          <TableCell>{employee.title}</TableCell>
-                          <TableCell>{employee.email}</TableCell>
-                          <TableCell>{employee.phone || "-"}</TableCell>
-                          <TableCell>
-                            {employee.manager_id ? 
-                              (() => {
-                                const manager = employees?.find(e => e.id === employee.manager_id);
-                                return manager ? `${manager.first_name} ${manager.last_name}` : "-";
-                              })() : 
-                              "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {isAdmin && (
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setEmployeeToEdit(employee)}
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setEmployeeToDelete(employee.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
+                <div className="space-y-4">
+                  {employees && employees.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {employees.map((employee) => (
+                        <Card key={employee.id}>
+                          <CardContent className="p-4">
+                            <div className="font-medium">{employee.first_name} {employee.last_name}</div>
+                            <div className="text-sm text-muted-foreground">{employee.title}</div>
+                            <div className="text-sm text-muted-foreground">{employee.department}</div>
+                            <div className="text-sm">{employee.email}</div>
+                            {employee.phone && <div className="text-sm">{employee.phone}</div>}
+                          </CardContent>
+                        </Card>
                       ))}
-                    </TableBody>
-                  </Table>
-                  {filteredEmployees?.length === 0 && (
-                    <div className="text-center py-4 text-gray-500">
+                    </div>
+                  ) : (
+                    <div className="text-center p-8 text-muted-foreground">
                       No employees found
                     </div>
                   )}
@@ -176,68 +53,12 @@ const AdminEmployeeDirectory = () => {
               )}
             </TabsContent>
             
-            <TabsContent value="org">
-              <ErrorBoundary>
-                {isLoading ? (
-                  <div className="h-[600px] flex items-center justify-center">
-                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                  </div>
-                ) : (
-                  employees && employees.length > 0 ? (
-                    <OrgChart employees={employees} isAdmin={isAdmin} />
-                  ) : (
-                    <div className="text-center py-4 text-gray-500">
-                      No employee data available
-                    </div>
-                  )
-                )}
-              </ErrorBoundary>
+            <TabsContent value="chart" className="pt-4">
+              <OrgChartViewer employees={employees} />
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
-
-      {/* Add/Edit Employee Dialog */}
-      {(showAddDialog || employeeToEdit) && (
-        <EmployeeFormDialog
-          open={showAddDialog || !!employeeToEdit}
-          onOpenChange={(open) => {
-            if (!open) {
-              setShowAddDialog(false);
-              setEmployeeToEdit(null);
-            }
-          }}
-          employees={employees || []}
-          employeeToEdit={employeeToEdit}
-          onSuccess={() => {
-            setShowAddDialog(false);
-            setEmployeeToEdit(null);
-            refetch();
-            toast.success(employeeToEdit ? "Employee updated" : "Employee added");
-          }}
-        />
-      )}
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!employeeToDelete} onOpenChange={() => setEmployeeToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the employee
-              and remove them from the system.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setEmployeeToDelete(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteEmployee}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };

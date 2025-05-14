@@ -1,8 +1,8 @@
 
-import ChatPage from "./ChatPage";
+import HomePage from "./HomePage";
 
 const Index = () => {
-  return <ChatPage />;
+  return <HomePage />;
 };
 
 export default Index;

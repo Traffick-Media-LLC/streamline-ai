@@ -36,13 +36,11 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees = [] }) => {
     );
   }
 
-  // If no image is available but we have employees, show the interactive chart as fallback
-  if (!imageSettings?.url && employees?.length > 0) {
-    return <OrgChart employees={employees} />;
-  }
+  // Check if we have an image from storage OR if we want to use interactive mode
+  const showInteractiveChart = useInteractive || (!imageSettings?.url && employees?.length > 0);
 
   // If no image is available and no employees, show a message
-  if (!imageSettings?.url) {
+  if (!imageSettings?.url && employees.length === 0) {
     return (
       <div className="h-[200px] border rounded-md flex items-center justify-center bg-muted/30 text-muted-foreground flex-col gap-2">
         <p>No organization chart available</p>
@@ -63,12 +61,12 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees = [] }) => {
     }
   };
 
-  const isPdf = imageSettings.fileType === 'pdf';
+  const isPdf = imageSettings?.fileType === 'pdf';
 
   return (
     <div className="space-y-4">
       {/* Toggle button for interactive/static views if employees are available */}
-      {employees && employees.length > 0 && (
+      {employees && employees.length > 0 && imageSettings?.url && (
         <div className="flex justify-end">
           <Button 
             variant="outline" 
@@ -79,7 +77,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees = [] }) => {
         </div>
       )}
       
-      {useInteractive && employees && employees.length > 0 ? (
+      {showInteractiveChart ? (
         <OrgChart employees={employees} />
       ) : (
         <>
@@ -146,7 +144,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees = [] }) => {
             </div>
           </div>
           
-          {!isPdf && (
+          {!isPdf && imageSettings?.url && (
             <Dialog open={fullscreenImage} onOpenChange={setFullscreenImage}>
               <DialogContent className="max-w-[90vw] max-h-[90vh] w-fit p-0">
                 <div className="relative overflow-auto max-h-[90vh]">
