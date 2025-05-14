@@ -15,6 +15,19 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce' // Use PKCE flow, which works better on mobile
+    flowType: 'pkce', // Use PKCE flow, which works better on mobile and in iframe environments
+    debug: window.location.hostname.includes('lovable') // Enable auth debugging in sandbox preview
   }
 });
+
+// Log auth configuration on load for debugging
+if (window.location.hostname.includes('lovable')) {
+  console.log("Supabase Auth Config:", {
+    url: SUPABASE_URL,
+    hasKey: !!SUPABASE_PUBLISHABLE_KEY,
+    storage: "localStorage",
+    location: window.location.origin,
+    flowType: 'pkce',
+    debug: true
+  });
+}

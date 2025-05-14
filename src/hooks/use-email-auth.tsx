@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +28,7 @@ export const useEmailAuth = (redirectTo: string) => {
       const isSandboxPreview = window.location.hostname.includes('lovable.dev') || 
                                 window.location.hostname.includes('lovable.ai');
       
-      // Prepare login options                          
+      // Prepare login options with the correct structure                         
       const signInOptions = {
         email,
         password
@@ -36,7 +37,21 @@ export const useEmailAuth = (redirectTo: string) => {
       // Add site URL option for sandbox previews
       if (isSandboxPreview) {
         console.log("Using redirectTo for sandbox preview:", window.location.origin + redirectTo);
+        
+        // Log additional debugging info
+        logEvent({
+          requestId,
+          eventType: 'sandbox_login_attempt',
+          component: 'useEmailAuth',
+          message: `Sandbox login attempt for: ${email}`,
+          metadata: { 
+            redirectUrl: window.location.origin + redirectTo,
+            hostname: window.location.hostname
+          }
+        });
       }
+      
+      console.log("Sending auth request with options:", { email, isSandboxPreview });
       
       const { data, error } = await supabase.auth.signInWithPassword(signInOptions);
       
@@ -59,7 +74,22 @@ export const useEmailAuth = (redirectTo: string) => {
         eventType: 'email_login_success',
         component: 'useEmailAuth',
         message: 'Login successful',
+        metadata: {
+          isSandbox: isSandboxPreview,
+          hasSession: !!data.session,
+          hasUser: !!data.user
+        }
       });
+      
+      // In sandbox preview, we should store any needed auth data
+      if (isSandboxPreview) {
+        // Log additional info about the session
+        console.log("Sandbox auth successful, session info:", {
+          hasSession: !!data.session,
+          hasUser: !!data.user,
+          expiresAt: data.session?.expires_at
+        });
+      }
       
       toast.success("Signed in successfully!");
       navigate(redirectTo);

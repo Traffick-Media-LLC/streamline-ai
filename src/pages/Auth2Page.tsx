@@ -18,6 +18,7 @@ const Auth2Page = () => {
   const { user } = useAuthSession();
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authDebugInfo, setAuthDebugInfo] = useState<any>(null);
   const requestId = generateRequestId();
   
   // Get the redirect path from location state or default to home
@@ -78,6 +79,7 @@ const Auth2Page = () => {
   const isSandboxPreview = window.location.hostname.includes('lovable.dev') || 
                           window.location.hostname.includes('lovable.ai');
 
+  // Get detailed auth state for debugging in sandbox previews
   useEffect(() => {
     if (isSandboxPreview) {
       console.log("Sandbox preview environment detected:", window.location.hostname);
@@ -88,6 +90,25 @@ const Auth2Page = () => {
         message: `Sandbox preview detected: ${window.location.hostname}`,
         metadata: { hostname: window.location.hostname, from }
       });
+      
+      // Get additional debug info for sandbox
+      const getAuthState = async () => {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const { data: userData } = await supabase.auth.getUser();
+          
+          setAuthDebugInfo({
+            hasSession: !!sessionData.session,
+            hasUser: !!userData.user,
+            sessionExpiry: sessionData.session?.expires_at,
+            userEmail: userData.user?.email
+          });
+        } catch (err) {
+          console.error("Error getting auth debug info:", err);
+        }
+      };
+      
+      getAuthState();
     }
   }, [isSandboxPreview, from, requestId]);
 
@@ -112,12 +133,30 @@ const Auth2Page = () => {
                 <p><strong>Note:</strong> You're using a sandbox preview environment.</p>
                 <p className="mt-1">If you're having trouble signing in, make sure your Supabase project 
                 has <strong>{window.location.origin}</strong> added as an authorized redirect URL.</p>
+                
+                <div className="mt-2 border-t border-amber-200 pt-2">
+                  <p><strong>Important:</strong> For sandbox previews, you need to add the Lovable preview URL to your Supabase project's redirect URLs.</p>
+                  <ol className="list-decimal pl-5 mt-1 space-y-1">
+                    <li>Go to your Supabase dashboard → Authentication → URL Configuration</li>
+                    <li>Add <code className="bg-amber-100 px-1 rounded">{window.location.origin}</code> to the list of redirect URLs</li>
+                    <li>Save the changes</li>
+                  </ol>
+                </div>
               </div>
             )}
             
             {authError && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
                 <p><strong>Authentication error:</strong> {authError}</p>
+              </div>
+            )}
+            
+            {isSandboxPreview && authDebugInfo && (
+              <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-700">
+                <p><strong>Sandbox Auth Debug:</strong></p>
+                <pre className="mt-1 whitespace-pre-wrap overflow-auto max-h-24">
+                  {JSON.stringify(authDebugInfo, null, 2)}
+                </pre>
               </div>
             )}
             
