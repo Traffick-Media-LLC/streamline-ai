@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import OrgChartViewer from '@/components/OrgChartViewer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
@@ -44,7 +43,7 @@ const AdminEmployeeDirectory = () => {
     <div className="space-y-6 container py-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Employee Directory</CardTitle>
+          <CardTitle>Employee Directory Management</CardTitle>
           <Button onClick={handleAddEmployee} size="sm">
             <Plus className="mr-1 h-4 w-4" /> Add Employee
           </Button>
@@ -107,16 +106,6 @@ const AdminEmployeeDirectory = () => {
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Organization Chart Viewer */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Organization Chart</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <OrgChartViewer />
         </CardContent>
       </Card>
 
