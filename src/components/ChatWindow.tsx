@@ -7,6 +7,9 @@ import { Animated, AnimatedList } from "@/components/ui/animated";
 import { useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Extend Message type for internal use to include animation delay
+type MessageWithAnimation = Message & { animationDelay?: number };
+
 const ChatWindow = () => {
   const {
     getCurrentChat,
@@ -37,7 +40,7 @@ const ChatWindow = () => {
   const optimizedMessages = useMemo(() => {
     if (!currentChat) return [];
     // Only apply staggered animations to the most recent messages (up to 5)
-    const messages = [...currentChat.messages];
+    const messages = [...currentChat.messages] as MessageWithAnimation[];
     const messageCount = messages.length;
 
     // Apply stagger to last few messages only
@@ -89,7 +92,7 @@ const ChatWindow = () => {
   return <div className="flex-1 h-full overflow-hidden flex flex-col">
       <ScrollArea className="flex-1">
         <div className="p-4 min-h-full">
-          {currentChat.messages.length === 0 ? <Animated type="fade" className="flex flex-col items-center justify-center h-full text-center">
+          {currentChat?.messages.length === 0 ? <Animated type="fade" className="flex flex-col items-center justify-center h-full text-center">
               <p className="text-lg text-muted-foreground font-medium">
                 Ask a question to start the conversation
               </p>

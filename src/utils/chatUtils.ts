@@ -50,7 +50,9 @@ export const generateChatTitle = async (firstMessage: string): Promise<string> =
 
 export const getMessagesByDate = (messages: Message[]) => {
   return messages.reduce<Record<string, Message[]>>((acc, message) => {
-    const date = new Date(message.timestamp).toDateString();
+    // Use createdAt for date grouping, fall back to timestamp if present
+    const time = message.timestamp || new Date(message.createdAt).getTime();
+    const date = new Date(time).toDateString();
     if (!acc[date]) {
       acc[date] = [];
     }

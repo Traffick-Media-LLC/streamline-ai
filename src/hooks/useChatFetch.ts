@@ -1,7 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
-import { Chat } from "../types/chat";
+import { Chat, Message } from "../types/chat";
 import { User } from "@supabase/supabase-js";
 
 export const useChatFetch = (
@@ -36,18 +36,23 @@ export const useChatFetch = (
       return;
     }
 
-    const formattedChats = data.map(chat => ({
-      id: chat.id,
-      title: chat.title,
-      messages: chat.chat_messages.map(msg => ({
+    const formattedChats = data.map(chat => {
+      const messages = chat.chat_messages.map(msg => ({
         id: msg.id,
         role: msg.role as "user" | "assistant" | "system",
         content: msg.content,
+        createdAt: new Date(msg.timestamp).toISOString(),
         timestamp: new Date(msg.timestamp).getTime()
-      })),
-      createdAt: new Date(chat.created_at).getTime(),
-      updatedAt: new Date(chat.updated_at).getTime()
-    }));
+      }));
+
+      return {
+        id: chat.id,
+        title: chat.title,
+        messages: messages,
+        createdAt: new Date(chat.created_at).toISOString(),
+        updatedAt: new Date(chat.updated_at).toISOString()
+      } as Chat;
+    });
 
     setChats(formattedChats);
     if (formattedChats.length > 0 && !currentChatId) {

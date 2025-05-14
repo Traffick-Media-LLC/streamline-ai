@@ -15,7 +15,7 @@ export const useStatePermissionsOperations = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isError, setIsError] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, user } = useAuth();
   const [debugLogs, setDebugLogs] = useState<Array<{level: string, message: string, data?: any}>>([]);
   const [lastSaveTimestamp, setLastSaveTimestamp] = useState<number | null>(null);
 
@@ -82,7 +82,7 @@ export const useStatePermissionsOperations = () => {
       const adminVerification = await verifyAdminStatus(errorTracker);
       if (!adminVerification.success) {
         // If we're in guest mode, proceed anyway
-        if (isGuest) {
+        if (!user) {
           addDebugLog('warning', "Admin verification failed but proceeding due to guest mode");
         } else {
           throw new Error(adminVerification.error);

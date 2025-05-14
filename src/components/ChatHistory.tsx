@@ -1,4 +1,3 @@
-
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ProfileEditDialog from "./ProfileEditDialog";
+import { Chat } from "../types/chat";
 
 const ChatHistory = ({
   onClose,
@@ -48,8 +48,12 @@ const ChatHistory = ({
     fetchUserProfile();
   }, [user?.id]);
   
-  const chatsByDate = chats.reduce<Record<string, typeof chats>>((acc, chat) => {
-    const date = formatDate(chat.createdAt);
+  const chatsByDate = chats.reduce<Record<string, Chat[]>>((acc, chat) => {
+    // Convert string timestamps to numbers for proper date formatting
+    const date = formatDate(typeof chat.createdAt === 'string' ? 
+      new Date(chat.createdAt).getTime() : 
+      Number(chat.createdAt));
+      
     if (!acc[date]) {
       acc[date] = [];
     }

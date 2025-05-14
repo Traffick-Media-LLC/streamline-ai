@@ -8,6 +8,8 @@ export type Message = {
   role: "system" | "assistant" | "user";
   metadata?: Record<string, any>;
   isEdited?: boolean;
+  // Add timestamp as an optional property for backward compatibility
+  timestamp?: number;
 };
 
 export type Chat = {

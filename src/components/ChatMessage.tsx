@@ -20,8 +20,10 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
   const { sendMessage } = useChatContext();
 
   useEffect(() => {
-    setFormattedTime(formatTimestamp(message.timestamp));
-  }, [message.timestamp]);
+    // Use timestamp if available for backward compatibility, otherwise use createdAt
+    const time = message.timestamp || new Date(message.createdAt).getTime();
+    setFormattedTime(formatTimestamp(time));
+  }, [message.timestamp, message.createdAt]);
 
   const isUser = message.role === "user";
 

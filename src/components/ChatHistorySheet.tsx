@@ -1,4 +1,3 @@
-
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Chat } from "../types/chat";
 
 const ChatHistorySheet = ({
   onClose
@@ -33,17 +33,44 @@ const ChatHistorySheet = ({
   // Group chats by recency
   const getLast7DaysChats = () => {
     const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    return filteredChats.filter(chat => chat.updatedAt > oneWeekAgo)
-      .sort((a, b) => b.updatedAt - a.updatedAt);
+    return filteredChats.filter(chat => {
+      // Convert string timestamps to numbers for comparison
+      const updatedAt = typeof chat.updatedAt === 'string' ? 
+        new Date(chat.updatedAt).getTime() : 
+        Number(chat.updatedAt);
+      return updatedAt > oneWeekAgo;
+    }).sort((a, b) => {
+      // Convert string timestamps to numbers for sorting
+      const aUpdated = typeof a.updatedAt === 'string' ? 
+        new Date(a.updatedAt).getTime() : 
+        Number(a.updatedAt);
+      const bUpdated = typeof b.updatedAt === 'string' ? 
+        new Date(b.updatedAt).getTime() : 
+        Number(b.updatedAt);
+      return bUpdated - aUpdated;
+    });
   };
   
   const getOlderChats = () => {
     const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
     const currentYear = new Date().getFullYear();
-    return filteredChats.filter(chat => 
-      chat.updatedAt < oneWeekAgo && 
-      new Date(chat.updatedAt).getFullYear() === currentYear
-    ).sort((a, b) => b.updatedAt - a.updatedAt);
+    return filteredChats.filter(chat => {
+      // Convert string timestamps to numbers for comparison
+      const updatedAt = typeof chat.updatedAt === 'string' ? 
+        new Date(chat.updatedAt).getTime() : 
+        Number(chat.updatedAt);
+      const chatYear = new Date(updatedAt).getFullYear();
+      return updatedAt < oneWeekAgo && chatYear === currentYear;
+    }).sort((a, b) => {
+      // Convert string timestamps to numbers for sorting
+      const aUpdated = typeof a.updatedAt === 'string' ? 
+        new Date(a.updatedAt).getTime() : 
+        Number(a.updatedAt);
+      const bUpdated = typeof b.updatedAt === 'string' ? 
+        new Date(b.updatedAt).getTime() : 
+        Number(b.updatedAt);
+      return bUpdated - aUpdated;
+    });
   };
   
   const handleCreateNewChat = async () => {

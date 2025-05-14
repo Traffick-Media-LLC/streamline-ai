@@ -25,11 +25,12 @@ export const useChatSending = (
         return { success: false, error: 'Authentication required' };
       }
 
+      const now = new Date().toISOString();
       const userMessage: Message = {
         id: uuidv4(),
         role: 'user',
         content,
-        timestamp: Date.now()
+        createdAt: now
       };
 
       // Create a new chat if needed
@@ -75,7 +76,7 @@ export const useChatSending = (
           id: uuidv4(),
           role: 'assistant',
           content: response,
-          timestamp: Date.now()
+          createdAt: new Date().toISOString()
         };
         
         await errorTracker.logStage('add_assistant_message', 'start');

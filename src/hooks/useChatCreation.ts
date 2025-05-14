@@ -56,12 +56,15 @@ export const useChatCreation = (
         durationMs: calculateDuration(dbStartTime)
       });
 
+      const createdAt = new Date(chat.created_at).toISOString();
+      const updatedAt = new Date(chat.updated_at).toISOString();
+
       const newChat: Chat = {
         id: chat.id,
         title: chat.title,
         messages: [],
-        createdAt: new Date(chat.created_at).getTime(),
-        updatedAt: new Date(chat.updated_at).getTime(),
+        createdAt: createdAt,
+        updatedAt: updatedAt,
       };
       
       // Update state
