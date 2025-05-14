@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,7 +15,7 @@ export const useStatePermissionsOperations = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isError, setIsError] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
-  const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const [debugLogs, setDebugLogs] = useState<Array<{level: string, message: string, data?: any}>>([]);
   const [lastSaveTimestamp, setLastSaveTimestamp] = useState<number | null>(null);
 
@@ -47,17 +46,16 @@ export const useStatePermissionsOperations = () => {
     addDebugLog('info', "Starting saveStatePermissions", { 
       stateId, 
       productIds, 
-      isAuthenticated: isAuthenticated || isGuest, 
-      isAdmin: isAdmin || isGuest, 
-      isGuest,
+      isAuthenticated, 
+      isAdmin,
       retryCount,
       operationId
     });
     
     // Verify authentication and admin status first with more detailed logging
     const validationContext: ValidationContext = { 
-      isAuthenticated: isAuthenticated || isGuest, 
-      isAdmin: isAdmin || isGuest 
+      isAuthenticated, 
+      isAdmin
     };
     
     addDebugLog('info', "Validating permissions with context", validationContext);
@@ -75,9 +73,8 @@ export const useStatePermissionsOperations = () => {
       await errorTracker.logStage('saving_permissions', 'start', { 
         stateId, 
         productIds,
-        isAuthenticated: isAuthenticated || isGuest,
-        isAdmin: isAdmin || isGuest,
-        isGuest,
+        isAuthenticated,
+        isAdmin,
         operationId
       });
 

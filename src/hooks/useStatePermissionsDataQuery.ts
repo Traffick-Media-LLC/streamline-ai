@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -6,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { State, StateProduct, SavePermissionResult } from '@/types/statePermissions';
 
 export const useStatePermissionsDataQuery = () => {
-  const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
   // Fetch all states
@@ -23,7 +22,7 @@ export const useStatePermissionsDataQuery = () => {
       console.log("States data received:", data?.length || 0, "items");
       return data || [];
     },
-    enabled: isAuthenticated || isGuest,
+    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 15, // 15 minutes - states rarely change
     meta: {
       onError: (error: any) => {
@@ -52,7 +51,7 @@ export const useStatePermissionsDataQuery = () => {
         product_id: typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id
       })) || [];
     },
-    enabled: isAuthenticated || isGuest,
+    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 2, // 2 minutes
     meta: {
       onError: (error: any) => {

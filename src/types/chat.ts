@@ -1,43 +1,44 @@
 
-export interface ChatContextType {
-  currentChatId: string | null;
-  isLoadingResponse: boolean;
-  createNewChat: () => Promise<string | null>;
-  sendMessage: (content: string) => Promise<void>;
-  getCurrentChat: () => Chat | null;
-  chats: Chat[];
-  selectChat: (chatId: string) => void;
-  isInitializing: boolean;
-}
+import { User } from "@supabase/supabase-js";
 
-export interface Chat {
+export type Message = {
+  id: string;
+  createdAt: string;
+  content: string;
+  role: "system" | "assistant" | "user";
+  metadata?: Record<string, any>;
+  isEdited?: boolean;
+};
+
+export type Chat = {
   id: string;
   title: string;
   messages: Message[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface Message {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  timestamp: number;
-  animationDelay?: number;
-}
-
-// Enhanced chat log interface with categorization
-export interface ChatLog {
-  requestId: string;
-  userId?: string;
-  chatId?: string;
-  eventType: string;
-  component: string;
-  message: string;
-  durationMs?: number;
+  createdAt: string;
+  updatedAt: string;
+  user_id?: string;
   metadata?: Record<string, any>;
-  errorDetails?: Record<string, any>;
-  severity?: 'debug' | 'info' | 'warning' | 'error' | 'critical';
-  timestamp?: number;
-  category?: 'auth' | 'network' | 'ai_response' | 'database' | 'credential' | 'generic';
+};
+
+export type SendMessageResult = { success: boolean; error?: string };
+
+export type ChatContextType = {
+  currentChatId: string;
+  isLoadingResponse: boolean;
+  chats: Chat[];
+  createNewChat: () => Promise<string>;
+  sendMessage: (content: string) => Promise<SendMessageResult>;
+  getCurrentChat: () => Chat;
+  selectChat: (chatId: string) => Promise<boolean>;
+  isInitializing: boolean;
+};
+
+export interface ChatOperationsProps {
+  user: User | null;
+  currentChatId: string;
+  setCurrentChatId: (id: string) => void;
+  createChat?: (title: string, userId?: string) => Promise<string>;
+  getChat?: (chatId: string) => Promise<Chat | null>;
+  updateChat?: (chatId: string, updates: Partial<Chat>) => Promise<boolean>;
+  deleteChat?: (chatId: string) => Promise<boolean>;
 }

@@ -16,6 +16,7 @@ type AuthContextType = {
   isAuthenticated: boolean;
   userRole: AppRole | null;
   isAdmin: boolean;
+  isGuest: boolean; // Keep this for backward compatibility
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   userRole: null,
   isAdmin: false,
+  isGuest: false, // Initialize with false
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -124,6 +126,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isAuthenticated: isActuallyAuthenticated,
         userRole,
         isAdmin,
+        isGuest: false, // Always false as the guest feature is removed
       }}
     >
       {children}

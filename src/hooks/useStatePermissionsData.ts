@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -11,7 +10,7 @@ export const useStatePermissionsData = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshAttempts, setRefreshAttempts] = useState(0);
-  const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const [lastRefreshTime, setLastRefreshTime] = useState<number | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -20,7 +19,7 @@ export const useStatePermissionsData = () => {
   const fetchStates = useCallback(async (abortSignal?: AbortSignal) => {
     try {
       setError(null);
-      console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin, isGuest });
+      console.log("Fetching states data... Auth state:", { isAuthenticated, isAdmin });
       
       const { data, error } = await supabase
         .from('states')
@@ -47,7 +46,7 @@ export const useStatePermissionsData = () => {
       });
       return false;
     }
-  }, [isAuthenticated, isAdmin, isGuest]);
+  }, [isAuthenticated, isAdmin]);
 
   // Fetch state products with enhanced logging and cache busting
   const fetchStateProducts = useCallback(async (abortSignal?: AbortSignal) => {
@@ -129,7 +128,7 @@ export const useStatePermissionsData = () => {
 
   // Refresh data only when explicitly requested
   const refreshData = useCallback(async (force = false) => {
-    if (!isAuthenticated && !isGuest) {
+    if (!isAuthenticated) {
       console.log("Not authenticated, skipping state permissions data fetch");
       setError("Authentication required. Please ensure you're logged in or continue as guest.");
       setLoading(false);
@@ -181,7 +180,7 @@ export const useStatePermissionsData = () => {
       setLoading(false);
       return false;
     }
-  }, [fetchStates, fetchStateProducts, isAuthenticated, isGuest, lastRefreshTime]);
+  }, [fetchStates, fetchStateProducts, isAuthenticated, lastRefreshTime]);
 
   // Initialize data only once
   useEffect(() => {
@@ -193,8 +192,8 @@ export const useStatePermissionsData = () => {
         return;
       }
       
-      if ((isAuthenticated || isGuest)) {
-        console.log("Authentication state confirmed, initializing data", { isAuthenticated, isAdmin, isGuest });
+      if (isAuthenticated) {
+        console.log("Authentication state confirmed, initializing data", { isAuthenticated, isAdmin });
         setHasInitialized(true);
         
         abortController = new AbortController();
@@ -212,11 +211,11 @@ export const useStatePermissionsData = () => {
         abortController.abort();
       }
     };
-  }, [isAuthenticated, isAdmin, isGuest, refreshData, hasInitialized]);
+  }, [isAuthenticated, isAdmin, refreshData, hasInitialized]);
 
   // Only retry on actual errors, not just when data is loading
   useEffect(() => {
-    if (!hasInitialized || !(isAuthenticated || isGuest)) {
+    if (!hasInitialized || !isAuthenticated) {
       return;
     }
     
@@ -233,7 +232,7 @@ export const useStatePermissionsData = () => {
     }, delay);
     
     return () => clearTimeout(retryTimer);
-  }, [error, refreshAttempts, loading, refreshData, hasInitialized, isAuthenticated, isGuest]);
+  }, [error, refreshAttempts, loading, refreshData, hasInitialized, isAuthenticated]);
 
   return {
     states,

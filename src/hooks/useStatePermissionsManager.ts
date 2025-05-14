@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useStatePermissionsData } from './useStatePermissionsData';
 import { useProductsData } from './useProductsData';
@@ -17,7 +16,7 @@ interface StateOperationResult {
 }
 
 export const useStatePermissionsManager = () => {
-  const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const [shouldRefresh, setShouldRefresh] = useState(false);
   
   const { 
@@ -102,11 +101,10 @@ export const useStatePermissionsManager = () => {
   useEffect(() => {
     console.log("StatePermissionsManager - Auth status check:", { 
       isAuthenticated, 
-      isAdmin, 
-      isGuest,
+      isAdmin,
       hasInitialized
     });
-  }, [isAuthenticated, isAdmin, isGuest, hasInitialized]);
+  }, [isAuthenticated, isAdmin, hasInitialized]);
 
   const handleStateClick = useCallback((stateName: string): StateOperationResult => {
     console.log("handleStateClick called with state:", stateName);

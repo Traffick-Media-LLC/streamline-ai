@@ -7,6 +7,7 @@ import { useChatFetching } from "./useChatFetching";
 import { useChatSelection } from "./useChatSelection";
 import { useChatSending } from "./useChatSending";
 import { generateRequestId, ErrorTracker } from "@/utils/logging";
+import { SendMessageResult } from "@/types/chat";
 
 export const useChatOperations = () => {
   const { user } = useAuth();

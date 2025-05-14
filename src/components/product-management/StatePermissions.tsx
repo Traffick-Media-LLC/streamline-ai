@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ProductSelectionDialog } from "./ProductSelectionDialog";
 import { useStatePermissionsDataQuery } from "@/hooks/useStatePermissionsDataQuery";
@@ -36,7 +35,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
 
   const { products, brands } = useProductsData();
   const { getStateProducts } = useStateProductMapping(stateProducts, products);
-  const { isAuthenticated, isAdmin, isGuest } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
 
   // UI state
   const [showDebug, setShowDebug] = useState(false);
@@ -204,8 +203,8 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
 
   const authCheckComponent = (
     <StatePermissionsAuthCheck 
-      isAuthenticated={isAuthenticated || isGuest}
-      isAdmin={isAdmin || isGuest}
+      isAuthenticated={isAuthenticated}
+      isAdmin={isAdmin}
       error={error}
       refreshData={() => {
         toast.loading("Refreshing data...");
@@ -216,7 +215,7 @@ const StatePermissions: React.FC<StatePermissionsProps> = ({ onDataLoaded }) => 
     />
   );
 
-  if ((!isAuthenticated && !isGuest) || (!isAdmin && !isGuest)) {
+  if (!isAuthenticated || !isAdmin) {
     return authCheckComponent;
   }
 
