@@ -5,8 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, ZoomIn, ZoomOut, Download, FileText, Eye } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Employee } from '@/hooks/useEmployeesData';
 
-const OrgChartViewer: React.FC = () => {
+interface OrgChartViewerProps {
+  employees?: Employee[];
+}
+
+const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   const { imageSettings, isLoading, error } = useOrgChartImage();
   const [fullscreenImage, setFullscreenImage] = useState(false);
 

@@ -20,7 +20,7 @@ const AdminOrgChart = () => {
         </TabsContent>
         <TabsContent value="view" className="pt-4">
           <div className="border rounded-lg p-4">
-            <OrgChartViewer employees={employees} />
+            <OrgChartViewer />
           </div>
         </TabsContent>
       </Tabs>
