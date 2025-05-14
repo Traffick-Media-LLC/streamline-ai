@@ -1,8 +1,8 @@
 
-import HomePage from "./HomePage";
+import EmployeeDirectory from "./EmployeeDirectory";
 
 const Index = () => {
-  return <HomePage />;
+  return <EmployeeDirectory />;
 };
 
 export default Index;

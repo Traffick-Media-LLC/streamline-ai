@@ -1,19 +1,26 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import OrgChartViewer from '@/components/OrgChartViewer';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Plus, Pencil, Trash2 } from 'lucide-react';
 import { logError, logEvent, generateRequestId } from '@/utils/logging';
 import { useAuth } from '@/contexts/AuthContext';
 import { ensureBucketAccess } from '@/utils/storage/ensureBucketAccess';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Employee } from '@/hooks/useEmployeesData';
+import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
+import EmployeeFormDialog from '@/components/admin/EmployeeFormDialog';
 
 const EmployeeDirectory: React.FC = () => {
-  const { data: employees = [], isLoading, error } = useEmployeesData();
-  const { user } = useAuth();
+  const { data: employees = [], isLoading, error, refetch } = useEmployeesData();
+  const { user, isAdmin } = useAuth();
   const pageRequestId = generateRequestId();
+  const [employeeToEdit, setEmployeeToEdit] = useState<Employee | undefined>(undefined);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { deleteEmployee } = useEmployeeOperations();
 
   // Check if the org_chart bucket exists and create it if it doesn't
   useEffect(() => {
@@ -59,6 +66,30 @@ const EmployeeDirectory: React.FC = () => {
     initOrgChartStorage();
   }, [user?.id, pageRequestId]);
 
+  const handleAddEmployee = () => {
+    setEmployeeToEdit(undefined);
+    setIsDialogOpen(true);
+  };
+
+  const handleEditEmployee = (employee: Employee) => {
+    setEmployeeToEdit(employee);
+    setIsDialogOpen(true);
+  };
+
+  const handleDeleteEmployee = async (id: string) => {
+    try {
+      await deleteEmployee.mutateAsync(id);
+      refetch();
+    } catch (error) {
+      console.error("Failed to delete employee:", error);
+    }
+  };
+
+  const handleDialogSuccess = () => {
+    setIsDialogOpen(false);
+    refetch();
+  };
+
   if (error) {
     return (
       <Alert variant="destructive" className="my-4">
@@ -74,8 +105,13 @@ const EmployeeDirectory: React.FC = () => {
 
       {/* Employee Table */}
       <Card className="mb-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Employee Directory</CardTitle>
+          {isAdmin && (
+            <Button onClick={handleAddEmployee} size="sm">
+              <Plus className="mr-1 h-4 w-4" /> Add Employee
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -92,6 +128,7 @@ const EmployeeDirectory: React.FC = () => {
                     <TableHead>Department</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
+                    {isAdmin && <TableHead className="w-[100px] text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -103,11 +140,31 @@ const EmployeeDirectory: React.FC = () => {
                         <TableCell>{employee.department}</TableCell>
                         <TableCell>{employee.email}</TableCell>
                         <TableCell>{employee.phone || '-'}</TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => handleEditEmployee(employee)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => handleDeleteEmployee(employee.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                      <TableCell colSpan={isAdmin ? 6 : 5} className="text-center h-24 text-muted-foreground">
                         No employees found
                       </TableCell>
                     </TableRow>
@@ -128,6 +185,17 @@ const EmployeeDirectory: React.FC = () => {
           <OrgChartViewer />
         </CardContent>
       </Card>
+
+      {/* Employee Form Dialog */}
+      {isAdmin && (
+        <EmployeeFormDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          employees={employees || []}
+          onSuccess={handleDialogSuccess}
+          employeeToEdit={employeeToEdit}
+        />
+      )}
     </div>
   );
 };
