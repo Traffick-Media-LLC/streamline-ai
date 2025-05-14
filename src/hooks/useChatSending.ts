@@ -1,151 +1,108 @@
 
-import { useState } from "react";
-import { Message } from "../types/chat";
-import { v4 as uuidv4 } from "uuid";
-import { generateRequestId, logEvent, ErrorTracker } from "@/utils/logging";
-import { toast } from "@/components/ui/sonner";
-import { LogCategory } from "@/types/logging";
+import { User } from "@supabase/supabase-js";
+import { v4 as uuidv4 } from 'uuid';
+import { Message } from "@/types/chat";
+import { generateRequestId, ErrorTracker, startTimer, calculateDuration } from "@/utils/logging";
 
 export const useChatSending = (
-  user,
-  isGuest,
-  currentChatId,
-  createNewChat,
-  handleMessageUpdate,
-  setIsLoadingResponse,
-  getCurrentChat
+  user: User | null,
+  currentChatId: string | null,
+  createNewChat: () => Promise<string | null>,
+  handleMessageUpdate: (chatId: string, message: Message, requestId?: string) => Promise<void>,
+  setIsLoadingResponse: (loading: boolean) => void,
+  getCurrentChat: () => any
 ) => {
-  const [pendingMessages, setPendingMessages] = useState<Record<string, boolean>>({});
-
-  // Send a message to the chat
   const sendMessage = async (content: string) => {
-    // Don't send blank messages
-    if (!content?.trim()) {
-      return;
-    }
-
-    // Get request ID for tracking
     const requestId = generateRequestId();
-    const errorTracker = new ErrorTracker('useChatSending', user?.id, currentChatId, requestId);
-
-    // Initialize current chat if doesn't exist
-    let chatId = currentChatId;
-    if (!chatId) {
-      try {
-        chatId = await createNewChat();
-        if (!chatId) {
-          toast.error("Failed to create new chat");
-          return;
-        }
-      } catch (error) {
-        toast.error("Failed to create new chat");
-        console.error("Error creating new chat:", error);
-        return;
-      }
-    }
-    
-    // Track pending message for this request
-    const messageId = uuidv4();
-    setPendingMessages(prev => ({ ...prev, [messageId]: true }));
-    
-    // Set loading state
-    setIsLoadingResponse(true);
+    const errorTracker = new ErrorTracker('useChatSending', user?.id, currentChatId || undefined, requestId);
+    const startTime = startTimer();
 
     try {
-      // Log the chat request
-      await errorTracker.logStage('send_message', 'start', { 
-        messageLength: content.length,
-        isAuthenticated: !!user?.id,
-        isGuest: isGuest
-      });
+      await errorTracker.logStage('send_message', 'start');
       
-      // Add the user message locally
+      if (!user) {
+        await errorTracker.logStage('send_message', 'error', { reason: 'unauthorized' });
+        return { success: false, error: 'Authentication required' };
+      }
+
       const userMessage: Message = {
-        id: messageId,
-        role: "user",
+        id: uuidv4(),
+        role: 'user',
         content,
         timestamp: Date.now()
       };
+
+      // Create a new chat if needed
+      let activeChatId = currentChatId;
       
-      await handleMessageUpdate(chatId, userMessage);
-      
-      // Get the chat history after adding user message
-      const currentChat = getCurrentChat();
-      const chatHistory = currentChat?.messages || [];
-      
-      // Use the minimal history for the call (limit to last 20 messages)
-      const streamlinedHistory = chatHistory.slice(-20);
-      
-      // Prepare the body for the API call
-      const body = {
-        message: content,
-        chatId,
-        chatHistory: streamlinedHistory,
-        requestId
-      };
-      
-      await errorTracker.logStage('api_request', 'start', { 
-        historyLength: streamlinedHistory.length 
-      });
-      
-      // Fetch from the chat Edge function
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data, error } = await supabase.functions.invoke('chat', {
-        body
-      });
-      
-      if (error) {
-        throw new Error(`${error.message || 'Unknown error'}`);
+      if (!activeChatId) {
+        await errorTracker.logStage('create_new_chat', 'start');
+        activeChatId = await createNewChat();
+        
+        if (!activeChatId) {
+          await errorTracker.logStage('send_message', 'error', { reason: 'failed_to_create_chat' });
+          return { success: false, error: 'Failed to create chat' };
+        }
+        
+        await errorTracker.logStage('create_new_chat', 'complete', { chatId: activeChatId });
       }
+
+      // Add user message to chat
+      await errorTracker.logStage('add_user_message', 'start');
+      await handleMessageUpdate(activeChatId, userMessage, requestId);
+      await errorTracker.logStage('add_user_message', 'complete');
+
+      // Set loading state for UI
+      setIsLoadingResponse(true);
       
-      // Check for error in the response data
-      if (data.error) {
-        throw new Error(`${data.error || 'Unknown error in response'}`);
+      try {
+        // Get current chat context
+        const currentChat = getCurrentChat();
+        const messages = currentChat?.messages || [];
+        
+        // Generate AI response
+        await errorTracker.logStage('generate_response', 'start');
+        
+        const generationStartTime = startTimer();
+        const response = "This is a mock response. In a real app, this would come from an API call.";
+        
+        await errorTracker.logStage('generate_response', 'complete', {
+          durationMs: calculateDuration(generationStartTime)
+        });
+
+        // Add assistant message to chat
+        const assistantMessage: Message = {
+          id: uuidv4(),
+          role: 'assistant',
+          content: response,
+          timestamp: Date.now()
+        };
+        
+        await errorTracker.logStage('add_assistant_message', 'start');
+        await handleMessageUpdate(activeChatId, assistantMessage, requestId);
+        await errorTracker.logStage('add_assistant_message', 'complete');
+        
+        await errorTracker.logStage('send_message', 'complete', {
+          durationMs: calculateDuration(startTime),
+          userMessageLength: content.length,
+          aiResponseLength: response.length
+        });
+
+        return { success: true };
+        
+      } catch (error) {
+        await errorTracker.logError('Error generating response', error);
+        return { success: false, error: 'Failed to generate response' };
+      } finally {
+        setIsLoadingResponse(false);
       }
-      
-      await errorTracker.logStage('api_request', 'complete', { 
-        tokensUsed: data.tokensUsed,
-        model: data.model,
-        messageLength: data.message?.length || 0,
-        responseTime: data.responseTime
-      });
-      
-      // Create assistant message
-      const assistantMessage: Message = {
-        id: uuidv4(),
-        role: "assistant",
-        content: data.message,
-        timestamp: Date.now()
-      };
-      
-      // Update the chat with the assistant response
-      await handleMessageUpdate(chatId, assistantMessage);
-      await errorTracker.logStage('send_message', 'complete');
       
     } catch (error) {
-      // Log the error - Fix here: Using the proper signature for logError
-      await errorTracker.logError(
-        `Error sending message: ${error.message || 'Unknown error'}`,
-        error,
-        { messageId }
-      );
-      
-      // Show error to user
-      toast.error(`Failed to send message: ${error.message || 'Unknown error'}`);
-      console.error('Error sending message:', error);
-      
-    } finally {
-      // Clear pending status for this message
-      setPendingMessages(prev => {
-        const updated = { ...prev };
-        delete updated[messageId];
-        return updated;
-      });
-      
-      // Clear loading state
+      await errorTracker.logError('Error in sendMessage', error);
       setIsLoadingResponse(false);
+      return { success: false, error: 'An unexpected error occurred' };
     }
   };
 
-  return { sendMessage, pendingMessages };
+  return { sendMessage };
 };

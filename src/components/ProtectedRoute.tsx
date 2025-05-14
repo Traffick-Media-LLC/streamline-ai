@@ -12,7 +12,7 @@ type ProtectedRouteProps = {
 };
 
 const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
-  const { isAuthenticated, loading, user, isAdmin, userRole, isGuest } = useAuth();
+  const { isAuthenticated, loading, user, isAdmin, userRole } = useAuth();
   const [authChecked, setAuthChecked] = useState(false);
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -24,7 +24,6 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     isAuthenticated, 
     loading, 
     isAdmin,
-    isGuest,
     requiredRole,
     userRole,
     userId: user?.id,
@@ -49,8 +48,8 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     );
   }
 
-  // If not authenticated (and not in guest mode), redirect to auth - BUT only if not already on auth page
-  if (!isAuthenticated && !isGuest && !isAuthPage) {
+  // If not authenticated, redirect to auth - BUT only if not already on auth page
+  if (!isAuthenticated && !isAuthPage) {
     console.log("Not authenticated, redirecting to auth page");
     // Add current path as state to redirect back after login
     return <Navigate to="/auth" state={{ from: location.pathname }} />;

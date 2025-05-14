@@ -7,7 +7,6 @@ import { generateRequestId, ErrorTracker, startTimer, calculateDuration } from "
 
 export const useMessageOperations = (
   user: User | null,
-  isGuest: boolean,
   setChats: (chats: any[] | ((prev: any[]) => any[])) => void
 ) => {
   const handleMessageUpdate = async (
@@ -25,7 +24,7 @@ export const useMessageOperations = (
         messageId: message.id
       });
 
-      if (!isGuest && user) {
+      if (user) {
         // If it's an authenticated user, store in database
         try {
           // If it's an assistant message, get the user's first name first
@@ -86,11 +85,6 @@ export const useMessageOperations = (
             messageId: message.id
           });
         }
-      } else if (isGuest) {
-        // For guest users, we need to update local storage after updating the state
-        await errorTracker.logStage('update_guest_message', 'start', {
-          messageRole: message.role
-        });
       }
 
       // Update React state
@@ -105,15 +99,6 @@ export const useMessageOperations = (
           }
           return chat;
         });
-        
-        // For guest users, update localStorage
-        if (isGuest) {
-          localStorage.setItem('guestChats', JSON.stringify(updatedChats));
-          
-          errorTracker.logStage('update_guest_storage', 'complete', {
-            chatCount: updatedChats.length
-          });
-        }
         
         return updatedChats;
       });

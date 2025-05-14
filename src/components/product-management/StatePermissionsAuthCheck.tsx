@@ -1,11 +1,8 @@
 
 import React from 'react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, RefreshCw, User } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/components/ui/sonner";
-import { ErrorTracker } from "@/utils/logging";
 
 interface StatePermissionsAuthCheckProps {
   isAuthenticated: boolean;
@@ -20,29 +17,6 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
   error,
   refreshData
 }) => {
-  const { setIsGuest } = useAuth();
-
-  const handleContinueAsGuest = async () => {
-    const errorTracker = new ErrorTracker('StatePermissionsAuthCheck');
-    try {
-      console.log("Continuing as guest with admin privileges");
-      // Set the guest flag before we initialize any logging
-      setIsGuest(true);
-      
-      // Log this action after setting the guest flag
-      await errorTracker.logStage('guest_access', 'start');
-      
-      toast.success("Continuing as guest with admin privileges", {
-        description: "You now have full access to view and modify permissions"
-      });
-      
-      await errorTracker.logStage('guest_access', 'complete');
-    } catch (err) {
-      console.error("Error setting guest mode:", err);
-      await errorTracker.logError("Failed to enable guest mode", err);
-    }
-  };
-
   // Authentication check
   if (!isAuthenticated && !isAdmin) {
     return (
@@ -51,8 +25,7 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Authentication Required</AlertTitle>
           <AlertDescription>
-            This page requires admin access. Please ensure you're logged in with appropriate permissions,
-            or continue as a guest to view and edit permissions.
+            This page requires admin access. Please ensure you're logged in with appropriate permissions.
           </AlertDescription>
         </Alert>
         <div className="mt-4 flex items-center gap-2">
@@ -61,13 +34,6 @@ export const StatePermissionsAuthCheck: React.FC<StatePermissionsAuthCheckProps>
             className="flex items-center gap-2"
           >
             Go to Login
-          </Button>
-          <Button 
-            onClick={handleContinueAsGuest}
-            variant="outline" 
-            className="flex items-center gap-2 ml-2"
-          >
-            <User className="h-4 w-4" /> Continue as Guest
           </Button>
         </div>
       </div>

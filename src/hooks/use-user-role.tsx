@@ -5,30 +5,20 @@ import { toast } from "@/components/ui/sonner";
 
 type AppRole = 'basic' | 'admin';
 
-export const useUserRole = (userId: string | undefined, isGuest: boolean) => {
+export const useUserRole = (userId: string | undefined) => {
   const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // When isGuest changes, update admin status and role accordingly
-    if (isGuest) {
-      console.log("Guest mode enabled - granting admin privileges");
-      setIsAdmin(true);
-      setUserRole('admin');
-      setLoading(false);
-    } else if (!userId) {
+    // Skip if no userId is available
+    if (!userId) {
       // Only reset admin status if not logged in
-      console.log("Guest mode disabled - reverting to authenticated status");
       setIsAdmin(false);
       setUserRole(null);
       setLoading(false);
+      return;
     }
-  }, [isGuest, userId]);
-
-  useEffect(() => {
-    // Skip if we're in guest mode or no userId is available
-    if (!userId || isGuest) return;
 
     const fetchUserRole = async () => {
       try {
@@ -85,7 +75,7 @@ export const useUserRole = (userId: string | undefined, isGuest: boolean) => {
     };
 
     fetchUserRole();
-  }, [userId, isGuest, isAdmin]);
+  }, [userId, isAdmin]);
 
   return {
     userRole,

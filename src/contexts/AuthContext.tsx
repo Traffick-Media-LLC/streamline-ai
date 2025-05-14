@@ -14,8 +14,6 @@ type AuthContextType = {
   signOut: () => Promise<void>;
   loading: boolean;
   isAuthenticated: boolean;
-  isGuest: boolean;
-  setIsGuest: (value: boolean) => void;
   userRole: AppRole | null;
   isAdmin: boolean;
 };
@@ -26,8 +24,6 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   loading: true,
   isAuthenticated: false,
-  isGuest: false,
-  setIsGuest: () => {},
   userRole: null,
   isAdmin: false,
 });
@@ -38,18 +34,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGuest, setIsGuest] = useState(() => {
-    // Initialize from localStorage if available
-    return localStorage.getItem('isGuestSession') === 'true';
-  });
   const isMobile = useIsMobile();
 
-  // Update localStorage when isGuest changes
-  useEffect(() => {
-    localStorage.setItem('isGuestSession', isGuest ? 'true' : 'false');
-  }, [isGuest]);
-
-  const { userRole, isAdmin, loading: roleLoading } = useUserRole(user?.id, isGuest);
+  const { userRole, isAdmin, loading: roleLoading } = useUserRole(user?.id);
 
   useEffect(() => {
     console.log("Auth provider initializing", isMobile ? "(mobile)" : "(desktop)");
@@ -115,8 +102,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      setIsGuest(false);
-      localStorage.removeItem('isGuestSession');
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
@@ -127,7 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const isActuallyAuthenticated = !!user || isGuest;
+  const isActuallyAuthenticated = !!user;
 
   return (
     <AuthContext.Provider
@@ -137,8 +122,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signOut,
         loading: loading || (roleLoading && !isActuallyAuthenticated),
         isAuthenticated: isActuallyAuthenticated,
-        isGuest,
-        setIsGuest,
         userRole,
         isAdmin,
       }}

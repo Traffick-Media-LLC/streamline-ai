@@ -2,7 +2,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { FcGoogle } from "react-icons/fc";
-import { UserIcon } from "lucide-react";
 import { Animated } from "@/components/ui/animated";
 import { useGoogleAuth } from "@/hooks/use-google-auth";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -10,10 +9,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 interface AuthFormProps {
   from: string;
   loading: boolean;
-  onGuestAccess: () => void;
 }
 
-const AuthForm: React.FC<AuthFormProps> = ({ from, loading, onGuestAccess }) => {
+const AuthForm: React.FC<AuthFormProps> = ({ from, loading }) => {
   const { loading: googleLoading, handleGoogleSignIn } = useGoogleAuth(from);
   const isMobile = useIsMobile();
   
@@ -28,16 +26,6 @@ const AuthForm: React.FC<AuthFormProps> = ({ from, loading, onGuestAccess }) => 
       >
         <FcGoogle className="h-5 w-5" />
         {(loading || googleLoading) ? "Signing in..." : "Sign in with Google"}
-      </Button>
-
-      <Button 
-        variant="secondary" 
-        size={isMobile ? "default" : "lg"} 
-        className="w-full flex items-center justify-center gap-2 h-12 transition-all duration-300 hover:-translate-y-1 hover:shadow-md" 
-        onClick={onGuestAccess}
-      >
-        <UserIcon className="h-5 w-5" />
-        Continue as Guest
       </Button>
     </Animated>
   );

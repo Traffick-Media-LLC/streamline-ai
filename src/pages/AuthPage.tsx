@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { toast } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { Animated } from "@/components/ui/animated";
 import AuthForm from "@/components/auth/AuthForm";
@@ -15,33 +14,12 @@ const AuthPage = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, setIsGuest } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { user } = useAuthSession();
   const isMobile = useIsMobile();
   
   // Get the redirect path from location state or default to home
   const from = location.state?.from || "/";
-
-  const handleGuestAccess = async () => {
-    try {
-      // First set the flag in localStorage directly for immediate effect
-      localStorage.setItem('isGuestSession', 'true');
-      
-      // Then update context state
-      setIsGuest(true);
-      
-      toast.success("Continuing as guest with admin access");
-      console.log("Guest mode enabled, redirecting to:", from, "isMobile:", isMobile);
-      
-      // Wait a moment before redirecting to ensure state is properly updated
-      setTimeout(() => {
-        navigate(from);
-      }, 300);
-    } catch (error) {
-      console.error("Error enabling guest mode:", error);
-      toast.error("Failed to enable guest mode");
-    }
-  };
 
   if (isAuthenticated || user) {
     console.log("Already authenticated, redirecting to:", from, "isMobile:", isMobile);
@@ -60,7 +38,6 @@ const AuthPage = () => {
             <AuthForm 
               from={from}
               loading={loading}
-              onGuestAccess={handleGuestAccess}
             />
             
             <Animated type="fade" delay={0.6}>

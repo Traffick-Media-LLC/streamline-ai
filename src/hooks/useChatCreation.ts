@@ -7,7 +7,6 @@ import { ErrorTracker, startTimer, calculateDuration } from "@/utils/logging";
 
 export const useChatCreation = (
   user: User | null,
-  isGuest: boolean,
   setChats: (chats: Chat[] | ((prev: Chat[]) => Chat[])) => void,
   setCurrentChatId: (id: string | null) => void
 ) => {
@@ -15,52 +14,15 @@ export const useChatCreation = (
     const errorTracker = new ErrorTracker('useChatCreation', user?.id);
     const startTime = startTimer();
     
-    await errorTracker.logStage('create_chat', 'start', { isGuest });
+    await errorTracker.logStage('create_chat', 'start');
     
-    if (!user && !isGuest) {
+    if (!user) {
       await errorTracker.logStage('create_chat', 'error', {
         reason: 'unauthorized'
       });
       
       toast.error("Please sign in to create a chat");
       return null;
-    }
-
-    if (isGuest) {
-      const newChat: Chat = {
-        id: `guest-${Date.now()}`,
-        title: "New Chat",
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      
-      await errorTracker.logStage('create_guest_chat', 'complete', {
-        chatId: newChat.id
-      });
-      
-      // Update state
-      setChats(prevChats => {
-        const updatedChats = [newChat, ...prevChats];
-        
-        // Save to localStorage for guests
-        localStorage.setItem('guestChats', JSON.stringify(updatedChats));
-        
-        errorTracker.logStage('update_guest_storage', 'complete', {
-          chatCount: updatedChats.length
-        });
-        
-        return updatedChats;
-      });
-      
-      setCurrentChatId(newChat.id);
-      
-      await errorTracker.logStage('create_chat', 'complete', {
-        chatId: newChat.id,
-        durationMs: calculateDuration(startTime)
-      });
-      
-      return newChat.id;
     }
 
     try {

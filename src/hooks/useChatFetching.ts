@@ -3,36 +3,17 @@ import { useEffect } from "react";
 
 export const useChatFetching = (
   user, 
-  isGuest, 
   setChats, 
   setCurrentChatId, 
   currentChatId, 
   setIsInitializing
 ) => {
-  // Function to fetch chats from storage or API
+  // Function to fetch chats from API
   const fetchChats = async () => {
     try {
       setIsInitializing(true);
       
-      if (isGuest) {
-        // Handle guest flow (local storage)
-        const stored = localStorage.getItem('guest-chats');
-        const storedChats = stored ? JSON.parse(stored) : [];
-        
-        // Guest chats loaded from storage
-        setChats(storedChats);
-        
-        // If currentChatId is already set but not in the chats, reset it
-        if (currentChatId && !storedChats.some(chat => chat.id === currentChatId)) {
-          setCurrentChatId(storedChats.length > 0 ? storedChats[0].id : null);
-        } 
-        // If no current chat but we have stored chats, set the most recent one
-        else if (!currentChatId && storedChats.length > 0) {
-          const sortedChats = [...storedChats].sort((a, b) => b.updatedAt - a.updatedAt);
-          setCurrentChatId(sortedChats[0].id);
-        }
-      } 
-      else if (user) {
+      if (user) {
         // Handle authenticated user flow (API)
         const { supabase } = await import("@/integrations/supabase/client");
         
@@ -96,7 +77,7 @@ export const useChatFetching = (
           setCurrentChatId(transformedChats[0].id);
         }
       } else {
-        // No user yet (not logged in and not a guest)
+        // No user yet (not logged in)
         setChats([]);
         setCurrentChatId(null);
       }
@@ -108,10 +89,10 @@ export const useChatFetching = (
     }
   };
   
-  // Fetch chats on initial mount and when user/currentChatId changes
+  // Fetch chats on initial mount and when user changes
   useEffect(() => {
     fetchChats();
-  }, [user?.id, isGuest]);
+  }, [user?.id]);
   
   return { fetchChats };
 };

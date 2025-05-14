@@ -9,7 +9,7 @@ import { useChatSending } from "./useChatSending";
 import { generateRequestId, ErrorTracker } from "@/utils/logging";
 
 export const useChatOperations = () => {
-  const { user, isGuest } = useAuth();
+  const { user } = useAuth();
   const {
     chats,
     setChats,
@@ -22,12 +22,11 @@ export const useChatOperations = () => {
     getCurrentChat
   } = useChatState();
   
-  const { createNewChat } = useChatCreation(user, isGuest, setChats, setCurrentChatId);
-  const { handleMessageUpdate } = useMessageOperations(user, isGuest, setChats);
+  const { createNewChat } = useChatCreation(user, setChats, setCurrentChatId);
+  const { handleMessageUpdate } = useMessageOperations(user, setChats);
   
   const { fetchChats } = useChatFetching(
     user, 
-    isGuest, 
     setChats, 
     setCurrentChatId, 
     currentChatId, 
@@ -38,7 +37,6 @@ export const useChatOperations = () => {
   
   const { sendMessage } = useChatSending(
     user,
-    isGuest,
     currentChatId,
     createNewChat,
     handleMessageUpdate,
