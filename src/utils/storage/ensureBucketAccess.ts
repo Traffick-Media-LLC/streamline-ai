@@ -9,6 +9,10 @@ export interface BucketAccessResult {
   message?: string;
 }
 
+// Constants for bucket configuration
+export const BUCKET_ID = 'org_chart';
+export const BUCKET_NAME = 'Organization Chart';
+
 export async function ensureBucketAccess(userId: string | undefined): Promise<BucketAccessResult> {
   const requestId = generateRequestId();
   
@@ -23,13 +27,13 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
     
     // Check if the org_chart bucket exists
     try {
-      const { data, error } = await supabase.storage.getBucket('org_chart');
+      const { data, error } = await supabase.storage.getBucket(BUCKET_ID);
       
       if (error) {
-        console.log('Bucket does not exist, creating org_chart storage bucket');
+        console.log('Bucket does not exist, creating storage bucket', BUCKET_ID);
         
         // Create the bucket if it doesn't exist
-        const { error: createError } = await supabase.storage.createBucket('org_chart', {
+        const { error: createError } = await supabase.storage.createBucket(BUCKET_ID, {
           public: true,
           fileSizeLimit: 10485760, // 10MB
         });
@@ -38,17 +42,21 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
           logError(
             requestId,
             'ensureBucketAccess',
-            'Error creating org_chart bucket',
+            `Error creating bucket ${BUCKET_ID}`,
             createError
           );
-          return { success: false, error: createError };
+          return { 
+            success: false, 
+            error: createError,
+            message: `Failed to create bucket: ${createError.message}`
+          };
         } else {
           logEvent({
             requestId,
             userId,
             eventType: 'bucket_created',
             component: 'ensureBucketAccess',
-            message: 'Successfully created org_chart bucket'
+            message: `Successfully created ${BUCKET_ID} bucket`
           });
         }
       } else {
@@ -57,7 +65,7 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
           userId,
           eventType: 'bucket_exists',
           component: 'ensureBucketAccess',
-          message: 'org_chart bucket already exists'
+          message: `${BUCKET_ID} bucket already exists`
         });
       }
       
@@ -66,7 +74,7 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
         // Attempt a simple operation to verify permissions
         const testFilePath = `permission_test_${Date.now()}.txt`;
         const { error: testError } = await supabase.storage
-          .from('org_chart')
+          .from(BUCKET_ID)
           .upload(testFilePath, new Blob(['test']), {
             upsert: true
           });
@@ -81,14 +89,14 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
           return { 
             success: false, 
             error: {
-              message: 'You do not have permission to upload to this bucket',
+              message: `You do not have permission to upload to the ${BUCKET_ID} bucket`,
               details: testError
             }
           };
         }
         
         // Clean up test file
-        await supabase.storage.from('org_chart').remove([testFilePath]);
+        await supabase.storage.from(BUCKET_ID).remove([testFilePath]);
         
         logEvent({
           requestId,
@@ -104,7 +112,11 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
           'Storage permission test exception',
           permError
         );
-        return { success: false, error: permError };
+        return { 
+          success: false, 
+          error: permError,
+          message: `Exception during permission test: ${permError instanceof Error ? permError.message : String(permError)}`
+        };
       }
       
       logEvent({
@@ -123,10 +135,18 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
         'Unexpected error checking bucket',
         error
       );
-      return { success: false, error };
+      return { 
+        success: false, 
+        error,
+        message: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
+      };
     }
   } catch (error) {
     console.error('Error in ensureBucketAccess:', error);
-    return { success: false, error };
+    return { 
+      success: false, 
+      error,
+      message: `Critical error: ${error instanceof Error ? error.message : String(error)}`
+    };
   }
 }

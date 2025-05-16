@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { logError, logEvent, generateRequestId } from "@/utils/logging";
+import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 
 export interface OrgChartImageSettings {
   url: string | null;
@@ -137,6 +138,7 @@ export const useOrgChartImage = () => {
       });
 
       console.log("Starting upload with authenticated user:", user?.id);
+      console.log("Using bucket:", BUCKET_ID);
 
       // Upload the actual file directly without test permissions
       const fileExt = file.name.split('.').pop();
@@ -144,7 +146,7 @@ export const useOrgChartImage = () => {
       const filePath = fileName;
 
       const { error: uploadError, data } = await supabase.storage
-        .from('org_chart')
+        .from(BUCKET_ID)
         .upload(filePath, file, {
           upsert: true,
           contentType: file.type,
@@ -185,13 +187,13 @@ export const useOrgChartImage = () => {
 
       // Get the public URL for the uploaded file
       const { data: { publicUrl } } = supabase.storage
-        .from('org_chart')
+        .from(BUCKET_ID)
         .getPublicUrl(filePath);
 
       // Remove old image if exists
       if (imageSettings?.filename && imageSettings.filename !== fileName) {
         await supabase.storage
-          .from('org_chart')
+          .from(BUCKET_ID)
           .remove([imageSettings.filename]);
       }
 
@@ -282,7 +284,7 @@ export const useOrgChartImage = () => {
 
       // Remove the file from storage
       const { error: deleteError } = await supabase.storage
-        .from('org_chart')
+        .from(BUCKET_ID)
         .remove([imageSettings.filename]);
 
       if (deleteError) {

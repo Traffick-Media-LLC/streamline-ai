@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { generateRequestId } from '@/utils/logging';
 import { useAuth } from '@/contexts/AuthContext';
-import { ensureBucketAccess } from '@/utils/storage/ensureBucketAccess';
+import { ensureBucketAccess, BUCKET_ID } from '@/utils/storage/ensureBucketAccess';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const EmployeeDirectory: React.FC = () => {
@@ -15,18 +15,21 @@ const EmployeeDirectory: React.FC = () => {
   const { user } = useAuth();
   const pageRequestId = generateRequestId();
 
-  // Check if the org_chart bucket exists and create it if it doesn't
+  // Check if the storage bucket exists and create it if it doesn't
   useEffect(() => {
     const initOrgChartStorage = async () => {
       try {
         if (user?.id) {
+          console.log(`Initializing ${BUCKET_ID} bucket access for user ${user.id}`);
           const result = await ensureBucketAccess(user.id);
           if (!result.success) {
-            console.error('Failed to initialize org chart bucket:', result.error);
+            console.error('Failed to initialize bucket:', result.error);
+          } else {
+            console.log(`Successfully verified access to ${BUCKET_ID} bucket`);
           }
         }
       } catch (error) {
-        console.error('Exception initializing org_chart storage:', error);
+        console.error(`Exception initializing ${BUCKET_ID} storage:`, error);
       }
     };
 
