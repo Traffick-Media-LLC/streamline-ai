@@ -41,16 +41,16 @@ const EmailAuthForm = ({ from }: EmailAuthFormProps) => {
     const { email, password } = values;
     
     // Log form submission
-    logEvent({
+    logEvent(
       requestId,
-      component: 'EmailAuthForm',
-      eventType: isSignUp ? 'auth_signup_submit' : 'auth_login_submit',
-      message: `Form submitted for ${isSignUp ? 'signup' : 'login'}`,
-      metadata: {
+      'EmailAuthForm',
+      isSignUp ? 'auth_signup_submit' : 'auth_login_submit',
+      `Form submitted for ${isSignUp ? 'signup' : 'login'}`,
+      {
         email,
         from
       }
-    });
+    );
     
     if (isSignUp) {
       const result = await signup(email, password);
@@ -67,18 +67,18 @@ const EmailAuthForm = ({ from }: EmailAuthFormProps) => {
         });
         
         // Log form error
-        logEvent({
+        logEvent(
           requestId,
-          component: 'EmailAuthForm',
-          eventType: 'auth_form_error',
-          message: `Form error: ${result.error}`,
-          metadata: {
+          'EmailAuthForm',
+          'auth_form_error',
+          `Form error: ${result.error}`,
+          {
             email,
             error: result.error,
             from
           },
-          severity: 'warning'
-        });
+          'warning'
+        );
       }
     }
   };
@@ -88,13 +88,13 @@ const EmailAuthForm = ({ from }: EmailAuthFormProps) => {
     setIsSignUp(!isSignUp);
     
     // Log auth mode toggle
-    logEvent({
+    logEvent(
       requestId,
-      component: 'EmailAuthForm',
-      eventType: 'auth_mode_toggle',
-      message: `Auth mode toggled to ${!isSignUp ? 'signup' : 'login'}`,
-      metadata: { from }
-    });
+      'EmailAuthForm',
+      'auth_mode_toggle',
+      `Auth mode toggled to ${!isSignUp ? 'signup' : 'login'}`,
+      { from }
+    );
   };
 
   return (
