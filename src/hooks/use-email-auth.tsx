@@ -5,12 +5,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { logError, logEvent, generateRequestId } from "@/utils/logging";
+import { ErrorTracker } from "@/utils/logging/ErrorTracker";
 
 export const useEmailAuth = (redirectTo: string) => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const requestId = generateRequestId();
+  
+  // Create an error tracker for consistent logging
+  const errorTracker = new ErrorTracker('EmailAuthHook');
 
   const login = async (email: string, password: string) => {
     setLoading(true);
