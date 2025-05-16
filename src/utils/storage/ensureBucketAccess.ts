@@ -54,13 +54,58 @@ export async function ensureBucketAccess(userId: string | undefined) {
         });
       }
       
-      // No more permission test - just return success
+      // Check if we have permission to upload to this bucket
+      try {
+        // Attempt a simple operation to verify permissions
+        const testFilePath = `permission_test_${Date.now()}.txt`;
+        const { error: testError } = await supabase.storage
+          .from('org_chart')
+          .upload(testFilePath, new Blob(['test']), {
+            upsert: true
+          });
+          
+        if (testError) {
+          logError(
+            requestId,
+            'ensureBucketAccess',
+            'Storage permission test failed',
+            testError
+          );
+          return { 
+            success: false, 
+            error: {
+              message: 'You do not have permission to upload to this bucket',
+              details: testError
+            }
+          };
+        }
+        
+        // Clean up test file
+        await supabase.storage.from('org_chart').remove([testFilePath]);
+        
+        logEvent({
+          requestId,
+          userId,
+          eventType: 'permission_verified',
+          component: 'ensureBucketAccess',
+          message: 'Storage permission test successful'
+        });
+      } catch (permError) {
+        logError(
+          requestId,
+          'ensureBucketAccess',
+          'Storage permission test exception',
+          permError
+        );
+        return { success: false, error: permError };
+      }
+      
       logEvent({
         requestId,
         userId,
-        eventType: 'permission_verified',
+        eventType: 'bucket_access_success',
         component: 'ensureBucketAccess',
-        message: 'Bucket access check completed'
+        message: 'Bucket access check completed successfully'
       });
       
       return { success: true };

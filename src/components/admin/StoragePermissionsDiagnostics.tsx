@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { RefreshCw, CheckCircle, AlertCircle, Info } from "lucide-react";
+import { RefreshCw, CheckCircle, AlertCircle, Info, Database } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ensureBucketAccess } from "@/utils/storage/ensureBucketAccess";
 
@@ -24,6 +24,11 @@ interface DiagnosticsResults {
     success: boolean;
     error?: any;
     message?: string;
+  };
+  databaseFunctions?: {
+    success: boolean;
+    message?: string;
+    error?: any;
   };
 }
 
@@ -58,12 +63,42 @@ const StoragePermissionsDiagnostics: React.FC = () => {
       // Step 3: Check bucket access
       const bucketAccessResult = await ensureBucketAccess(user?.id);
       
+      // Step 4: Test database function access
+      let databaseFunctionResult = { success: false };
+      try {
+        const { data: roleData, error: roleError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user?.id)
+          .maybeSingle();
+          
+        if (roleError) {
+          databaseFunctionResult = {
+            success: false,
+            error: roleError,
+            message: `Error accessing user_roles: ${roleError.message}`
+          };
+        } else {
+          databaseFunctionResult = {
+            success: true,
+            message: `Successfully queried user_roles table. Role: ${roleData?.role || 'none'}`
+          };
+        }
+      } catch (dbError) {
+        databaseFunctionResult = {
+          success: false,
+          error: dbError,
+          message: `Exception accessing database: ${dbError instanceof Error ? dbError.message : String(dbError)}`
+        };
+      }
+      
       // Combine results
       setResults({
         timestamp: new Date().toISOString(),
         user: user ? { id: user.id, email: user.email } : null,
         adminStatus: adminResults,
         bucketAccess: bucketAccessResult,
+        databaseFunctions: databaseFunctionResult
       });
       
       if (bucketAccessResult.success) {
@@ -120,9 +155,31 @@ const StoragePermissionsDiagnostics: React.FC = () => {
                 <AlertDescription>
                   {results.bucketAccess?.success 
                     ? "Your account has proper access to the storage buckets." 
-                    : `Storage access failed: ${results.bucketAccess?.message || "Unknown error"}`}
+                    : `Storage access failed: ${results.bucketAccess?.error?.message || results.bucketAccess?.message || "Unknown error"}`}
+                    
+                  {!results.bucketAccess?.success && results.bucketAccess?.error?.details && (
+                    <div className="mt-2 text-xs p-2 bg-red-50 rounded border border-red-100 whitespace-pre-wrap font-mono">
+                      {JSON.stringify(results.bucketAccess.error.details, null, 2)}
+                    </div>
+                  )}
                 </AlertDescription>
               </Alert>
+              
+              {results.databaseFunctions && (
+                <Alert variant={results.databaseFunctions.success ? "default" : "destructive"}>
+                  <Database className="h-4 w-4" />
+                  <AlertTitle>Database Function Test</AlertTitle>
+                  <AlertDescription>
+                    {results.databaseFunctions.message}
+                    
+                    {!results.databaseFunctions.success && results.databaseFunctions.error && (
+                      <div className="mt-2 text-xs p-2 bg-red-50 rounded border border-red-100 whitespace-pre-wrap font-mono">
+                        {JSON.stringify(results.databaseFunctions.error, null, 2)}
+                      </div>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
               
               <Alert>
                 <Info className="h-4 w-4" />
@@ -136,6 +193,7 @@ const StoragePermissionsDiagnostics: React.FC = () => {
                         : results.adminStatus.rpcAdminCheck ? "Yes" : "No"
                     }</div>
                     <div>User ID: {results.user?.id || "Not logged in"}</div>
+                    <div>Timestamp: {new Date(results.timestamp).toLocaleString()}</div>
                   </div>
                 </AlertDescription>
               </Alert>
