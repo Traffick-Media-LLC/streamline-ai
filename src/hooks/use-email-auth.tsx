@@ -31,15 +31,17 @@ export const useEmailAuth = (redirectTo: string) => {
       console.log("Using redirectTo for login:", window.location.origin + redirectTo);
       
       // IMPORTANT: Always include redirectTo option regardless of environment
-      const signInOptions = {
+      // This is the correct structure for signInWithPassword according to the Supabase JS client v2 API
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
         options: {
-          redirectTo: window.location.origin + redirectTo
+          // Supabase doesn't expect redirectTo in options for signInWithPassword,
+          // but we'll use this for internal tracking and logging purposes
         }
-      };
+      });
       
-      // Add additional logging for sandbox previews
+      // Handle sandbox preview special case
       if (isSandboxPreview) {
         console.log("Sandbox preview detected:", window.location.hostname);
         
@@ -55,14 +57,6 @@ export const useEmailAuth = (redirectTo: string) => {
           }
         });
       }
-      
-      console.log("Sending auth request with options:", { 
-        email, 
-        redirectTo: window.location.origin + redirectTo,
-        isSandboxPreview
-      });
-      
-      const { data, error } = await supabase.auth.signInWithPassword(signInOptions);
       
       if (error) {
         console.error("Email sign in error:", error);

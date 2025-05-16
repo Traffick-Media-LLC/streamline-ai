@@ -12,7 +12,7 @@ import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { logEvent, generateRequestId } from "@/utils/logging";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { AlertTriangle } from "lucide-react"; // Using Lucide React icons instead of Radix icons
 
 const Auth2Page = () => {
   const location = useLocation();
@@ -134,8 +134,8 @@ const Auth2Page = () => {
             
             {isSandboxPreview && (
               <div className="mt-4">
-                <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
-                  <ExclamationTriangleIcon className="h-4 w-4" />
+                <Alert className="bg-amber-50 border-amber-200 text-amber-800">
+                  <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Sandbox Preview Environment</AlertTitle>
                   <AlertDescription className="space-y-2">
                     <p>To make authentication work in the sandbox preview:</p>
