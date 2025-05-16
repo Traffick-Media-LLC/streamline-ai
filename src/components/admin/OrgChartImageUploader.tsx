@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,27 +23,12 @@ const OrgChartImageUploader: React.FC = () => {
   // Log component mount with auth state
   useEffect(() => {
     const logInitialState = async () => {
-      await logEvent({
+      logEvent({
         requestId: componentRequestId,
         userId: user?.id,
         eventType: 'uploader_mounted',
         component: 'OrgChartImageUploader',
-        message: 'Org chart uploader component mounted',
-        metadata: {
-          isAuthenticated,
-          isAdmin,
-          hasUser: !!user,
-          hasSession: !!session,
-          userDetails: user ? {
-            id: user.id,
-            email: user.email,
-            metadata: user.user_metadata
-          } : null,
-          sessionDetails: session ? {
-            expiresAt: new Date(session.expires_at * 1000).toISOString(),
-          } : null
-        },
-        severity: 'info'
+        message: 'Org chart uploader component mounted'
       });
 
       // Generate debug info for troubleshooting
@@ -55,39 +41,6 @@ const OrgChartImageUploader: React.FC = () => {
       ].filter(Boolean).join('\n');
 
       setSessionDebugInfo(authDebugInfo);
-
-      // Validate storage permissions directly
-      if (user && session) {
-        try {
-          const { data: bucketInfo, error: bucketError } = await supabase.storage.getBucket('org_chart');
-          
-          if (bucketError) {
-            console.error("Error getting bucket info:", bucketError);
-            
-            await logEvent({
-              requestId: componentRequestId,
-              userId: user?.id,
-              eventType: 'bucket_access_check',
-              component: 'OrgChartImageUploader',
-              message: 'Error checking bucket access',
-              metadata: { error: bucketError.message, errorMessage: bucketError.message },
-              severity: 'warning'
-            });
-          } else {
-            await logEvent({
-              requestId: componentRequestId,
-              userId: user?.id,
-              eventType: 'bucket_access_success',
-              component: 'OrgChartImageUploader',
-              message: 'Successfully verified bucket access',
-              metadata: { bucketInfo },
-              severity: 'info'
-            });
-          }
-        } catch (error) {
-          console.error("Unexpected error checking bucket:", error);
-        }
-      }
     };
 
     logInitialState();
@@ -119,18 +72,12 @@ const OrgChartImageUploader: React.FC = () => {
       return;
     }
 
-    await logEvent({
+    logEvent({
       requestId: componentRequestId,
       userId: user?.id,
       eventType: 'file_selected',
       component: 'OrgChartImageUploader',
-      message: 'File selected for upload',
-      metadata: {
-        fileType: file.type,
-        fileSize: file.size,
-        fileName: file.name
-      },
-      severity: 'info'
+      message: 'File selected for upload'
     });
 
     setSelectedFile(file);
@@ -147,20 +94,12 @@ const OrgChartImageUploader: React.FC = () => {
       return;
     }
 
-    await logEvent({
+    logEvent({
       requestId: componentRequestId,
       userId: user?.id,
       eventType: 'upload_initiated',
       component: 'OrgChartImageUploader',
-      message: 'User initiated upload',
-      metadata: {
-        fileType: selectedFile.type,
-        fileSize: selectedFile.size,
-        fileName: selectedFile.name,
-        isAdmin,
-        isAuthenticated
-      },
-      severity: 'info'
+      message: 'User initiated upload'
     });
 
     try {

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -20,97 +21,13 @@ export const useOrgChartImage = () => {
 
   // Log authentication state on hook initialization
   useEffect(() => {
-    const logAuthState = async () => {
-      await logEvent({
-        requestId: uploadRequestId,
-        userId: user?.id,
-        eventType: 'org_chart_auth_state',
-        component: 'useOrgChartImage',
-        message: 'OrgChart hook initialized',
-        metadata: {
-          isAuthenticated,
-          isAdmin, 
-          hasUser: !!user,
-          hasSession: !!session,
-          sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
-          userMetadata: user?.user_metadata,
-        },
-        severity: 'info',
-        category: 'auth'
-      });
-
-      // Double-check admin status directly with the database
-      if (isAuthenticated && user) {
-        try {
-          const { data: adminCheck, error: adminCheckError } = await supabase.rpc('is_admin');
-          
-          if (adminCheckError) {
-            await logError(
-              uploadRequestId,
-              'useOrgChartImage',
-              'Error checking admin status via RPC',
-              adminCheckError,
-              { userId: user?.id },
-              'error',
-              'credential'
-            );
-          } else {
-            await logEvent({
-              requestId: uploadRequestId,
-              userId: user?.id,
-              eventType: 'admin_check',
-              component: 'useOrgChartImage',
-              message: `Admin check result: ${adminCheck}`,
-              metadata: { adminCheck, clientSideAdminValue: isAdmin },
-              severity: adminCheck === isAdmin ? 'info' : 'warning',
-              category: 'auth'
-            });
-          }
-          
-          // Also check user_roles table directly as backup
-          const { data: roleData, error: roleError } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          
-          if (roleError) {
-            await logError(
-              uploadRequestId,
-              'useOrgChartImage',
-              'Error checking user role from table',
-              roleError,
-              { userId: user?.id },
-              'warning',
-              'credential'
-            );
-          } else {
-            await logEvent({
-              requestId: uploadRequestId,
-              userId: user?.id,
-              eventType: 'role_check',
-              component: 'useOrgChartImage',
-              message: `User role from table: ${roleData?.role || 'none'}`,
-              metadata: { role: roleData?.role, userId: user.id },
-              severity: 'info',
-              category: 'auth'
-            });
-          }
-        } catch (error) {
-          await logError(
-            uploadRequestId,
-            'useOrgChartImage',
-            'Unexpected error checking admin status',
-            error,
-            { userId: user?.id },
-            'error',
-            'credential'
-          );
-        }
-      }
-    };
-
-    logAuthState();
+    logEvent({
+      requestId: uploadRequestId,
+      userId: user?.id,
+      eventType: 'org_chart_auth_state',
+      component: 'useOrgChartImage',
+      message: 'OrgChart hook initialized'
+    });
   }, [isAdmin, isAuthenticated, user, session, uploadRequestId]);
 
   // Fetch the current org chart image settings
@@ -118,17 +35,12 @@ export const useOrgChartImage = () => {
     queryKey: ['orgChartImage'],
     queryFn: async (): Promise<OrgChartImageSettings> => {
       try {
-        await logEvent({
+        logEvent({
           requestId: uploadRequestId,
           userId: user?.id,
           eventType: 'fetch_image_settings_start',
           component: 'useOrgChartImage',
-          message: 'Fetching org chart settings',
-          metadata: {
-            isAuthenticated,
-            isAdmin
-          },
-          severity: 'info'
+          message: 'Fetching org chart settings'
         });
 
         const { data, error } = await supabase
@@ -140,26 +52,21 @@ export const useOrgChartImage = () => {
         if (error) {
           // Handle permission errors gracefully
           if (error.message.includes('permission denied')) {
-            await logEvent({
+            logEvent({
               requestId: uploadRequestId,
               userId: user?.id,
               eventType: 'fetch_image_settings_permission_denied',
               component: 'useOrgChartImage',
-              message: 'Reading org chart as non-admin user',
-              metadata: { error },
-              severity: 'warning'
+              message: 'Reading org chart as non-admin user'
             });
             return { url: null, filename: null, updated_at: null, fileType: null };
           }
           
-          await logError(
+          logError(
             uploadRequestId,
             'useOrgChartImage',
             'Error fetching org chart image settings',
-            error,
-            { isAdmin, isAuthenticated },
-            'error',
-            'database'
+            error
           );
           
           throw error;
@@ -179,29 +86,21 @@ export const useOrgChartImage = () => {
           settings.fileType = isPdf ? "pdf" : "image";
         }
         
-        await logEvent({
+        logEvent({
           requestId: uploadRequestId,
           userId: user?.id,
           eventType: 'fetch_image_settings_success',
           component: 'useOrgChartImage',
-          message: 'Successfully fetched org chart settings',
-          metadata: {
-            hasUrl: !!settings?.url,
-            fileType: settings?.fileType
-          },
-          severity: 'info'
+          message: 'Successfully fetched org chart settings'
         });
         
         return settings;
       } catch (error) {
-        await logError(
+        logError(
           uploadRequestId,
           'useOrgChartImage',
           'Error fetching org chart image',
-          error,
-          { isAdmin, isAuthenticated },
-          'error',
-          'database'
+          error
         );
         return { url: null, filename: null, updated_at: null, fileType: null };
       }
@@ -215,179 +114,31 @@ export const useOrgChartImage = () => {
   // Upload a new org chart image
   const uploadImage = useMutation({
     mutationFn: async (file: File) => {
+      // Only check if user is authenticated and admin, but don't do additional verification
       if (!isAuthenticated || !isAdmin) {
-        await logEvent({
+        logEvent({
           requestId: uploadRequestId,
           userId: user?.id,
           eventType: 'upload_auth_check_failed',
           component: 'useOrgChartImage',
-          message: 'Upload attempted without admin privileges',
-          metadata: { isAuthenticated, isAdmin, fileType: file.type, fileSize: file.size },
-          severity: 'warning',
-          category: 'auth'
+          message: 'Upload attempted without admin privileges'
         });
         
         toast.error("You must be an admin to upload an organization chart");
         throw new Error("Admin privileges required");
       }
 
-      if (!user || !session) {
-        await logEvent({
-          requestId: uploadRequestId,
-          userId: user?.id,
-          eventType: 'upload_invalid_session',
-          component: 'useOrgChartImage',
-          message: 'Upload attempted with missing session',
-          metadata: { hasUser: !!user, hasSession: !!session, fileType: file.type },
-          severity: 'warning',
-          category: 'auth'
-        });
-        
-        toast.error("Authentication session is missing. Please try logging out and back in.");
-        throw new Error("Authentication session is invalid");
-      }
-
-      await logEvent({
+      logEvent({
         requestId: uploadRequestId,
-        userId: user.id,
+        userId: user?.id,
         eventType: 'upload_started',
         component: 'useOrgChartImage',
-        message: 'Starting org chart upload',
-        metadata: { 
-          fileType: file.type, 
-          fileSize: file.size,
-          fileName: file.name,
-          isAdmin,
-          sessionExpiresAt: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'unknown'
-        },
-        severity: 'info',
-        category: 'network'
+        message: 'Starting org chart upload'
       });
 
       console.log("Starting upload with authenticated user:", user?.id);
 
-      // Verify access permissions
-      try {
-        // Test write permission with a small test file
-        const testBlob = new Blob(['test'], { type: 'text/plain' });
-        const testFile = new File([testBlob], '_test_permissions.txt', { type: 'text/plain' });
-        
-        await logEvent({
-          requestId: uploadRequestId,
-          userId: user.id,
-          eventType: 'permission_test_started',
-          component: 'useOrgChartImage',
-          message: 'Testing storage write permissions',
-          metadata: {},
-          severity: 'info'
-        });
-        
-        // Check session before upload
-        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          await logError(
-            uploadRequestId,
-            'useOrgChartImage',
-            'Session verification failed',
-            sessionError,
-            { userId: user.id },
-            'error',
-            'auth'
-          );
-          toast.error("Session verification failed. Please try logging out and back in.");
-          throw new Error("Session verification failed");
-        } else {
-          await logEvent({
-            requestId: uploadRequestId,
-            userId: user.id,
-            eventType: 'session_verified',
-            component: 'useOrgChartImage',
-            message: 'Session verified before upload',
-            metadata: { 
-              hasSession: !!currentSession,
-              expiresAt: currentSession?.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : 'unknown'
-            },
-            severity: 'info',
-            category: 'auth'
-          });
-        }
-        
-        // Upload the test file to check permissions
-        const { error: testUploadError } = await supabase.storage
-          .from('org_chart')
-          .upload('_test_permissions.txt', testFile, {
-            upsert: true,
-            contentType: 'text/plain',
-          });
-        
-        if (testUploadError) {
-          await logError(
-            uploadRequestId,
-            'useOrgChartImage',
-            'Permission test failed',
-            testUploadError,
-            { 
-              userId: user.id,
-              isAdmin,
-              hasSession: !!currentSession
-            },
-            'error',
-            'auth'
-          );
-          
-          // Add detailed logging for security policy errors
-          if (testUploadError.message.includes('new row violates row-level security policy')) {
-            await logEvent({
-              requestId: uploadRequestId,
-              userId: user.id,
-              eventType: 'rls_policy_violation',
-              component: 'useOrgChartImage',
-              message: 'RLS policy violation in test upload',
-              metadata: {
-                isAuthenticated,
-                isAdmin,
-                hasUser: !!user,
-                hasSession: !!session,
-                userId: user.id,
-                errorMessage: testUploadError.message
-              },
-              severity: 'error',
-              category: 'auth'
-            });
-          }
-          
-          toast.error("Storage permission test failed. You may not have permission to upload files.");
-          throw new Error(`Storage permission test failed: ${testUploadError.message}`);
-        } else {
-          await logEvent({
-            requestId: uploadRequestId,
-            userId: user.id,
-            eventType: 'permission_test_successful',
-            component: 'useOrgChartImage',
-            message: 'Permission test successful, proceeding with upload',
-            metadata: {},
-            severity: 'info'
-          });
-          
-          // Clean up test file
-          await supabase.storage
-            .from('org_chart')
-            .remove(['_test_permissions.txt']);
-        }
-      } catch (error) {
-        await logError(
-          uploadRequestId,
-          'useOrgChartImage',
-          'Error testing storage permissions',
-          error,
-          { userId: user.id },
-          'error'
-        );
-        throw error;
-      }
-
-      // Upload the actual file to storage
+      // Upload the actual file directly without test permissions
       const fileExt = file.name.split('.').pop();
       const fileName = `org_chart_${Date.now()}.${fileExt}`;
       const filePath = fileName;
@@ -402,62 +153,34 @@ export const useOrgChartImage = () => {
       if (uploadError) {
         console.error("Error uploading file:", uploadError);
         
-        // Add more detailed error information for debugging
         if (uploadError.message.includes('new row violates row-level security policy')) {
-          await logEvent({
+          logEvent({
             requestId: uploadRequestId,
             userId: user?.id,
             eventType: 'rls_policy_violation',
             component: 'useOrgChartImage',
-            message: 'RLS Policy Error during file upload',
-            metadata: {
-              isAuthenticated,
-              isAdmin, 
-              hasUser: !!user,
-              hasSession: !!session,
-              userId: user?.id,
-              fileType: file.type,
-              fileSize: file.size,
-              errorMessage: uploadError.message
-            },
-            severity: 'error',
-            category: 'auth'
+            message: 'RLS Policy Error during file upload'
           });
           
-          toast.error("Upload failed due to permission issues. Please check your login status.");
+          toast.error("Upload failed due to permission issues. Please contact an administrator.");
         } else {
-          await logError(
+          logError(
             uploadRequestId,
             'useOrgChartImage',
             'Error uploading file',
-            uploadError,
-            {
-              fileType: file.type,
-              fileSize: file.size,
-              userId: user?.id,
-              isAdmin,
-              hasSession: !!session
-            },
-            'error',
-            'network'
+            uploadError
           );
         }
         
         throw uploadError;
       }
       
-      await logEvent({
+      logEvent({
         requestId: uploadRequestId,
         userId: user?.id,
         eventType: 'file_uploaded',
         component: 'useOrgChartImage',
-        message: 'File uploaded successfully',
-        metadata: { 
-          filePath,
-          fileType: file.type,
-          fileSize: file.size
-        },
-        severity: 'info'
+        message: 'File uploaded successfully'
       });
 
       // Get the public URL for the uploaded file
@@ -483,17 +206,12 @@ export const useOrgChartImage = () => {
         fileType: fileType,
       };
 
-      await logEvent({
+      logEvent({
         requestId: uploadRequestId,
         userId: user?.id,
         eventType: 'updating_settings',
         component: 'useOrgChartImage',
-        message: 'Updating app settings with new file info',
-        metadata: { 
-          newSettings,
-          fileType
-        },
-        severity: 'info'
+        message: 'Updating app settings with new file info'
       });
 
       const { error: updateError } = await supabase
@@ -502,34 +220,22 @@ export const useOrgChartImage = () => {
         .eq('id', 'org_chart_image');
 
       if (updateError) {
-        await logError(
+        logError(
           uploadRequestId,
           'useOrgChartImage',
           'Error updating org chart image settings',
-          updateError,
-          {
-            userId: user?.id,
-            isAdmin,
-            newSettings
-          },
-          'error',
-          'database'
+          updateError
         );
         
         throw updateError;
       }
 
-      await logEvent({
+      logEvent({
         requestId: uploadRequestId,
         userId: user?.id,
         eventType: 'upload_complete',
         component: 'useOrgChartImage',
-        message: 'Org chart upload and settings update completed successfully',
-        metadata: { 
-          newSettings,
-          fileType
-        },
-        severity: 'info'
+        message: 'Org chart upload and settings update completed successfully'
       });
 
       return newSettings;
@@ -543,9 +249,7 @@ export const useOrgChartImage = () => {
         userId: user?.id,
         eventType: 'upload_success_notification',
         component: 'useOrgChartImage',
-        message: 'User notified of successful upload',
-        metadata: {},
-        severity: 'info'
+        message: 'User notified of successful upload'
       });
     },
     onError: (error: any) => {
@@ -555,15 +259,7 @@ export const useOrgChartImage = () => {
         uploadRequestId,
         'useOrgChartImage',
         'Upload error in mutation handler',
-        error,
-        {
-          isAuthenticated,
-          isAdmin,
-          hasUser: !!user,
-          hasSession: !!session
-        },
-        'error',
-        'network'
+        error
       );
       
       toast.error("Failed to update organization chart", {
