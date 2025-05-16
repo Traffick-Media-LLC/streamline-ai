@@ -2,7 +2,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import { logError, logEvent, generateRequestId } from "@/utils/logging";
 
-export async function ensureBucketAccess(userId: string | undefined) {
+// Define a proper return type for the function
+export interface BucketAccessResult {
+  success: boolean;
+  error?: any;
+  message?: string;
+}
+
+export async function ensureBucketAccess(userId: string | undefined): Promise<BucketAccessResult> {
   const requestId = generateRequestId();
   
   try {

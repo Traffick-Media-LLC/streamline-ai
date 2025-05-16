@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { RefreshCw, CheckCircle, AlertCircle, Info, Database } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ensureBucketAccess } from "@/utils/storage/ensureBucketAccess";
+import { ensureBucketAccess, BucketAccessResult } from "@/utils/storage/ensureBucketAccess";
 
 // Define proper types for the admin results object
 interface AdminCheckResults {
@@ -20,11 +20,7 @@ interface DiagnosticsResults {
   timestamp: string;
   user: { id: string; email: string } | null;
   adminStatus: AdminCheckResults;
-  bucketAccess: {
-    success: boolean;
-    error?: any;
-    message?: string;
-  };
+  bucketAccess: BucketAccessResult;
   databaseFunctions?: {
     success: boolean;
     message?: string;
