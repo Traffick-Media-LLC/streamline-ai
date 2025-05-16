@@ -9,25 +9,34 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Detect if we're in a sandbox preview environment
+const isSandboxPreview = typeof window !== 'undefined' && 
+  (window.location.hostname.includes('lovable.dev') || 
+   window.location.hostname.includes('lovable.ai'));
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce', // Use PKCE flow, which works better on mobile and in iframe environments
-    debug: window.location.hostname.includes('lovable') // Enable auth debugging in sandbox preview
+    flowType: 'pkce', // Use PKCE flow, which works better in mobile and in iframe environments
+    debug: isSandboxPreview // Enable auth debugging in sandbox preview
   }
 });
 
 // Log auth configuration on load for debugging
-if (window.location.hostname.includes('lovable')) {
+if (isSandboxPreview) {
   console.log("Supabase Auth Config:", {
     url: SUPABASE_URL,
     hasKey: !!SUPABASE_PUBLISHABLE_KEY,
     storage: "localStorage",
     location: window.location.origin,
     flowType: 'pkce',
-    debug: true
+    debug: true,
+    cookieOptions: {
+      sameSite: 'lax',
+      secure: window.location.protocol === 'https:',
+    }
   });
 }

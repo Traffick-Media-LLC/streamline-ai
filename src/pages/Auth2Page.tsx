@@ -11,6 +11,8 @@ import { useAuthSession } from "@/hooks/use-auth-session";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { logEvent, generateRequestId } from "@/utils/logging";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
 
 const Auth2Page = () => {
   const location = useLocation();
@@ -101,7 +103,9 @@ const Auth2Page = () => {
             hasSession: !!sessionData.session,
             hasUser: !!userData.user,
             sessionExpiry: sessionData.session?.expires_at,
-            userEmail: userData.user?.email
+            userEmail: userData.user?.email,
+            origin: window.location.origin,
+            redirectTo: window.location.origin + from
           });
         } catch (err) {
           console.error("Error getting auth debug info:", err);
@@ -129,25 +133,28 @@ const Auth2Page = () => {
             <EmailAuthForm from={from} />
             
             {isSandboxPreview && (
-              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
-                <p><strong>Note:</strong> You're using a sandbox preview environment.</p>
-                <p className="mt-1">If you're having trouble signing in, make sure your Supabase project 
-                has <strong>{window.location.origin}</strong> added as an authorized redirect URL.</p>
-                
-                <div className="mt-2 border-t border-amber-200 pt-2">
-                  <p><strong>Important:</strong> For sandbox previews, you need to add the Lovable preview URL to your Supabase project's redirect URLs.</p>
-                  <ol className="list-decimal pl-5 mt-1 space-y-1">
-                    <li>Go to your Supabase dashboard → Authentication → URL Configuration</li>
-                    <li>Add <code className="bg-amber-100 px-1 rounded">{window.location.origin}</code> to the list of redirect URLs</li>
-                    <li>Save the changes</li>
-                  </ol>
-                </div>
+              <div className="mt-4">
+                <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
+                  <ExclamationTriangleIcon className="h-4 w-4" />
+                  <AlertTitle>Sandbox Preview Environment</AlertTitle>
+                  <AlertDescription className="space-y-2">
+                    <p>To make authentication work in the sandbox preview:</p>
+                    <ol className="list-decimal pl-5 space-y-1">
+                      <li>Go to your <strong>Supabase Dashboard → Authentication → URL Configuration</strong></li>
+                      <li>Add <code className="bg-amber-100 px-1 rounded">{window.location.origin}</code> to the list of redirect URLs</li>
+                      <li>Make sure the Site URL is also configured correctly</li>
+                    </ol>
+                  </AlertDescription>
+                </Alert>
               </div>
             )}
             
             {authError && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
                 <p><strong>Authentication error:</strong> {authError}</p>
+                <p className="mt-2 text-xs">
+                  Tip: Make sure <code className="bg-red-100 px-1 rounded">{window.location.origin}</code> is an authorized redirect URL in your Supabase project.
+                </p>
               </div>
             )}
             

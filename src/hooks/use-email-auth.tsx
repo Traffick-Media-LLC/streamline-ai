@@ -28,15 +28,20 @@ export const useEmailAuth = (redirectTo: string) => {
       const isSandboxPreview = window.location.hostname.includes('lovable.dev') || 
                                 window.location.hostname.includes('lovable.ai');
       
-      // Prepare login options with the correct structure                         
+      console.log("Using redirectTo for login:", window.location.origin + redirectTo);
+      
+      // IMPORTANT: Always include redirectTo option regardless of environment
       const signInOptions = {
         email,
-        password
+        password,
+        options: {
+          redirectTo: window.location.origin + redirectTo
+        }
       };
       
-      // Add site URL option for sandbox previews
+      // Add additional logging for sandbox previews
       if (isSandboxPreview) {
-        console.log("Using redirectTo for sandbox preview:", window.location.origin + redirectTo);
+        console.log("Sandbox preview detected:", window.location.hostname);
         
         // Log additional debugging info
         logEvent({
@@ -51,7 +56,11 @@ export const useEmailAuth = (redirectTo: string) => {
         });
       }
       
-      console.log("Sending auth request with options:", { email, isSandboxPreview });
+      console.log("Sending auth request with options:", { 
+        email, 
+        redirectTo: window.location.origin + redirectTo,
+        isSandboxPreview
+      });
       
       const { data, error } = await supabase.auth.signInWithPassword(signInOptions);
       
