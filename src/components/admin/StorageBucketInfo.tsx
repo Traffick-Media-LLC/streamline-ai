@@ -7,6 +7,7 @@ import { Info, Database, FolderOpen, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 
+// Updated interface to match Supabase Bucket type
 interface BucketInfo {
   id: string;
   name: string;
@@ -14,7 +15,7 @@ interface BucketInfo {
   public: boolean;
   created_at: string;
   updated_at: string;
-  file_size_limit: number | null;
+  file_size_limit?: number | null; // Changed to optional to match Supabase Bucket type
 }
 
 const StorageBucketInfo: React.FC = () => {
