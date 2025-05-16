@@ -21,11 +21,7 @@ interface DiagnosticsResults {
   user: { id: string; email: string } | null;
   adminStatus: AdminCheckResults;
   bucketAccess: BucketAccessResult;
-  databaseFunctions?: {
-    success: boolean;
-    message?: string;
-    error?: any;
-  };
+  databaseFunctions?: BucketAccessResult;
 }
 
 const StoragePermissionsDiagnostics: React.FC = () => {
@@ -60,7 +56,7 @@ const StoragePermissionsDiagnostics: React.FC = () => {
       const bucketAccessResult = await ensureBucketAccess(user?.id);
       
       // Step 4: Test database function access
-      let databaseFunctionResult = { success: false };
+      let databaseFunctionResult: BucketAccessResult = { success: false };
       try {
         const { data: roleData, error: roleError } = await supabase
           .from('user_roles')
