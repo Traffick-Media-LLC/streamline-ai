@@ -41,21 +41,19 @@ const Auth2Page = () => {
         description: errorDescription || "Please try again"
       });
       
-      logError(
+      logError({
         requestId,
-        'Auth2Page',
-        `Auth redirect error: ${error}`,
-        new Error(error),
-        {
+        component: 'Auth2Page',
+        message: `Auth redirect error: ${error}`,
+        error: new Error(error),
+        metadata: {
           error,
           errorDescription,
           url: window.location.href
         },
-        undefined,
-        undefined, 
-        'error',
-        'auth'
-      );
+        severity: 'error',
+        category: 'auth'
+      });
     }
     
     // Handle any hash params for auth providers
@@ -67,32 +65,30 @@ const Auth2Page = () => {
         try {
           setIsLoading(true);
           
-          logEvent(
+          logEvent({
             requestId,
-            'Auth2Page',
-            'auth_hash_params_detected',
-            'Hash params detected in URL, attempting to process authentication',
-            {
+            eventType: 'auth_hash_params_detected',
+            component: 'Auth2Page',
+            message: 'Hash params detected in URL, attempting to process authentication',
+            metadata: {
               hashLength: hashParams.length
             }
-          );
+          });
           
           const { data, error } = await supabase.auth.getUser();
           
           if (error) {
-            logError(
+            logError({
               requestId,
-              'Auth2Page',
-              'Failed to get user from hash params',
+              component: 'Auth2Page',
+              message: 'Failed to get user from hash params',
               error,
-              {
+              metadata: {
                 hashLength: hashParams.length
               },
-              undefined,
-              undefined,
-              'error',
-              'auth'
-            );
+              severity: 'error',
+              category: 'auth'
+            });
             
             throw error;
           }
@@ -101,34 +97,32 @@ const Auth2Page = () => {
             toast.success("Signed in successfully!");
             console.log("User authenticated via hash params:", data.user.id);
             
-            logEvent(
+            logEvent({
               requestId,
-              'Auth2Page',
-              'auth_hash_success',
-              `User authenticated via hash params: ${data.user.id}`,
-              {
+              eventType: 'auth_hash_success',
+              component: 'Auth2Page',
+              message: `User authenticated via hash params: ${data.user.id}`,
+              metadata: {
                 userId: data.user.id,
                 email: data.user.email
               }
-            );
+            });
           }
         } catch (err) {
           console.error("Error processing authentication hash:", err);
           setAuthError("Failed to process authentication");
           
-          logError(
+          logError({
             requestId,
-            'Auth2Page',
-            'Error processing authentication hash',
-            err,
-            {
+            component: 'Auth2Page',
+            message: 'Error processing authentication hash',
+            error: err,
+            metadata: {
               hashLength: hashParams.length
             },
-            undefined,
-            undefined,
-            'error',
-            'auth'
-          );
+            severity: 'error',
+            category: 'auth'
+          });
         } finally {
           setIsLoading(false);
         }
@@ -149,16 +143,16 @@ const Auth2Page = () => {
     if (isSandboxPreview) {
       console.log("Sandbox preview environment detected:", window.location.hostname);
       
-      logEvent(
+      logEvent({
         requestId,
-        'Auth2Page',
-        'sandbox_preview_detected',
-        `Sandbox preview detected: ${window.location.hostname}`,
-        {
+        eventType: 'sandbox_preview_detected',
+        component: 'Auth2Page',
+        message: `Sandbox preview detected: ${window.location.hostname}`,
+        metadata: {
           hostname: window.location.hostname,
           from
         }
-      );
+      });
       
       // Get additional debug info for sandbox
       const getAuthState = async () => {
@@ -175,34 +169,32 @@ const Auth2Page = () => {
             redirectTo: window.location.origin + from
           });
           
-          logEvent(
+          logEvent({
             requestId,
-            'Auth2Page',
-            'auth_debug_info',
-            'Auth debug info retrieved',
-            {
+            eventType: 'auth_debug_info',
+            component: 'Auth2Page',
+            message: 'Auth debug info retrieved',
+            metadata: {
               hasSession: !!sessionData.session,
               hasUser: !!userData.user,
               origin: window.location.origin,
               redirectTo: window.location.origin + from
             }
-          );
+          });
         } catch (err) {
           console.error("Error getting auth debug info:", err);
           
-          logError(
+          logError({
             requestId,
-            'Auth2Page',
-            'Error getting auth debug info',
-            err,
-            {
+            component: 'Auth2Page',
+            message: 'Error getting auth debug info',
+            error: err,
+            metadata: {
               hostname: window.location.hostname
             },
-            undefined,
-            undefined,
-            'error',
-            'auth'
-          );
+            severity: 'error',
+            category: 'auth'
+          });
         }
       };
       
@@ -213,16 +205,16 @@ const Auth2Page = () => {
   if (isAuthenticated || user) {
     console.log("Already authenticated, redirecting to:", from);
     
-    logEvent(
+    logEvent({
       requestId,
-      'Auth2Page',
-      'auth_already_authenticated',
-      `Already authenticated, redirecting to: ${from}`,
-      {
+      eventType: 'auth_already_authenticated',
+      component: 'Auth2Page',
+      message: `Already authenticated, redirecting to: ${from}`,
+      metadata: {
         userId: user?.id,
         redirectTo: from
       }
-    );
+    });
     
     return <Navigate to={from} />;
   }
