@@ -22,7 +22,7 @@ const EmployeeDirectory: React.FC = () => {
         if (user?.id) {
           const result = await ensureBucketAccess(user.id);
           if (!result.success) {
-            console.error('Failed to initialize org chart bucket:', result.error || result.message);
+            console.error('Failed to initialize org chart bucket:', result.error);
           }
         }
       } catch (error) {
