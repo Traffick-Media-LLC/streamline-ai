@@ -22,16 +22,16 @@ export const useEmailAuth = (redirectTo: string) => {
     
     try {
       // Log the authentication attempt
-      logEvent({
+      logEvent(
         requestId,
-        eventType: 'auth_login_attempt',
-        component: 'EmailAuthForm',
-        message: `Email login attempt: ${email}`,
-        metadata: {
+        'EmailAuthForm',
+        'auth_login_attempt',
+        `Email login attempt: ${email}`,
+        {
           email,
           redirectTo
         }
-      });
+      );
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -43,20 +43,22 @@ export const useEmailAuth = (redirectTo: string) => {
         setLoading(false);
         
         // Log authentication error
-        logError({
+        logError(
           requestId,
-          component: 'EmailAuthForm',
-          message: `Email sign in failed: ${error.message}`,
+          'EmailAuthForm',
+          `Email sign in failed: ${error.message}`,
           error,
-          metadata: {
+          {
             email,
             errorCode: error.code,
             errorName: error.name,
             redirectTo
           },
-          severity: 'error',
-          category: 'auth'
-        });
+          undefined,
+          undefined,
+          'error',
+          'auth'
+        );
         
         return { success: false, error: error.message };
       } 
@@ -64,17 +66,17 @@ export const useEmailAuth = (redirectTo: string) => {
       console.log("Email sign in successful:", data);
       
       // Log successful authentication
-      logEvent({
+      logEvent(
         requestId,
-        eventType: 'auth_login_success',
-        component: 'EmailAuthForm',
-        message: `Email login successful: ${email}`,
-        metadata: {
+        'EmailAuthForm',
+        'auth_login_success',
+        `Email login successful: ${email}`,
+        {
           email,
           userId: data.user?.id,
           redirectTo
         }
-      });
+      );
       
       toast.success("Signed in successfully!");
       navigate(redirectTo);
@@ -84,18 +86,20 @@ export const useEmailAuth = (redirectTo: string) => {
       setLoading(false);
       
       // Log unexpected error
-      logError({
+      logError(
         requestId,
-        component: 'EmailAuthForm',
-        message: "Unexpected error during sign in",
+        'EmailAuthForm',
+        "Unexpected error during sign in",
         error,
-        metadata: {
+        {
           email,
           redirectTo
         },
-        severity: 'critical',
-        category: 'auth'
-      });
+        undefined,
+        undefined,
+        'critical',
+        'auth'
+      );
       
       return { success: false, error: error.message || "An unexpected error occurred" };
     }
@@ -107,16 +111,16 @@ export const useEmailAuth = (redirectTo: string) => {
     
     try {
       // Log the signup attempt
-      logEvent({
+      logEvent(
         requestId,
-        eventType: 'auth_signup_attempt',
-        component: 'EmailAuthForm',
-        message: `Email signup attempt: ${email}`,
-        metadata: {
+        'EmailAuthForm',
+        'auth_signup_attempt',
+        `Email signup attempt: ${email}`,
+        {
           email,
           redirectTo
         }
-      });
+      );
       
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -131,20 +135,22 @@ export const useEmailAuth = (redirectTo: string) => {
         setLoading(false);
         
         // Log signup error
-        logError({
+        logError(
           requestId,
-          component: 'EmailAuthForm',
-          message: `Email signup failed: ${error.message}`,
+          'EmailAuthForm',
+          `Email signup failed: ${error.message}`,
           error,
-          metadata: {
+          {
             email,
             errorCode: error.code,
             errorName: error.name,
             redirectTo
           },
-          severity: 'error',
-          category: 'auth'
-        });
+          undefined,
+          undefined,
+          'error',
+          'auth'
+        );
         
         return { success: false, error: error.message };
       } 
@@ -158,13 +164,13 @@ export const useEmailAuth = (redirectTo: string) => {
         });
         
         // Log account already exists
-        logEvent({
+        logEvent(
           requestId,
-          eventType: 'auth_signup_account_exists',
-          component: 'EmailAuthForm',
-          message: `Account already exists: ${email}`,
-          metadata: { email }
-        });
+          'EmailAuthForm',
+          'auth_signup_account_exists',
+          `Account already exists: ${email}`,
+          { email }
+        );
         
         setLoading(false);
         return { success: false, error: "Account already exists" };
@@ -176,16 +182,16 @@ export const useEmailAuth = (redirectTo: string) => {
         });
         
         // Log account created but needs confirmation
-        logEvent({
+        logEvent(
           requestId,
-          eventType: 'auth_signup_confirmation_required',
-          component: 'EmailAuthForm',
-          message: `Account created, email confirmation required: ${email}`,
-          metadata: {
+          'EmailAuthForm',
+          'auth_signup_confirmation_required',
+          `Account created, email confirmation required: ${email}`,
+          {
             email,
             userId: data.user.id
           }
-        });
+        );
         
         setLoading(false);
         return { success: true };
@@ -193,17 +199,17 @@ export const useEmailAuth = (redirectTo: string) => {
       
       // If email confirmation is not enabled, redirect to the app
       // Log successful signup
-      logEvent({
+      logEvent(
         requestId,
-        eventType: 'auth_signup_success',
-        component: 'EmailAuthForm',
-        message: `Signup successful: ${email}`,
-        metadata: {
+        'EmailAuthForm',
+        'auth_signup_success',
+        `Signup successful: ${email}`,
+        {
           email,
           userId: data.user?.id,
           redirectTo
         }
-      });
+      );
       
       toast.success("Account created successfully!");
       navigate(redirectTo);
@@ -213,18 +219,20 @@ export const useEmailAuth = (redirectTo: string) => {
       setLoading(false);
       
       // Log unexpected error
-      logError({
+      logError(
         requestId,
-        component: 'EmailAuthForm',
-        message: "Unexpected error during signup",
+        'EmailAuthForm',
+        "Unexpected error during signup",
         error,
-        metadata: {
+        {
           email,
           redirectTo
         },
-        severity: 'critical',
-        category: 'auth'
-      });
+        undefined,
+        undefined,
+        'critical',
+        'auth'
+      );
       
       return { success: false, error: error.message || "An unexpected error occurred" };
     }
