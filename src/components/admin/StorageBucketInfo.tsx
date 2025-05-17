@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 import { toast } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
-import { FileObject } from '@supabase/storage-js';
 
 // Updated interface to match Supabase Bucket type
 interface BucketInfo {
@@ -21,14 +19,14 @@ interface BucketInfo {
   file_size_limit?: number | null; // Made optional to match Supabase Bucket type
 }
 
-// Updated to match the structure from Supabase's FileObject
+// Updated FileInfo interface with proper types that don't rely on external FileObject
 interface FileInfo {
   name: string;
   id: string;
   updated_at: string;
   created_at: string;
   last_accessed_at: string;
-  metadata: Record<string, any>; // Changed to match FileObject's metadata type
+  metadata: Record<string, any>; // Using generic Record type instead
 }
 
 const StorageBucketInfo: React.FC = () => {
@@ -60,7 +58,7 @@ const StorageBucketInfo: React.FC = () => {
         if (fileError) {
           setError(`Error listing files: ${fileError.message}`);
         } else {
-          // Transform FileObject[] to FileInfo[] to match our interface
+          // Transform the file data to match our FileInfo interface
           const transformedFiles = fileData?.map(file => ({
             ...file,
             metadata: file.metadata || {}
