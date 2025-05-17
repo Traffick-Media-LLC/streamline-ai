@@ -92,8 +92,8 @@ const StorageBucketInfo: React.FC = () => {
     setPolicyLoading(true);
     try {
       // Fetch policies that apply to our bucket
-      const { data, error } = await supabase
-        .rpc('get_storage_policies', { bucket_name: BUCKET_ID });
+      // Fix 1: Use type assertion for the RPC function to handle the custom function
+      const { data, error } = await (supabase.rpc as any)('get_storage_policies', { bucket_name: BUCKET_ID });
       
       if (error) {
         console.error("Error fetching policies:", error);
@@ -122,12 +122,15 @@ const StorageBucketInfo: React.FC = () => {
           }
         ];
         
+        // Fix 2: Use the proper array type for the fallback
         setPolicies(simplePolicies);
       } else {
         setPolicies(data || []);
       }
     } catch (err) {
       console.error("Error in fetchPolicies:", err);
+      // Ensure we always set an array even on error
+      setPolicies([]);
     } finally {
       setPolicyLoading(false);
     }
