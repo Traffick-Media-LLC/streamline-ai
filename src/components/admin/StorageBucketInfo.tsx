@@ -3,11 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Info, Database, FolderOpen, RefreshCw, Shield, Calendar, FileText, AlertTriangle, User } from "lucide-react";
+import { Info, Database, FolderOpen, RefreshCw, Shield, Calendar, FileText, AlertTriangle, User, Check, HelpCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 import { toast } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 // Updated interface to match Supabase Bucket type
 interface BucketInfo {
@@ -30,17 +31,30 @@ interface FileInfo {
   metadata: Record<string, any>; // Using generic Record type instead
 }
 
+// Interface for RLS policy information
+interface PolicyInfo {
+  name: string;
+  action: string;
+  definition: string;
+  command: string;
+}
+
 const StorageBucketInfo: React.FC = () => {
   const [bucketInfo, setBucketInfo] = useState<BucketInfo | null>(null);
   const [loading, setLoading] = useState(false);
+  const [policyLoading, setPolicyLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
-  const [policies, setPolicies] = useState<any[]>([]);
+  const [policies, setPolicies] = useState<PolicyInfo[]>([]);
   const [authStatus, setAuthStatus] = useState<{
     authenticated: boolean;
     userId: string | null;
     role: string | null;
   }>({ authenticated: false, userId: null, role: null });
+  const [testUploadStatus, setTestUploadStatus] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error';
+    message?: string;
+  }>({ status: 'idle' });
   
   const checkAuthStatus = async () => {
     try {
@@ -71,6 +85,51 @@ const StorageBucketInfo: React.FC = () => {
     } catch (err) {
       console.error("Auth check error:", err);
       return false;
+    }
+  };
+
+  const fetchPolicies = async () => {
+    setPolicyLoading(true);
+    try {
+      // Fetch policies that apply to our bucket
+      const { data, error } = await supabase
+        .rpc('get_storage_policies', { bucket_name: BUCKET_ID });
+      
+      if (error) {
+        console.error("Error fetching policies:", error);
+        
+        // Fallback to simplified policy info
+        const { data: bucketData } = await supabase.storage.getBucket(BUCKET_ID);
+        
+        const simplePolicies = [
+          {
+            name: 'Public can view org_chart files',
+            action: 'SELECT',
+            definition: `bucket_id = '${BUCKET_ID}'`,
+            command: 'USING'
+          },
+          {
+            name: 'Authenticated users can upload to org_chart',
+            action: 'INSERT',
+            definition: `bucket_id = '${BUCKET_ID}'`,
+            command: 'WITH CHECK'
+          },
+          {
+            name: 'Admins can manage org_chart files',
+            action: 'ALL',
+            definition: `bucket_id = '${BUCKET_ID}' AND (SELECT is_admin())`,
+            command: 'USING'
+          }
+        ];
+        
+        setPolicies(simplePolicies);
+      } else {
+        setPolicies(data || []);
+      }
+    } catch (err) {
+      console.error("Error in fetchPolicies:", err);
+    } finally {
+      setPolicyLoading(false);
     }
   };
   
@@ -114,26 +173,60 @@ const StorageBucketInfo: React.FC = () => {
           setFiles(transformedFiles);
         }
         
-        // Try to get storage policies directly (avoiding the _rls_policies table)
-        try {
-          // Use storage.getBucket instead - we'll just use the public property from bucketInfo
-          // Skip querying non-existent _rls_policies table
-          console.log('Bucket is public:', bucketData?.public);
-          
-          // Set a simple policy description based on bucket public status
-          const simplePolicies = bucketData?.public ? 
-            [{ name: 'Public bucket - anyone can access files' }] : 
-            [{ name: 'Private bucket - requires authentication' }];
-          
-          setPolicies(simplePolicies);
-        } catch (policyErr) {
-          console.log('Could not fetch policies, likely not an admin');
-        }
+        // Fetch policy information
+        await fetchPolicies();
       }
     } catch (err) {
       setError(`Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const testStoragePermission = async () => {
+    setTestUploadStatus({ status: 'loading' });
+    try {
+      // Generate a unique test filename
+      const testFileName = `test_upload_${Date.now()}.txt`;
+      const testContent = new Blob(['This is a test file to check storage permissions.'], 
+        { type: 'text/plain' });
+      
+      // Try upload
+      const { data, error } = await supabase.storage
+        .from(BUCKET_ID)
+        .upload(testFileName, testContent, { upsert: true });
+        
+      if (error) {
+        setTestUploadStatus({ 
+          status: 'error',
+          message: `Upload failed: ${error.message}`
+        });
+        return;
+      }
+      
+      // Successfully uploaded, now try to delete
+      const { error: deleteError } = await supabase.storage
+        .from(BUCKET_ID)
+        .remove([testFileName]);
+        
+      if (deleteError) {
+        setTestUploadStatus({ 
+          status: 'error',
+          message: `Upload succeeded but deletion failed: ${deleteError.message}`
+        });
+        return;
+      }
+      
+      // All operations succeeded
+      setTestUploadStatus({ 
+        status: 'success',
+        message: 'Test upload and delete succeeded. Your storage permissions are working correctly.'
+      });
+    } catch (err) {
+      setTestUploadStatus({ 
+        status: 'error',
+        message: `Test error: ${err instanceof Error ? err.message : String(err)}`
+      });
     }
   };
   
@@ -222,6 +315,60 @@ const StorageBucketInfo: React.FC = () => {
           </Alert>
         )}
         
+        {/* Permission Test Section */}
+        <Alert className={`mb-4 ${
+          testUploadStatus.status === 'success' ? 'bg-green-50 border-green-200' : 
+          testUploadStatus.status === 'error' ? 'bg-red-50 border-red-200' :
+          'bg-muted'
+        }`}>
+          <div className="flex items-center">
+            {testUploadStatus.status === 'idle' && <HelpCircle className="h-4 w-4" />}
+            {testUploadStatus.status === 'loading' && <RefreshCw className="h-4 w-4 animate-spin" />}
+            {testUploadStatus.status === 'success' && <Check className="h-4 w-4 text-green-500" />}
+            {testUploadStatus.status === 'error' && <AlertTriangle className="h-4 w-4 text-red-500" />}
+          </div>
+          <AlertTitle>
+            {testUploadStatus.status === 'idle' && 'Storage Permission Check'}
+            {testUploadStatus.status === 'loading' && 'Testing Storage Permissions...'}
+            {testUploadStatus.status === 'success' && 'Storage Permissions Working'}
+            {testUploadStatus.status === 'error' && 'Storage Permission Error'}
+          </AlertTitle>
+          <AlertDescription>
+            {testUploadStatus.status === 'idle' && (
+              <div className="mt-2">
+                <p className="mb-2">Test if your storage permissions are correctly configured by uploading and then removing a test file.</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={testStoragePermission}
+                  disabled={!authStatus.authenticated}
+                >
+                  Test Permissions
+                </Button>
+              </div>
+            )}
+            {testUploadStatus.status === 'loading' && (
+              <p className="mt-2">Running storage permission test...</p>
+            )}
+            {(testUploadStatus.status === 'success' || testUploadStatus.status === 'error') && (
+              <div className="mt-2">
+                <p className={testUploadStatus.status === 'error' ? 'text-red-700' : 'text-green-700'}>
+                  {testUploadStatus.message}
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={testStoragePermission} 
+                  className="mt-2"
+                  disabled={!authStatus.authenticated}
+                >
+                  Test Again
+                </Button>
+              </div>
+            )}
+          </AlertDescription>
+        </Alert>
+        
         {bucketInfo ? (
           <div className="space-y-6">
             <Alert>
@@ -295,30 +442,51 @@ const StorageBucketInfo: React.FC = () => {
               </AlertDescription>
             </Alert>
 
-            {policies && policies.length > 0 && (
-              <Alert>
-                <Shield className="h-4 w-4" />
-                <AlertTitle>Access Policies</AlertTitle>
-                <AlertDescription>
-                  <div className="mt-2">
-                    <p className="text-sm mb-2">This bucket has {policies.length} access policies:</p>
-                    <ul className="list-disc pl-5 space-y-1 text-sm">
-                      {policies.map((policy, index) => (
-                        <li key={index}>{policy.name || `Policy ${index + 1}`}</li>
-                      ))}
-                    </ul>
-                    <p className="text-sm mt-2 text-muted-foreground">
-                      Note: After our SQL update, we now have simplified RLS policies:
-                    </p>
-                    <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
-                      <li>Public can view org_chart files</li>
-                      <li>Authenticated users can upload to org_chart</li>
-                      <li>Admins can manage org_chart files</li>
-                    </ul>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
+            {/* Storage Policies Section */}
+            <Alert>
+              <Shield className="h-4 w-4" />
+              <AlertTitle className="flex items-center gap-2">
+                Access Policies
+                {policyLoading && <RefreshCw className="h-3 w-3 animate-spin" />}
+              </AlertTitle>
+              <AlertDescription>
+                <Accordion type="single" collapsible className="mt-2">
+                  <AccordionItem value="policies">
+                    <AccordionTrigger>
+                      <span className="text-sm">
+                        {policies.length} Policies for {BUCKET_ID} bucket
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3 mt-2 p-2 bg-muted/20 rounded-md">
+                        {policies.map((policy, index) => (
+                          <div key={index} className="border rounded p-3 bg-white">
+                            <div className="flex items-center gap-2 font-medium">
+                              <Shield className="h-3 w-3" /> 
+                              {policy.name}
+                            </div>
+                            <div className="text-xs mt-1 font-mono bg-muted p-2 rounded overflow-x-auto">
+                              <span className="text-blue-600">POLICY</span> {policy.name} <br />
+                              <span className="text-blue-600">ON</span> storage.objects <br />
+                              <span className="text-blue-600">FOR</span> {policy.action} <br />
+                              <span className="text-blue-600">{policy.command}</span> ({policy.definition})
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-3">
+                        <p>Current RLS policies for {BUCKET_ID} bucket:</p>
+                        <ul className="list-disc pl-5 mt-1 space-y-1">
+                          <li>Public can view {BUCKET_ID} files</li>
+                          <li>Authenticated users can upload to {BUCKET_ID}</li>
+                          <li>Admins can manage {BUCKET_ID} files</li>
+                        </ul>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </AlertDescription>
+            </Alert>
           </div>
         ) : (
           <div className="text-center py-8">
