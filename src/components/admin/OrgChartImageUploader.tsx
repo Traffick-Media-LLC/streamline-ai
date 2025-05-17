@@ -21,11 +21,20 @@ const OrgChartImageUploader: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sessionDebugInfo, setSessionDebugInfo] = useState<string | null>(null);
   const componentRequestId = generateRequestId();
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Check bucket access on component mount
   useEffect(() => {
     const checkBucketAccess = async () => {
-      if (!user?.id) return;
+      if (!isAuthenticated) {
+        setAuthError("You are not authenticated. Please log in first.");
+        return;
+      }
+      
+      if (!user?.id) {
+        setAuthError("User ID not available. Authentication may be incomplete.");
+        return;
+      }
       
       setCheckingBucket(true);
       try {
@@ -43,7 +52,7 @@ const OrgChartImageUploader: React.FC = () => {
     };
     
     checkBucketAccess();
-  }, [user?.id]);
+  }, [user?.id, isAuthenticated]);
   
   // Log component mount with auth state
   useEffect(() => {
@@ -117,6 +126,14 @@ const OrgChartImageUploader: React.FC = () => {
 
     if (!isUserAuthenticated) {
       toast.error("You must be logged in to upload files");
+      setAuthError("Authentication required for file uploads.");
+      return;
+    }
+    
+    // Check if user is admin
+    if (!isAdmin) {
+      toast.error("Only administrators can upload organization charts");
+      setAuthError("Admin role required for file uploads.");
       return;
     }
     
@@ -163,12 +180,27 @@ const OrgChartImageUploader: React.FC = () => {
       toast.error("You must be logged in to remove files");
       return;
     }
+    
+    if (!isAdmin) {
+      toast.error("Only administrators can remove organization charts");
+      return;
+    }
+    
     removeImage();
   };
   
   const retryBucketCheck = async () => {
+    setAuthError(null);
+    
+    if (!isAuthenticated) {
+      setAuthError("You are not authenticated. Please log in first.");
+      toast.error("Please log in first");
+      return;
+    }
+    
     if (!user?.id) {
-      toast.error("You must be logged in to check storage access");
+      setAuthError("User ID not available. Authentication may be incomplete.");
+      toast.error("Authentication error");
       return;
     }
     
@@ -199,11 +231,16 @@ const OrgChartImageUploader: React.FC = () => {
   // If user is not an admin, show a permissions error
   if (!isAuthenticated || !isAdmin) {
     return (
-      <Alert>
+      <Alert variant="destructive">
         <Lock className="h-4 w-4" />
         <AlertTitle>Admin Access Required</AlertTitle>
         <AlertDescription>
-          You need administrator privileges to manage the organization chart.
+          <p className="mb-3">You need administrator privileges to manage the organization chart.</p>
+          {!isAuthenticated ? (
+            <p className="font-semibold">Please log in with an admin account.</p>
+          ) : (
+            <p className="font-semibold">Your account doesn't have admin privileges.</p>
+          )}
           {imageSettings?.url && (
             <div className="mt-4">
               {imageSettings.fileType === 'pdf' ? (
@@ -238,6 +275,46 @@ const OrgChartImageUploader: React.FC = () => {
     );
   }
 
+  // Show authentication errors
+  if (authError) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-destructive flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" /> 
+            Authentication Error
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Authentication Error</AlertTitle>
+            <AlertDescription>
+              <p className="mb-4">{authError}</p>
+              <Button onClick={() => window.location.href = "/auth"}>
+                Go to Login
+              </Button>
+            </AlertDescription>
+          </Alert>
+          
+          <Alert className="mt-4">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Technical Information</AlertTitle>
+            <AlertDescription className="text-xs">
+              <div className="space-y-1 mt-2">
+                <p>Authentication: {isAuthenticated ? "Yes" : "No"}</p>
+                <p>Admin Status: {isAdmin ? 'Confirmed' : 'Not Admin'}</p>
+                <p>User ID: {user?.id || 'Not authenticated'}</p>
+                <p>Session Valid: {isUserAuthenticated ? 'Yes' : 'No'}</p>
+                <p>Bucket ID: {BUCKET_ID}</p>
+              </div>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+  
   // Show bucket access errors
   if (bucketStatus && !bucketStatus.success) {
     return (
@@ -311,6 +388,7 @@ const OrgChartImageUploader: React.FC = () => {
           ) : bucketStatus?.success ? (
             <div className="text-green-700 mt-2">
               You have access to upload files to the {BUCKET_ID} bucket.
+              <div className="text-sm mt-1">Current RLS policies now allow uploads by authenticated users and management by admins.</div>
             </div>
           ) : (
             <div className="flex justify-between items-center mt-2">

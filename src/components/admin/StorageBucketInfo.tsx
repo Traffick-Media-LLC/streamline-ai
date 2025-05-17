@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Info, Database, FolderOpen, RefreshCw, Shield, Calendar, FileText } from "lucide-react";
+import { Info, Database, FolderOpen, RefreshCw, Shield, Calendar, FileText, AlertTriangle, User } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 import { toast } from "@/components/ui/sonner";
@@ -35,12 +36,59 @@ const StorageBucketInfo: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [policies, setPolicies] = useState<any[]>([]);
+  const [authStatus, setAuthStatus] = useState<{
+    authenticated: boolean;
+    userId: string | null;
+    role: string | null;
+  }>({ authenticated: false, userId: null, role: null });
+  
+  const checkAuthStatus = async () => {
+    try {
+      // Check if we have a current session
+      const { data: sessionData } = await supabase.auth.getSession();
+      const isAuthenticated = !!sessionData.session?.user;
+      const userId = sessionData.session?.user?.id || null;
+      
+      // Check admin role if authenticated
+      let role = null;
+      if (isAuthenticated && userId) {
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .maybeSingle();
+          
+        role = roleData?.role || null;
+      }
+      
+      setAuthStatus({
+        authenticated: isAuthenticated,
+        userId,
+        role
+      });
+      
+      return isAuthenticated;
+    } catch (err) {
+      console.error("Auth check error:", err);
+      return false;
+    }
+  };
   
   const fetchBucketInfo = async () => {
     setLoading(true);
     setError(null);
     
     try {
+      // First check authentication status
+      const isAuthenticated = await checkAuthStatus();
+      
+      if (!isAuthenticated) {
+        setError("You are not authenticated. Please log in to view bucket info.");
+        setBucketInfo(null);
+        setLoading(false);
+        return;
+      }
+      
       // Get bucket information
       const { data: bucketData, error: bucketError } = await supabase.storage.getBucket(BUCKET_ID);
       
@@ -95,6 +143,11 @@ const StorageBucketInfo: React.FC = () => {
 
   const handleFileDelete = async (fileName: string) => {
     try {
+      if (!authStatus.authenticated) {
+        toast.error("You must be logged in to delete files");
+        return;
+      }
+      
       const { error } = await supabase.storage.from(BUCKET_ID).remove([fileName]);
       if (error) {
         toast.error(`Failed to delete file: ${error.message}`);
@@ -136,8 +189,27 @@ const StorageBucketInfo: React.FC = () => {
         </Button>
       </CardHeader>
       <CardContent>
+        {/* Authentication Status */}
+        <Alert variant={authStatus.authenticated ? "default" : "destructive"} className="mb-4">
+          <User className="h-4 w-4" />
+          <AlertTitle>Authentication Status</AlertTitle>
+          <AlertDescription>
+            <div className="space-y-1 mt-2 text-sm">
+              <div><strong>Status:</strong> {authStatus.authenticated ? 'Authenticated' : 'Not Authenticated'}</div>
+              {authStatus.userId && <div><strong>User ID:</strong> {authStatus.userId}</div>}
+              {authStatus.role && <div><strong>Role:</strong> {authStatus.role}</div>}
+              {!authStatus.authenticated && (
+                <div className="mt-2 text-red-500">
+                  You need to be authenticated to access bucket information and perform operations.
+                </div>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      
         {error && (
           <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
               {error}
@@ -210,6 +282,7 @@ const StorageBucketInfo: React.FC = () => {
                               size="sm"
                               className="text-destructive hover:text-destructive"
                               onClick={() => handleFileDelete(file.name)}
+                              disabled={!authStatus.authenticated || authStatus.role !== 'admin'}
                             >
                               Delete
                             </Button>
@@ -233,6 +306,14 @@ const StorageBucketInfo: React.FC = () => {
                       {policies.map((policy, index) => (
                         <li key={index}>{policy.name || `Policy ${index + 1}`}</li>
                       ))}
+                    </ul>
+                    <p className="text-sm mt-2 text-muted-foreground">
+                      Note: After our SQL update, we now have simplified RLS policies:
+                    </p>
+                    <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
+                      <li>Public can view org_chart files</li>
+                      <li>Authenticated users can upload to org_chart</li>
+                      <li>Admins can manage org_chart files</li>
                     </ul>
                   </div>
                 </AlertDescription>
