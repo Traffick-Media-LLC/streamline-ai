@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { RefreshCw, CheckCircle, AlertCircle, Info, Database } from "lucide-react";
+import { RefreshCw, CheckCircle, AlertCircle, Info, Database, Key, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ensureBucketAccess, BucketAccessResult } from "@/utils/storage/ensureBucketAccess";
+import { ensureBucketAccess, BucketAccessResult, BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 
 // Define proper types for the admin results object
 interface AdminCheckResults {
@@ -21,6 +21,7 @@ interface DiagnosticsResults {
   user: { id: string; email: string } | null;
   adminStatus: AdminCheckResults;
   bucketAccess: BucketAccessResult;
+  bucketPolicies?: any[];
   databaseFunctions?: BucketAccessResult;
 }
 
@@ -54,8 +55,24 @@ const StoragePermissionsDiagnostics: React.FC = () => {
       
       // Step 3: Check bucket access
       const bucketAccessResult = await ensureBucketAccess(user?.id);
+
+      // Step 4: Get bucket policies
+      let bucketPolicies = [];
+      try {
+        const { data: policies, error: policiesError } = await supabase
+          .from('_rls_policies')
+          .select('*')
+          .ilike('table', '%storage%')
+          .ilike('name', `%${BUCKET_ID}%`);
+
+        if (!policiesError && policies) {
+          bucketPolicies = policies;
+        }
+      } catch (policyError) {
+        console.error("Error fetching policies:", policyError);
+      }
       
-      // Step 4: Test database function access
+      // Step 5: Test database function access
       let databaseFunctionResult: BucketAccessResult = { success: false };
       try {
         const { data: roleData, error: roleError } = await supabase
@@ -90,6 +107,7 @@ const StoragePermissionsDiagnostics: React.FC = () => {
         user: user ? { id: user.id, email: user.email } : null,
         adminStatus: adminResults,
         bucketAccess: bucketAccessResult,
+        bucketPolicies,
         databaseFunctions: databaseFunctionResult
       });
       
@@ -111,7 +129,10 @@ const StoragePermissionsDiagnostics: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Storage Permissions Diagnostics</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="h-5 w-5" />
+          Storage Permissions Diagnostics
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -146,7 +167,7 @@ const StoragePermissionsDiagnostics: React.FC = () => {
                 </AlertTitle>
                 <AlertDescription>
                   {results.bucketAccess?.success 
-                    ? "Your account has proper access to the storage buckets." 
+                    ? `Your account has proper access to the '${BUCKET_ID}' bucket.` 
                     : `Storage access failed: ${results.bucketAccess?.error?.message || results.bucketAccess?.message || "Unknown error"}`}
                     
                   {!results.bucketAccess?.success && results.bucketAccess?.error?.details && (
@@ -156,6 +177,21 @@ const StoragePermissionsDiagnostics: React.FC = () => {
                   )}
                 </AlertDescription>
               </Alert>
+              
+              {results.bucketPolicies && results.bucketPolicies.length > 0 && (
+                <Alert>
+                  <Key className="h-4 w-4" />
+                  <AlertTitle>Storage Bucket Policies</AlertTitle>
+                  <AlertDescription>
+                    <p className="mb-2">Found {results.bucketPolicies.length} policies for {BUCKET_ID} bucket</p>
+                    <ul className="text-sm list-disc pl-5 space-y-1">
+                      {results.bucketPolicies.map((policy, index) => (
+                        <li key={index}>{policy.name || `Policy ${index + 1}`}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
               
               {results.databaseFunctions && (
                 <Alert variant={results.databaseFunctions.success ? "default" : "destructive"}>

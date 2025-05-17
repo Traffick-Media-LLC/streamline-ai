@@ -30,7 +30,7 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
       const { data, error } = await supabase.storage.getBucket(BUCKET_ID);
       
       if (error) {
-        console.log('Bucket does not exist, creating storage bucket', BUCKET_ID);
+        console.log('Bucket does not exist or not accessible, attempting to create storage bucket', BUCKET_ID);
         
         // Create the bucket if it doesn't exist
         const { error: createError } = await supabase.storage.createBucket(BUCKET_ID, {
@@ -45,6 +45,16 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
             `Error creating bucket ${BUCKET_ID}`,
             createError
           );
+          
+          // Special handling for permission denied errors
+          if (createError.message.includes('permission denied')) {
+            return { 
+              success: false, 
+              error: createError,
+              message: `You don't have permission to create the ${BUCKET_ID} bucket. This may require admin privileges.`
+            };
+          }
+          
           return { 
             success: false, 
             error: createError,
@@ -86,12 +96,20 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
             'Storage permission test failed',
             testError
           );
+          
+          // Special handling for RLS policy errors
+          if (testError.message.includes('new row violates row level security policy')) {
+            return { 
+              success: false, 
+              error: testError,
+              message: `RLS Policy Error: You don't have permission to upload to the ${BUCKET_ID} bucket. The bucket exists, but you need proper permissions.`
+            };
+          }
+          
           return { 
             success: false, 
-            error: {
-              message: `You do not have permission to upload to the ${BUCKET_ID} bucket`,
-              details: testError
-            }
+            error: testError,
+            message: `You do not have permission to upload to the ${BUCKET_ID} bucket`
           };
         }
         
