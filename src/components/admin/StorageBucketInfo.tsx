@@ -152,7 +152,7 @@ const StorageBucketInfo = () => {
               </div>
               
               {bucketInfo.public && (
-                <Alert variant="info" className="mt-2">
+                <Alert variant="default" className="mt-2 bg-blue-50 border-blue-100">
                   <InfoIcon className="h-4 w-4" />
                   <AlertDescription>
                     This bucket is public, which means anyone can view files without authentication, but only admins can upload and manage files.
