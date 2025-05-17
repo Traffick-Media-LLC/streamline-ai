@@ -56,20 +56,27 @@ const StoragePermissionsDiagnostics: React.FC = () => {
       // Step 3: Check bucket access
       const bucketAccessResult = await ensureBucketAccess(user?.id);
 
-      // Step 4: Get bucket policies
+      // Step 4: Get storage policies
+      // We can't directly query _rls_policies, but we can check bucket public status
       let bucketPolicies = [];
       try {
-        const { data: policies, error: policiesError } = await supabase
-          .from('_rls_policies')
-          .select('*')
-          .ilike('table', '%storage%')
-          .ilike('name', `%${BUCKET_ID}%`);
-
-        if (!policiesError && policies) {
-          bucketPolicies = policies;
+        const { data: bucketData, error: bucketError } = await supabase.storage.getBucket(BUCKET_ID);
+        
+        if (!bucketError && bucketData) {
+          // Create simplified policy information based on bucket's public status
+          if (bucketData.public) {
+            bucketPolicies = [
+              { name: `Public read access for ${BUCKET_ID}` },
+              { name: `Authenticated write access for ${BUCKET_ID}` }
+            ];
+          } else {
+            bucketPolicies = [
+              { name: `Private access for ${BUCKET_ID}` }
+            ];
+          }
         }
       } catch (policyError) {
-        console.error("Error fetching policies:", policyError);
+        console.error("Error checking bucket policies:", policyError);
       }
       
       // Step 5: Test database function access

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 import { toast } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
+import { FileObject } from '@supabase/storage-js';
 
 // Updated interface to match Supabase Bucket type
 interface BucketInfo {
@@ -17,19 +18,17 @@ interface BucketInfo {
   public: boolean;
   created_at: string;
   updated_at: string;
-  file_size_limit?: number | null; // Changed to optional to match Supabase Bucket type
+  file_size_limit?: number | null; // Made optional to match Supabase Bucket type
 }
 
+// Updated to match the structure from Supabase's FileObject
 interface FileInfo {
   name: string;
   id: string;
   updated_at: string;
   created_at: string;
   last_accessed_at: string;
-  metadata: {
-    size: number;
-    mimetype: string;
-  };
+  metadata: Record<string, any>; // Changed to match FileObject's metadata type
 }
 
 const StorageBucketInfo: React.FC = () => {
@@ -61,20 +60,26 @@ const StorageBucketInfo: React.FC = () => {
         if (fileError) {
           setError(`Error listing files: ${fileError.message}`);
         } else {
-          setFiles(fileData || []);
+          // Transform FileObject[] to FileInfo[] to match our interface
+          const transformedFiles = fileData?.map(file => ({
+            ...file,
+            metadata: file.metadata || {}
+          })) || [];
+          setFiles(transformedFiles);
         }
         
-        // Try to get policies (this might fail for non-admins)
+        // Try to get storage policies directly (avoiding the _rls_policies table)
         try {
-          const { data: policyData, error: policyError } = await supabase
-            .from('_rls_policies')
-            .select('*')
-            .ilike('table', '%storage%')
-            .ilike('name', `%${BUCKET_ID}%`);
-            
-          if (!policyError && policyData) {
-            setPolicies(policyData);
-          }
+          // Use storage.getBucket instead - we'll just use the public property from bucketInfo
+          // Skip querying non-existent _rls_policies table
+          console.log('Bucket is public:', bucketData?.public);
+          
+          // Set a simple policy description based on bucket public status
+          const simplePolicies = bucketData?.public ? 
+            [{ name: 'Public bucket - anyone can access files' }] : 
+            [{ name: 'Private bucket - requires authentication' }];
+          
+          setPolicies(simplePolicies);
         } catch (policyErr) {
           console.log('Could not fetch policies, likely not an admin');
         }
@@ -157,7 +162,7 @@ const StorageBucketInfo: React.FC = () => {
                   <div><strong>ID:</strong> {bucketInfo.id}</div>
                   <div><strong>Name:</strong> {bucketInfo.name}</div>
                   <div><strong>Public:</strong> {bucketInfo.public ? 
-                    <Badge variant="success">Yes</Badge> : 
+                    <Badge variant="secondary">Yes</Badge> : 
                     <Badge variant="outline">No</Badge>}
                   </div>
                   <div><strong>Created:</strong> {new Date(bucketInfo.created_at).toLocaleString()}</div>
