@@ -1,5 +1,4 @@
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import OrgChartViewer from '@/components/OrgChartViewer';
@@ -11,12 +10,42 @@ import { ensureBucketAccess, BUCKET_ID } from '@/utils/storage/ensureBucketAcces
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { toast } from '@/components/ui/sonner';
+import { supabase } from '@/integrations/supabase/client';
+import OrgChartDebugTools from '@/components/OrgChartDebugTools';
 
 const EmployeeDirectory: React.FC = () => {
   const { data: employees = [], isLoading, error } = useEmployeesData();
   const { user } = useAuth();
   const { imageSettings } = useOrgChartImage();
   const pageRequestId = generateRequestId();
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showDebugTools, setShowDebugTools] = useState(false);
+
+  // Force a refresh of the image settings by directly querying the database
+  useEffect(() => {
+    const checkAppSettings = async () => {
+      try {
+        if (user?.id) {
+          const { data, error } = await supabase
+            .from('app_settings')
+            .select('*')
+            .eq('id', 'org_chart_image')
+            .single();
+          
+          if (error) {
+            console.error('Error fetching app_settings:', error);
+          } else {
+            console.log('Direct app_settings query result:', data);
+            setDebugInfo(data);
+          }
+        }
+      } catch (error) {
+        console.error('Exception querying app_settings:', error);
+      }
+    };
+    
+    checkAppSettings();
+  }, [user?.id]);
 
   // Check if the storage bucket exists and create it if it doesn't
   useEffect(() => {
@@ -45,6 +74,8 @@ const EmployeeDirectory: React.FC = () => {
     // Log when org chart image is loaded
     if (imageSettings?.url) {
       console.log("Org chart image loaded:", imageSettings.url);
+    } else {
+      console.log("No org chart image URL available");
     }
   }, [imageSettings]);
 
@@ -63,11 +94,35 @@ const EmployeeDirectory: React.FC = () => {
 
       {/* Organization Chart */}
       <Card className="mb-8">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Organization Chart</CardTitle>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setShowDebugTools(!showDebugTools)}
+          >
+            {showDebugTools ? 'Hide Debug Tools' : 'Show Debug Tools'}
+          </Button>
         </CardHeader>
         <CardContent>
           <OrgChartViewer />
+          
+          {/* Debug info - will be removed in production */}
+          {(!imageSettings?.url || debugInfo) && showDebugTools && (
+            <div className="mt-4 p-4 bg-muted rounded-md text-xs">
+              <p className="font-semibold">Debug Information:</p>
+              <p>Image URL: {imageSettings?.url || 'Not set'}</p>
+              <p>Image Type: {imageSettings?.fileType || 'Not set'}</p>
+              <p>Updated: {imageSettings?.updated_at || 'Not set'}</p>
+              {debugInfo && (
+                <pre className="mt-2 overflow-auto max-h-[150px]">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              )}
+            </div>
+          )}
+          
+          {showDebugTools && <OrgChartDebugTools />}
         </CardContent>
       </Card>
 
