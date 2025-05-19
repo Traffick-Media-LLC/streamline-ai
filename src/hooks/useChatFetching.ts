@@ -1,5 +1,8 @@
 
 import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Chat, Message } from "@/types/chat";
+import { ErrorTracker } from "@/utils/logging";
 
 export const useChatFetching = (
   user, 
@@ -12,10 +15,10 @@ export const useChatFetching = (
   const fetchChats = async () => {
     try {
       setIsInitializing(true);
+      const errorTracker = new ErrorTracker('useChatFetching', user?.id);
       
       if (user) {
-        // Handle authenticated user flow (API)
-        const { supabase } = await import("@/integrations/supabase/client");
+        await errorTracker.logStage('fetch_chats', 'start');
         
         // Get chats for this user ordered by most recent
         const { data, error } = await supabase
@@ -25,6 +28,7 @@ export const useChatFetching = (
           .order('updated_at', { ascending: false });
           
         if (error) {
+          await errorTracker.logError('Error fetching chats', error);
           throw error;
         }
         
@@ -38,31 +42,54 @@ export const useChatFetching = (
             .order('timestamp', { ascending: true });
             
           if (messagesError) {
-            console.error(`Error fetching messages for chat ${chat.id}:`, messagesError);
+            await errorTracker.logError(`Error fetching messages for chat ${chat.id}`, messagesError);
             return {
               id: chat.id,
               title: chat.title || 'Untitled Chat',
               messages: [],
-              createdAt: new Date(chat.created_at).getTime(),
-              updatedAt: new Date(chat.updated_at).getTime()
-            };
+              createdAt: new Date(chat.created_at).toISOString(),
+              updatedAt: new Date(chat.updated_at).toISOString()
+            } as Chat;
           }
           
           // Transform messages
-          const messages = messagesData.map(msg => ({
-            id: msg.id,
-            role: msg.role,
-            content: msg.content,
-            timestamp: new Date(msg.timestamp).getTime()
-          }));
+          const messages = messagesData.map(msg => {
+            // Parse document_ids if available
+            let metadata = undefined;
+            
+            try {
+              // Handle JSON content or fields that might contain metadata
+              if (msg.document_ids && msg.document_ids.length > 0) {
+                metadata = { documentIds: msg.document_ids };
+              }
+            } catch (e) {
+              console.error('Error parsing message metadata:', e);
+            }
+            
+            const message: Message = {
+              id: msg.id,
+              role: msg.role,
+              content: msg.content,
+              createdAt: new Date(msg.timestamp).toISOString(),
+              timestamp: new Date(msg.timestamp).getTime()
+            };
+            
+            if (metadata) {
+              message.metadata = metadata;
+            }
+            
+            return message;
+          });
           
-          return {
+          const chatObj: Chat = {
             id: chat.id,
             title: chat.title || 'Untitled Chat',
             messages,
-            createdAt: new Date(chat.created_at).getTime(),
-            updatedAt: new Date(chat.updated_at).getTime()
+            createdAt: new Date(chat.created_at).toISOString(),
+            updatedAt: new Date(chat.updated_at).toISOString()
           };
+          
+          return chatObj;
         }));
         
         // Set chats in state
@@ -76,6 +103,10 @@ export const useChatFetching = (
         else if (!currentChatId && transformedChats.length > 0) {
           setCurrentChatId(transformedChats[0].id);
         }
+        
+        await errorTracker.logStage('fetch_chats', 'complete', {
+          chatCount: transformedChats.length
+        });
       } else {
         // No user yet (not logged in)
         setChats([]);

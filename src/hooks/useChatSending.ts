@@ -1,8 +1,9 @@
 
 import { User } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from 'uuid';
-import { Message } from "@/types/chat";
+import { Message, SendMessageResult } from "@/types/chat";
 import { generateRequestId, ErrorTracker, startTimer, calculateDuration } from "@/utils/logging";
+import { supabase } from "@/integrations/supabase/client";
 
 export const useChatSending = (
   user: User | null,
@@ -12,7 +13,7 @@ export const useChatSending = (
   setIsLoadingResponse: (loading: boolean) => void,
   getCurrentChat: () => any
 ) => {
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string): Promise<SendMessageResult> => {
     const requestId = generateRequestId();
     const errorTracker = new ErrorTracker('useChatSending', user?.id, currentChatId || undefined, requestId);
     const startTime = startTimer();
@@ -65,18 +66,40 @@ export const useChatSending = (
         await errorTracker.logStage('generate_response', 'start');
         
         const generationStartTime = startTimer();
-        const response = "This is a mock response. In a real app, this would come from an API call.";
+        
+        // Call the edge function with the message and chat history
+        const { data, error } = await supabase.functions.invoke('chat', {
+          body: {
+            message: content,
+            chatId: activeChatId,
+            chatHistory: messages,
+            requestId
+          }
+        });
+        
+        if (error) {
+          await errorTracker.logError('Error calling chat edge function', error);
+          return { success: false, error: 'Failed to generate response: ' + error.message };
+        }
         
         await errorTracker.logStage('generate_response', 'complete', {
-          durationMs: calculateDuration(generationStartTime)
+          durationMs: calculateDuration(generationStartTime),
+          sourceInfo: data.sourceInfo ? true : false,
+          model: data.model
         });
 
-        // Add assistant message to chat
+        // Add assistant message to chat with metadata
         const assistantMessage: Message = {
           id: uuidv4(),
           role: 'assistant',
-          content: response,
-          createdAt: new Date().toISOString()
+          content: data.message,
+          createdAt: new Date().toISOString(),
+          metadata: {
+            model: data.model,
+            tokensUsed: data.tokensUsed,
+            responseTimeMs: data.responseTime,
+            sourceInfo: data.sourceInfo
+          }
         };
         
         await errorTracker.logStage('add_assistant_message', 'start');
@@ -86,7 +109,7 @@ export const useChatSending = (
         await errorTracker.logStage('send_message', 'complete', {
           durationMs: calculateDuration(startTime),
           userMessageLength: content.length,
-          aiResponseLength: response.length
+          aiResponseLength: data.message.length
         });
 
         return { success: true };

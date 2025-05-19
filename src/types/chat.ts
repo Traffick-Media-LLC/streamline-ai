@@ -1,12 +1,37 @@
 
 import { User } from "@supabase/supabase-js";
 
+export type SourceInfo = {
+  found: boolean;
+  legal?: boolean;
+  state?: string;
+  brand?: string;
+  brandLogo?: string | null;
+  products?: Array<{
+    name: string;
+    brand: string;
+    brandLogo?: string | null;
+  }>;
+  message?: string;
+  error?: string;
+  source: 'product_database' | 'brand_database' | 'no_match' | 'database_error';
+};
+
+export type MessageMetadata = {
+  model?: string;
+  tokensUsed?: number;
+  responseTimeMs?: number;
+  sourceInfo?: SourceInfo;
+  isEdited?: boolean;
+  [key: string]: any;
+};
+
 export type Message = {
   id: string;
   createdAt: string;
   content: string;
   role: "system" | "assistant" | "user";
-  metadata?: Record<string, any>;
+  metadata?: MessageMetadata;
   isEdited?: boolean;
   // Add timestamp as an optional property for backward compatibility
   timestamp?: number;
