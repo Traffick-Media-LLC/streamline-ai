@@ -66,9 +66,14 @@ export const useChatFetching = (
               console.error('Error parsing message metadata:', e);
             }
             
+            // Ensure that the role is one of the allowed types
+            const role = (msg.role === 'system' || msg.role === 'assistant' || msg.role === 'user') 
+              ? msg.role as 'system' | 'assistant' | 'user'
+              : 'user'; // Default to 'user' if the role is not one of the allowed types
+            
             const message: Message = {
               id: msg.id,
-              role: msg.role,
+              role: role,
               content: msg.content,
               createdAt: new Date(msg.timestamp).toISOString(),
               timestamp: new Date(msg.timestamp).getTime()
