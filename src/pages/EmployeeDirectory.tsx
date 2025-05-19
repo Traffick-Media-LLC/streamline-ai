@@ -12,6 +12,7 @@ import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 import OrgChartDebugTools from '@/components/OrgChartDebugTools';
+import { Button } from '@/components/ui/button';
 
 const EmployeeDirectory: React.FC = () => {
   const { data: employees = [], isLoading, error } = useEmployeesData();
