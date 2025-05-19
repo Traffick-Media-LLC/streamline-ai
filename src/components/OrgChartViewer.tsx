@@ -53,9 +53,18 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
     
     // Set local image URL state from imageSettings only if not using an override
     if (!overrideUrl && imageSettings?.url && !imageLoadError) {
-      const absoluteUrl = ensureAbsoluteUrl(imageSettings.url);
-      setLocalImageUrl(absoluteUrl);
-      console.log("Setting absolute URL from settings:", absoluteUrl);
+      // FIX: Verify that imageSettings.url is a string or check if value is an object with url property
+      const settingsUrl = typeof imageSettings.value === 'object' && imageSettings.value !== null
+        ? (imageSettings.value as { url?: string }).url || null
+        : typeof imageSettings.url === 'string'
+          ? imageSettings.url
+          : null;
+          
+      if (settingsUrl) {
+        const absoluteUrl = ensureAbsoluteUrl(settingsUrl);
+        setLocalImageUrl(absoluteUrl);
+        console.log("Setting absolute URL from settings:", absoluteUrl);
+      }
     }
   }, [imageSettings, imageLoadError, overrideUrl]);
 
@@ -88,8 +97,10 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
           setLocalImageUrl(overrideUrl);
           setUsingOverrideUrl(true);
           toast.success('Using specified PDF URL');
-        } else if (data.value.url) {
-          const absoluteUrl = ensureAbsoluteUrl(data.value.url);
+        } else if (data.value && typeof data.value === 'object' && 'url' in data.value) {
+          // FIX: Type check for data.value to ensure it has a url property
+          const valueUrl = (data.value as { url: string }).url;
+          const absoluteUrl = ensureAbsoluteUrl(valueUrl);
           setLocalImageUrl(absoluteUrl);
           toast.success('Chart data refreshed');
           console.log("URL after refresh:", absoluteUrl);
@@ -122,10 +133,15 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
 
   // Toggle between override URL and database URL
   const toggleUrlSource = () => {
-    if (usingOverrideUrl && imageSettings?.url) {
+    // FIX: Check if imageSettings.url or imageSettings.value.url exists
+    const settingsUrl = imageSettings && typeof imageSettings.value === 'object' && imageSettings.value !== null
+      ? (imageSettings.value as { url?: string }).url
+      : imageSettings?.url;
+      
+    if (usingOverrideUrl && settingsUrl) {
       // Switch to URL from database
       setUsingOverrideUrl(false);
-      const absoluteUrl = ensureAbsoluteUrl(imageSettings.url);
+      const absoluteUrl = ensureAbsoluteUrl(settingsUrl);
       setLocalImageUrl(absoluteUrl);
       toast.info('Using URL from database');
     } else if (overrideUrl) {
@@ -286,15 +302,21 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
           {usingOverrideUrl ? (
             <span className="flex items-center justify-between">
               <span>Using manually specified PDF URL</span>
-              {imageSettings?.url && (
-                <Button 
-                  variant="ghost" 
-                  size="xs" 
-                  className="h-5 text-xs"
-                  onClick={toggleUrlSource}
-                >
-                  Switch to DB URL
-                </Button>
+              {/* FIX: Check if imageSettings contains a valid URL */}
+              {imageSettings && (
+                (typeof imageSettings.url === 'string' || 
+                (typeof imageSettings.value === 'object' && 
+                 imageSettings.value !== null && 
+                 'url' in imageSettings.value)) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"  // FIX: Changed from "xs" to "sm"
+                    className="h-5 text-xs"
+                    onClick={toggleUrlSource}
+                  >
+                    Switch to DB URL
+                  </Button>
+                )
               )}
             </span>
           ) : (
@@ -304,7 +326,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
               {overrideUrl && (
                 <Button 
                   variant="ghost" 
-                  size="xs" 
+                  size="sm"  // FIX: Changed from "xs" to "sm"
                   className="h-5 text-xs ml-2"
                   onClick={toggleUrlSource}
                 >
