@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Navigate, useNavigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { Animated } from "@/components/ui/animated";
@@ -12,7 +12,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const AuthPage = () => {
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
   const { user } = useAuthSession();
@@ -42,7 +41,7 @@ const AuthPage = () => {
             
             <Animated type="fade" delay={0.6}>
               <div className="text-center text-sm text-muted-foreground mt-6">
-                <p>Secure sign in with your Streamline Google account.</p>
+                <p>Secure sign in with your Streamline account.</p>
               </div>
             </Animated>
           </Card>
