@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -238,12 +237,12 @@ export const useOrgChartImage = () => {
           message: 'Updating app settings with new file info'
         });
   
-        // Use the secure function to update settings
-        const { error: updateError } = await supabase
+        // Use the secure function to update settings with type assertion
+        const { error: updateError } = await (supabase
           .rpc('update_app_settings', {
             setting_id: 'org_chart_image',
             setting_value: newSettings as unknown as Json
-          });
+          }) as any);
 
         if (updateError) {
           logError(
@@ -360,12 +359,12 @@ export const useOrgChartImage = () => {
       };
       
       try {
-        // Use the secure function to update settings
-        const { error: updateError } = await supabase
+        // Use the secure function to update settings with type assertion
+        const { error: updateError } = await (supabase
           .rpc('update_app_settings', {
             setting_id: 'org_chart_image',
             setting_value: newSettings as unknown as Json
-          });
+          }) as any);
             
         if (updateError) throw updateError;
       } catch (error) {
