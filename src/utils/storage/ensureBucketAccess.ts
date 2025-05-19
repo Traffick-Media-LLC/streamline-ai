@@ -25,6 +25,14 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
       message: 'Checking and ensuring bucket access'
     });
     
+    // Check if the user is authenticated
+    if (!userId) {
+      return { 
+        success: false, 
+        message: 'User is not authenticated. Please log in first.' 
+      };
+    }
+    
     // Check if the org_chart bucket exists
     try {
       const { data, error } = await supabase.storage.getBucket(BUCKET_ID);
@@ -34,7 +42,7 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
         
         // Create the bucket if it doesn't exist
         const { error: createError } = await supabase.storage.createBucket(BUCKET_ID, {
-          public: true,
+          public: true, // Make bucket public
           fileSizeLimit: 10485760, // 10MB
         });
         
@@ -98,7 +106,7 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
           );
           
           // Special handling for RLS policy errors
-          if (testError.message.includes('new row violates row level security policy')) {
+          if (testError.message?.includes('new row violates row level security policy')) {
             return { 
               success: false, 
               error: testError,
