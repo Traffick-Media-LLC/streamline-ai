@@ -238,11 +238,12 @@ export const useOrgChartImage = () => {
           message: 'Updating app settings with new file info'
         });
   
-        // Use direct update instead of RPC to resolve TypeScript issues
+        // Use the secure function to update settings
         const { error: updateError } = await supabase
-          .from('app_settings')
-          .update({ value: newSettings as unknown as Json })
-          .eq('id', 'org_chart_image');
+          .rpc('update_app_settings', {
+            setting_id: 'org_chart_image',
+            setting_value: newSettings as unknown as Json
+          });
 
         if (updateError) {
           logError(
@@ -350,7 +351,7 @@ export const useOrgChartImage = () => {
         throw deleteError;
       }
 
-      // Use direct update instead of RPC
+      // Use secure RPC function
       const newSettings: OrgChartImageSettings = {
         url: null,
         filename: null,
@@ -359,11 +360,12 @@ export const useOrgChartImage = () => {
       };
       
       try {
-        // Direct update to app_settings
+        // Use the secure function to update settings
         const { error: updateError } = await supabase
-          .from('app_settings')
-          .update({ value: newSettings as unknown as Json })
-          .eq('id', 'org_chart_image');
+          .rpc('update_app_settings', {
+            setting_id: 'org_chart_image',
+            setting_value: newSettings as unknown as Json
+          });
             
         if (updateError) throw updateError;
       } catch (error) {
