@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { Button } from "@/components/ui/button";
@@ -8,12 +7,21 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Employee } from '@/hooks/useEmployeesData';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Json } from "@/integrations/supabase/types";
 
 interface OrgChartViewerProps {
   employees?: Employee[];
   // Add an optional override URL prop
   overrideUrl?: string;
 }
+
+// Extended type to handle both direct properties and nested value structure
+type OrgChartImageData = {
+  url?: string;
+  filename?: string;
+  updated_at?: string;
+  fileType?: "image" | "pdf" | null;
+};
 
 const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ 
   employees,
@@ -44,6 +52,19 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
     return `${window.location.origin}/${url}`;
   };
 
+  // Helper function to extract URL from imageSettings, handling different structures
+  const extractImageUrl = (): string | null => {
+    if (!imageSettings) return null;
+    
+    // Direct url property
+    if (typeof imageSettings.url === 'string') {
+      return imageSettings.url;
+    }
+    
+    // No value to extract
+    return null;
+  };
+
   // For debugging purposes
   useEffect(() => {
     const log = `OrgChartViewer current image settings: ${JSON.stringify(imageSettings)}`;
@@ -52,13 +73,8 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
     setDebugLogs(prev => [...prev, log]);
     
     // Set local image URL state from imageSettings only if not using an override
-    if (!overrideUrl && imageSettings?.url && !imageLoadError) {
-      // FIX: Verify that imageSettings.url is a string or check if value is an object with url property
-      const settingsUrl = typeof imageSettings.value === 'object' && imageSettings.value !== null
-        ? (imageSettings.value as { url?: string }).url || null
-        : typeof imageSettings.url === 'string'
-          ? imageSettings.url
-          : null;
+    if (!overrideUrl && !imageLoadError) {
+      const settingsUrl = extractImageUrl();
           
       if (settingsUrl) {
         const absoluteUrl = ensureAbsoluteUrl(settingsUrl);
@@ -98,8 +114,9 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
           setUsingOverrideUrl(true);
           toast.success('Using specified PDF URL');
         } else if (data.value && typeof data.value === 'object' && 'url' in data.value) {
-          // FIX: Type check for data.value to ensure it has a url property
-          const valueUrl = (data.value as { url: string }).url;
+          // Extract URL from value object
+          const valueObj = data.value as unknown as { url: string };
+          const valueUrl = valueObj.url;
           const absoluteUrl = ensureAbsoluteUrl(valueUrl);
           setLocalImageUrl(absoluteUrl);
           toast.success('Chart data refreshed');
@@ -133,10 +150,8 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
 
   // Toggle between override URL and database URL
   const toggleUrlSource = () => {
-    // FIX: Check if imageSettings.url or imageSettings.value.url exists
-    const settingsUrl = imageSettings && typeof imageSettings.value === 'object' && imageSettings.value !== null
-      ? (imageSettings.value as { url?: string }).url
-      : imageSettings?.url;
+    // Get URL from settings
+    const settingsUrl = extractImageUrl();
       
     if (usingOverrideUrl && settingsUrl) {
       // Switch to URL from database
@@ -176,7 +191,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
   const isPdf = displayUrl?.endsWith('.pdf') || imageSettings?.fileType === 'pdf';
 
   // If no image is available or there was a load error, show a message
-  if (!displayUrl && ((!imageSettings?.url) || (imageLoadError))) {
+  if (!displayUrl && ((!extractImageUrl()) || (imageLoadError))) {
     return (
       <div className="h-[200px] border rounded-md flex items-center justify-center bg-muted/30 text-muted-foreground flex-col gap-4">
         <p>No organization chart available</p>
@@ -192,7 +207,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
         
         <div className="mt-4 text-xs text-muted-foreground">
           <p>Debug Information:</p>
-          <p>Image URL: {imageSettings?.url || 'Not set'}</p>
+          <p>Image URL: {extractImageUrl() || 'Not set'}</p>
           <p>Image Type: {imageSettings?.fileType || 'Not set'}</p>
           <p>Updated: {imageSettings?.updated_at || 'Not set'}</p>
         </div>
@@ -302,21 +317,16 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
           {usingOverrideUrl ? (
             <span className="flex items-center justify-between">
               <span>Using manually specified PDF URL</span>
-              {/* FIX: Check if imageSettings contains a valid URL */}
-              {imageSettings && (
-                (typeof imageSettings.url === 'string' || 
-                (typeof imageSettings.value === 'object' && 
-                 imageSettings.value !== null && 
-                 'url' in imageSettings.value)) && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm"  // FIX: Changed from "xs" to "sm"
-                    className="h-5 text-xs"
-                    onClick={toggleUrlSource}
-                  >
-                    Switch to DB URL
-                  </Button>
-                )
+              {/* Check if imageSettings contains a valid URL */}
+              {imageSettings && extractImageUrl() && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="h-5 text-xs"
+                  onClick={toggleUrlSource}
+                >
+                  Switch to DB URL
+                </Button>
               )}
             </span>
           ) : (
@@ -326,7 +336,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
               {overrideUrl && (
                 <Button 
                   variant="ghost" 
-                  size="sm"  // FIX: Changed from "xs" to "sm"
+                  size="sm"
                   className="h-5 text-xs ml-2"
                   onClick={toggleUrlSource}
                 >
