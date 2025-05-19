@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, ZoomIn, ZoomOut, Download, FileText, Eye } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Employee } from '@/hooks/useEmployeesData';
+import { toast } from '@/components/ui/sonner';
 
 interface OrgChartViewerProps {
   employees?: Employee[];
@@ -14,6 +15,11 @@ interface OrgChartViewerProps {
 const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   const { imageSettings, isLoading, error } = useOrgChartImage();
   const [fullscreenImage, setFullscreenImage] = useState(false);
+
+  // For debugging purposes
+  React.useEffect(() => {
+    console.log('OrgChartViewer current image settings:', imageSettings);
+  }, [imageSettings]);
 
   if (error) {
     return (
@@ -45,14 +51,20 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
 
   const handleDownload = () => {
     if (imageSettings?.url) {
-      const link = document.createElement('a');
-      link.href = imageSettings.url;
-      link.download = imageSettings.fileType === 'pdf' 
-        ? 'organization_chart.pdf' 
-        : 'organization_chart.png';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      try {
+        const link = document.createElement('a');
+        link.href = imageSettings.url;
+        link.download = imageSettings.fileType === 'pdf' 
+          ? 'organization_chart.pdf' 
+          : 'organization_chart.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("Download started");
+      } catch (e) {
+        console.error("Download error:", e);
+        toast.error("Failed to download file");
+      }
     }
   };
 
@@ -91,6 +103,12 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
               alt="Organization Chart" 
               className="w-full object-contain bg-muted"
               style={{ maxHeight: '600px' }}
+              onError={(e) => {
+                console.error("Image failed to load:", imageSettings.url);
+                toast.error("Image failed to load");
+                // Replace with a placeholder image as fallback
+                (e.target as HTMLImageElement).src = "https://placehold.co/800x600?text=Organization+Chart+Error";
+              }}
             />
             
             <div className="absolute top-2 right-2 flex gap-2">

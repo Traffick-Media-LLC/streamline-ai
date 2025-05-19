@@ -453,6 +453,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      update_app_settings: {
+        Args: { setting_id: string; setting_value: Json }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "basic" | "admin"

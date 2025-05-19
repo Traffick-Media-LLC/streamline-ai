@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ensureBucketAccess, BUCKET_ID } from '@/utils/storage/ensureBucketAccess';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
+import { toast } from '@/components/ui/sonner';
 
 const EmployeeDirectory: React.FC = () => {
   const { data: employees = [], isLoading, error } = useEmployeesData();
@@ -26,17 +27,26 @@ const EmployeeDirectory: React.FC = () => {
           const result = await ensureBucketAccess(user.id);
           if (!result.success) {
             console.error('Failed to initialize bucket:', result.error);
+            toast.error("Failed to access organization chart");
           } else {
             console.log(`Successfully verified access to ${BUCKET_ID} bucket`);
           }
         }
       } catch (error) {
         console.error(`Exception initializing ${BUCKET_ID} storage:`, error);
+        toast.error("Error accessing organization chart storage");
       }
     };
 
     initOrgChartStorage();
   }, [user?.id]);
+
+  useEffect(() => {
+    // Log when org chart image is loaded
+    if (imageSettings?.url) {
+      console.log("Org chart image loaded:", imageSettings.url);
+    }
+  }, [imageSettings]);
 
   if (error) {
     return (

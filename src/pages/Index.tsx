@@ -1,4 +1,5 @@
 
+import React from "react";
 import EmployeeDirectory from "./EmployeeDirectory";
 
 const Index = () => {
