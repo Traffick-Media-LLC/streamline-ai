@@ -7,6 +7,7 @@ import { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { logError, logEvent, generateRequestId } from "@/utils/logging";
 import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
+import { checkAdminPermissions } from "@/utils/admin/checkAdminPermissions";
 
 export interface OrgChartImageSettings {
   url: string | null;
@@ -19,6 +20,35 @@ export const useOrgChartImage = () => {
   const queryClient = useQueryClient();
   const { isAdmin, isAuthenticated, user, session } = useAuth();
   const uploadRequestId = generateRequestId();
+  const [adminPermissionVerified, setAdminPermissionVerified] = useState<boolean | null>(null);
+
+  // Verify admin permissions directly using the function
+  useEffect(() => {
+    const verifyAdminPermissions = async () => {
+      if (!user?.id) {
+        setAdminPermissionVerified(false);
+        return;
+      }
+      
+      try {
+        const result = await checkAdminPermissions(user.id);
+        setAdminPermissionVerified(result.isAdmin);
+        
+        if (!result.isAdmin && isAdmin) {
+          console.warn("Auth context reports user as admin but direct check failed", result);
+        }
+      } catch (error) {
+        console.error("Error verifying admin permissions:", error);
+        setAdminPermissionVerified(false);
+      }
+    };
+    
+    if (isAuthenticated && user) {
+      verifyAdminPermissions();
+    } else {
+      setAdminPermissionVerified(false);
+    }
+  }, [isAuthenticated, user, isAdmin]);
 
   // Log authentication state on hook initialization
   useEffect(() => {
@@ -27,9 +57,14 @@ export const useOrgChartImage = () => {
       userId: user?.id,
       eventType: 'org_chart_auth_state',
       component: 'useOrgChartImage',
-      message: 'OrgChart hook initialized'
+      message: 'OrgChart hook initialized',
+      metadata: {
+        isAdmin,
+        isAuthenticated,
+        adminVerified: adminPermissionVerified
+      }
     });
-  }, [isAdmin, isAuthenticated, user, session, uploadRequestId]);
+  }, [isAdmin, isAuthenticated, user, session, uploadRequestId, adminPermissionVerified]);
 
   // Fetch the current org chart image settings
   const { data: imageSettings, isLoading, error } = useQuery({
@@ -48,7 +83,7 @@ export const useOrgChartImage = () => {
           .from('app_settings')
           .select('value')
           .eq('id', 'org_chart_image')
-          .single();
+          .maybeSingle();
 
         if (error) {
           // Handle permission errors gracefully
@@ -115,8 +150,10 @@ export const useOrgChartImage = () => {
   // Upload a new org chart image
   const uploadImage = useMutation({
     mutationFn: async (file: File) => {
-      // Only check if user is authenticated and admin
-      if (!isAuthenticated || !isAdmin) {
+      // Double check admin permissions both ways for security
+      const shouldAllowUpload = adminPermissionVerified !== false && isAdmin;
+      
+      if (!isAuthenticated || !shouldAllowUpload) {
         toast.error("You must be an admin to upload an organization chart");
         throw new Error("Admin privileges required");
       }
@@ -126,10 +163,15 @@ export const useOrgChartImage = () => {
         userId: user?.id,
         eventType: 'upload_started',
         component: 'useOrgChartImage',
-        message: 'Starting org chart upload'
+        message: 'Starting org chart upload',
+        metadata: {
+          isAdmin,
+          adminVerified: adminPermissionVerified,
+          shouldAllowUpload
+        }
       });
 
-      console.log("Starting upload with authenticated user:", user?.id);
+      console.log("Starting upload with authenticated admin:", user?.id);
       
       try {
         // Upload the file directly
@@ -196,29 +238,38 @@ export const useOrgChartImage = () => {
           message: 'Updating app settings with new file info'
         });
   
-        // Make sure we're using the admin's session token for this update
-        const { error: updateError } = await supabase
-          .from('app_settings')
-          .update({ value: newSettings as unknown as Json })
-          .eq('id', 'org_chart_image');
+        // Use a direct RPC call to update settings as admin
+        const { error: rpcError } = await supabase.rpc('update_app_settings', {
+          setting_id: 'org_chart_image',
+          setting_value: newSettings
+        });
   
-        if (updateError) {
-          logError(
-            uploadRequestId,
-            'useOrgChartImage',
-            'Error updating org chart image settings',
-            updateError
-          );
-          
-          // Detailed error information for debugging
-          console.error("Update error details:", {
-            error: updateError,
-            userId: user?.id,
-            isAdmin,
-            sessionExpiry: session ? new Date(session.expires_at * 1000).toISOString() : 'No session'
-          });
-          
-          throw updateError;
+        if (rpcError) {
+          // Fallback to direct update if RPC fails
+          const { error: updateError } = await supabase
+            .from('app_settings')
+            .update({ value: newSettings as unknown as Json })
+            .eq('id', 'org_chart_image');
+  
+          if (updateError) {
+            logError(
+              uploadRequestId,
+              'useOrgChartImage',
+              'Error updating org chart image settings',
+              updateError
+            );
+            
+            // Detailed error information for debugging
+            console.error("Update error details:", {
+              error: updateError,
+              userId: user?.id,
+              isAdmin,
+              adminVerified: adminPermissionVerified,
+              sessionExpiry: session ? new Date(session.expires_at * 1000).toISOString() : 'No session'
+            });
+            
+            throw updateError;
+          }
         }
   
         logEvent({
@@ -270,16 +321,25 @@ export const useOrgChartImage = () => {
         error
       );
       
-      toast.error("Failed to update organization chart", {
-        description: error.message || "Check that you have admin permissions"
-      });
+      const errorMessage = error.message || "Check that you have admin permissions";
+      const permissionDenied = errorMessage.includes('permission denied');
+      
+      toast.error(
+        permissionDenied ? 
+          "Permission denied. Please refresh the page and try again." : 
+          "Failed to update organization chart", 
+        {
+          description: errorMessage
+        }
+      );
     }
   });
 
   // Remove the current org chart image
   const removeImage = useMutation({
     mutationFn: async () => {
-      if (!isAuthenticated || !isAdmin) {
+      // Double check admin permissions for security
+      if (!isAuthenticated || !adminPermissionVerified || !isAdmin) {
         toast.error("You must be an admin to remove an organization chart");
         throw new Error("Admin privileges required");
       }
@@ -298,22 +358,32 @@ export const useOrgChartImage = () => {
         throw deleteError;
       }
 
-      // Update the app_settings to null
+      // Try with RPC first, then fallback to direct update
       const newSettings: OrgChartImageSettings = {
         url: null,
         filename: null,
         updated_at: new Date().toISOString(),
         fileType: null,
       };
-
-      const { error: updateError } = await supabase
-        .from('app_settings')
-        .update({ value: newSettings as unknown as Json })
-        .eq('id', 'org_chart_image');
-
-      if (updateError) {
-        console.error("Error updating org chart image settings:", updateError);
-        throw updateError;
+      
+      try {
+        const { error: rpcError } = await supabase.rpc('update_app_settings', {
+          setting_id: 'org_chart_image',
+          setting_value: newSettings
+        });
+        
+        if (rpcError) {
+          // Fallback to direct update
+          const { error: updateError } = await supabase
+            .from('app_settings')
+            .update({ value: newSettings as unknown as Json })
+            .eq('id', 'org_chart_image');
+            
+          if (updateError) throw updateError;
+        }
+      } catch (error) {
+        console.error("Error updating settings:", error);
+        throw error;
       }
 
       return newSettings;
@@ -337,5 +407,6 @@ export const useOrgChartImage = () => {
     removeImage: () => removeImage.mutate(),
     isUploading: uploadImage.isPending,
     isRemoving: removeImage.isPending,
+    adminPermissionVerified
   };
 };
