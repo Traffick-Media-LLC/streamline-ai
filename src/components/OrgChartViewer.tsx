@@ -33,7 +33,6 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
   const [localImageUrl, setLocalImageUrl] = useState<string | null>(overrideUrl);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [usingOverrideUrl, setUsingOverrideUrl] = useState(!!overrideUrl);
 
   // Helper function to ensure URLs are absolute
@@ -57,20 +56,17 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
     if (!imageSettings) return null;
     
     // Direct url property
-    if (typeof imageSettings.url === 'string') {
-      return imageSettings.url;
+    if (typeof imageSettings === 'object' && imageSettings !== null && 'url' in imageSettings) {
+      return imageSettings.url as string;
     }
     
     // No value to extract
     return null;
   };
 
-  // For debugging purposes
   useEffect(() => {
-    const log = `OrgChartViewer current image settings: ${JSON.stringify(imageSettings)}`;
-    console.log(log);
+    console.log("OrgChartViewer current image settings:", imageSettings);
     console.log("Using override URL:", overrideUrl);
-    setDebugLogs(prev => [...prev, log]);
     
     // Set local image URL state from imageSettings only if not using an override
     if (!overrideUrl && !imageLoadError) {
@@ -99,14 +95,10 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
         .single();
       
       if (error) {
-        const errLog = `Error refreshing chart data: ${JSON.stringify(error)}`;
-        console.error(errLog);
-        setDebugLogs(prev => [...prev, errLog]);
+        console.error('Error refreshing chart data:', error);
         toast.error('Failed to refresh chart data');
       } else if (data?.value) {
-        const dataLog = `Refreshed chart data: ${JSON.stringify(data.value)}`;
-        console.log(dataLog);
-        setDebugLogs(prev => [...prev, dataLog]);
+        console.log('Refreshed chart data:', data.value);
         
         // Use override URL if set, otherwise use the URL from the database
         if (overrideUrl) {
@@ -123,8 +115,6 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
           console.log("URL after refresh:", absoluteUrl);
         }
       } else {
-        setDebugLogs(prev => [...prev, "No chart data available from refresh"]);
-        
         if (overrideUrl) {
           setLocalImageUrl(overrideUrl);
           setUsingOverrideUrl(true);
@@ -134,9 +124,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
         }
       }
     } catch (e) {
-      const exLog = `Exception refreshing chart data: ${e}`;
-      console.error(exLog);
-      setDebugLogs(prev => [...prev, exLog]);
+      console.error('Exception refreshing chart data:', e);
       
       // Still use override URL if available, even if refresh fails
       if (overrideUrl) {
@@ -204,13 +192,6 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           Refresh Data
         </Button>
-        
-        <div className="mt-4 text-xs text-muted-foreground">
-          <p>Debug Information:</p>
-          <p>Image URL: {extractImageUrl() || 'Not set'}</p>
-          <p>Image Type: {imageSettings?.fileType || 'Not set'}</p>
-          <p>Updated: {imageSettings?.updated_at || 'Not set'}</p>
-        </div>
       </div>
     );
   }
@@ -322,7 +303,6 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className="h-5 text-xs"
                   onClick={toggleUrlSource}
                 >
                   Switch to DB URL
@@ -337,7 +317,6 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({
                 <Button 
                   variant="ghost" 
                   size="sm"
-                  className="h-5 text-xs ml-2"
                   onClick={toggleUrlSource}
                 >
                   Use specified URL
