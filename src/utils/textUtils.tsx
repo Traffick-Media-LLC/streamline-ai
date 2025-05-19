@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 // Regular expressions for detecting different types of content
@@ -6,6 +5,7 @@ const urlRegex = /(https?:\/\/[^\s]+)/g;
 const boldTitleRegex = /\*\*(.*?)\*\*/g;
 const fileExtensionRegex = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|jpg|jpeg|png|gif)(?=\s|$|\)|\])/i;
 const logoUrlRegex = /logo|icon|brand.*\.(jpg|jpeg|png|gif|webp|svg)/i;
+const markdownImageRegex = /!\[(.*?)\]\((https?:\/\/[^\s]+)\)/g;
 
 // Function to check if a URL is likely a logo image
 const isLogoImageUrl = (url: string): boolean => {
@@ -13,7 +13,15 @@ const isLogoImageUrl = (url: string): boolean => {
 };
 
 export const renderTextWithLinks = (text: string) => {
-  // First, split by URLs but keep them
+  // First, remove any markdown image syntax for logo URLs
+  text = text.replace(markdownImageRegex, (match, altText, url) => {
+    if (isLogoImageUrl(url)) {
+      return ''; // Remove the entire markdown image syntax
+    }
+    return match; // Keep non-logo image markdown
+  });
+  
+  // Split by URLs but keep them
   const parts = text.split(urlRegex);
   
   return parts.map((part, index) => {

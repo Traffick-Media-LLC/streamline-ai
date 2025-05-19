@@ -499,6 +499,13 @@ Key product categories:
 
 If a customer mentions a specific brand, like "Juice Head pouches", correctly associate the products with that brand and its proper product category.
 
+PRESENTATION GUIDELINES:
+- NEVER include raw image URLs in your responses
+- NEVER use markdown image syntax like ![alt text](url) in your responses
+- NEVER include bracketed descriptive text like [Brand Logo] or [Product Image]
+- When brand logo URLs are provided in the data, DO NOT mention them in any way
+- When answering about product legality, ALWAYS list ALL products from the queried brand that are legal or illegal in the state
+
 Always cite your sources where appropriate (e.g., 'According to our State Map database...' or 'Based on the Knowledge Base...').
 
 Answer in a professional, clear, and helpful tone. If you cannot find an answer from the available sources, politely let the user know and suggest submitting a request via the Marketing Request Form or contacting the appropriate department.`;
@@ -508,7 +515,10 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
       baseSystemPrompt += `\n\nIMPORTANT: I've queried our product legality database and found the following information about the user's question:
 ${JSON.stringify(productLegalityData, null, 2)}
 
-Use this information to answer the current question. This data comes directly from our regulatory database and should be considered the final authority on product legality by state.`;
+Use this information to answer the current question. This data comes directly from our regulatory database and should be considered the final authority on product legality by state. When responding:
+- If the query was about a brand, list ALL products from this brand and their legal status in the specified state
+- If specific products were found, clearly state their legal status
+- Present the information in a clear, organized way without raw image URLs or markdown image syntax`;
     }
 
     messages.push({
