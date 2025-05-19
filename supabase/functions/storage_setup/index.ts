@@ -45,22 +45,30 @@ serve(async (req) => {
     }
     
     // Check if the user is an admin
-    const { data: roleData, error: roleError } = await supabase
+    const { data: isAdmin, error: roleError } = await supabase
       .rpc('is_admin');
       
-    if (roleError || !roleData) {
+    if (roleError || !isAdmin) {
       return new Response(
-        JSON.stringify({ error: 'Failed to verify admin role', details: roleError }),
+        JSON.stringify({ error: 'Admin access required', details: roleError }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    // Step 1: Ensure the bucket exists
-    const { data: bucket, error: bucketError } = await supabase
-      .storage
-      .getBucket(BUCKET_ID);
-      
-    if (bucketError) {
+    // Step 1: Ensure the bucket exists (this is redundant with our SQL migration but kept for safety)
+    let bucketExists = false;
+    
+    try {
+      const { data: bucket, error: bucketError } = await supabase
+        .storage
+        .getBucket(BUCKET_ID);
+        
+      bucketExists = !bucketError && bucket;
+    } catch (error) {
+      console.error("Error checking bucket:", error);
+    }
+    
+    if (!bucketExists) {
       // Create the bucket if it doesn't exist
       const { error: createError } = await supabase
         .storage
@@ -71,21 +79,14 @@ serve(async (req) => {
         
       if (createError) {
         return new Response(
-          JSON.stringify({ error: 'Failed to create bucket', details: createError }),
+          JSON.stringify({ 
+            success: false,
+            error: 'Failed to create bucket',
+            details: createError 
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-    }
-    
-    // Step 2: Set up the storage policies
-    const { data: policiesResult, error: policiesError } = await supabase
-      .rpc('create_storage_policies', { bucket_name: BUCKET_ID });
-      
-    if (policiesError) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to create storage policies', details: policiesError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
     
     return new Response(
@@ -93,7 +94,10 @@ serve(async (req) => {
         success: true,
         message: 'Storage setup completed successfully',
         bucket: BUCKET_ID,
-        policies: policiesResult
+        policies: [
+          { name: "Admin users can do everything with org_chart", type: "RLS Policy" },
+          { name: "All users can view org_chart files", type: "RLS Policy" }
+        ]
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

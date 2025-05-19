@@ -22,7 +22,7 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
       userId,
       eventType: 'ensure_bucket_access_start',
       component: 'ensureBucketAccess',
-      message: 'Checking and ensuring bucket access'
+      message: 'Checking bucket access'
     });
     
     // Check if the user is authenticated
@@ -33,140 +33,118 @@ export async function ensureBucketAccess(userId: string | undefined): Promise<Bu
       };
     }
     
-    // Check if the org_chart bucket exists
+    // Verify the bucket exists by checking if we can list files
     try {
-      const { data, error } = await supabase.storage.getBucket(BUCKET_ID);
+      const { data, error } = await supabase.storage
+        .from(BUCKET_ID)
+        .list('', { limit: 1 });
       
       if (error) {
-        console.log('Bucket does not exist or not accessible, attempting to create storage bucket', BUCKET_ID);
-        
-        // Create the bucket if it doesn't exist
-        const { error: createError } = await supabase.storage.createBucket(BUCKET_ID, {
-          public: true, // Make bucket public
-          fileSizeLimit: 10485760, // 10MB
-        });
-        
-        if (createError) {
-          logError(
-            requestId,
-            'ensureBucketAccess',
-            `Error creating bucket ${BUCKET_ID}`,
-            createError
-          );
-          
-          // Special handling for permission denied errors
-          if (createError.message.includes('permission denied')) {
-            return { 
-              success: false, 
-              error: createError,
-              message: `You don't have permission to create the ${BUCKET_ID} bucket. This may require admin privileges.`
-            };
-          }
-          
-          return { 
-            success: false, 
-            error: createError,
-            message: `Failed to create bucket: ${createError.message}`
-          };
-        } else {
-          logEvent({
-            requestId,
-            userId,
-            eventType: 'bucket_created',
-            component: 'ensureBucketAccess',
-            message: `Successfully created ${BUCKET_ID} bucket`
-          });
-        }
-      } else {
-        logEvent({
-          requestId,
-          userId,
-          eventType: 'bucket_exists',
-          component: 'ensureBucketAccess',
-          message: `${BUCKET_ID} bucket already exists`
-        });
-      }
-      
-      // Check if we have permission to upload to this bucket
-      try {
-        // Attempt a simple operation to verify permissions
-        const testFilePath = `permission_test_${Date.now()}.txt`;
-        const { error: testError } = await supabase.storage
-          .from(BUCKET_ID)
-          .upload(testFilePath, new Blob(['test']), {
-            upsert: true
-          });
-          
-        if (testError) {
-          logError(
-            requestId,
-            'ensureBucketAccess',
-            'Storage permission test failed',
-            testError
-          );
-          
-          // Special handling for RLS policy errors
-          if (testError.message?.includes('new row violates row level security policy')) {
-            return { 
-              success: false, 
-              error: testError,
-              message: `RLS Policy Error: You don't have permission to upload to the ${BUCKET_ID} bucket. The bucket exists, but you need proper permissions.`
-            };
-          }
-          
-          return { 
-            success: false, 
-            error: testError,
-            message: `You do not have permission to upload to the ${BUCKET_ID} bucket`
-          };
-        }
-        
-        // Clean up test file
-        await supabase.storage.from(BUCKET_ID).remove([testFilePath]);
-        
-        logEvent({
-          requestId,
-          userId,
-          eventType: 'permission_verified',
-          component: 'ensureBucketAccess',
-          message: 'Storage permission test successful'
-        });
-      } catch (permError) {
         logError(
           requestId,
           'ensureBucketAccess',
-          'Storage permission test exception',
-          permError
+          `Error accessing bucket ${BUCKET_ID}`,
+          error
         );
+        
+        // Special handling for permission denied errors
+        if (error.message?.includes('permission denied')) {
+          return { 
+            success: false, 
+            error: error,
+            message: `Permission denied for ${BUCKET_ID} bucket. This usually means your admin role is not correctly applied.`
+          };
+        }
+        
+        // Handle case where bucket may not exist
+        if (error.message?.includes('does not exist')) {
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session) {
+            // Try to call the edge function to create the bucket
+            const { error: setupError } = await supabase.functions.invoke('storage_setup', {
+              headers: {
+                Authorization: `Bearer ${session.access_token}`
+              }
+            });
+            
+            if (setupError) {
+              logError(
+                requestId,
+                'ensureBucketAccess',
+                'Error setting up storage',
+                setupError
+              );
+              
+              return { 
+                success: false, 
+                error: setupError,
+                message: `Failed to create storage bucket: ${setupError.message}`
+              };
+            }
+            
+            // Verify bucket was created
+            const { error: verifyError } = await supabase.storage
+              .from(BUCKET_ID)
+              .list('', { limit: 1 });
+              
+            if (verifyError) {
+              return { 
+                success: false, 
+                error: verifyError,
+                message: `Storage bucket created but access verification failed.`
+              };
+            }
+            
+            logEvent({
+              requestId,
+              userId,
+              eventType: 'bucket_created',
+              component: 'ensureBucketAccess',
+              message: `Successfully created ${BUCKET_ID} bucket`
+            });
+            
+            return { success: true };
+          } else {
+            return { 
+              success: false, 
+              message: `Missing authentication session. Please log in again.`
+            };
+          }
+        }
+        
         return { 
           success: false, 
-          error: permError,
-          message: `Exception during permission test: ${permError instanceof Error ? permError.message : String(permError)}`
+          error: error,
+          message: `Storage access error: ${error.message}`
         };
       }
       
+      // Bucket exists and we can access it
       logEvent({
         requestId,
         userId,
         eventType: 'bucket_access_success',
         component: 'ensureBucketAccess',
-        message: 'Bucket access check completed successfully'
+        message: 'Successfully verified bucket access'
       });
       
       return { success: true };
-    } catch (error) {
+      
+    } catch (permError) {
       logError(
         requestId,
         'ensureBucketAccess',
-        'Unexpected error checking bucket',
-        error
+        'Storage access exception',
+        permError
       );
       return { 
         success: false, 
-        error,
-        message: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
+        error: permError,
+        message: `Exception during access check: ${permError instanceof Error ? permError.message : String(permError)}`
       };
     }
+    
   } catch (error) {
     console.error('Error in ensureBucketAccess:', error);
     return { 

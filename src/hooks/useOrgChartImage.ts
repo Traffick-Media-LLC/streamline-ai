@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -115,16 +114,8 @@ export const useOrgChartImage = () => {
   // Upload a new org chart image
   const uploadImage = useMutation({
     mutationFn: async (file: File) => {
-      // Only check if user is authenticated and admin, but don't do additional verification
+      // Only check if user is authenticated and admin
       if (!isAuthenticated || !isAdmin) {
-        logEvent({
-          requestId: uploadRequestId,
-          userId: user?.id,
-          eventType: 'upload_auth_check_failed',
-          component: 'useOrgChartImage',
-          message: 'Upload attempted without admin privileges'
-        });
-        
         toast.error("You must be an admin to upload an organization chart");
         throw new Error("Admin privileges required");
       }
@@ -140,7 +131,7 @@ export const useOrgChartImage = () => {
       console.log("Starting upload with authenticated user:", user?.id);
       console.log("Using bucket:", BUCKET_ID);
 
-      // Upload the actual file directly without test permissions
+      // Upload the file directly
       const fileExt = file.name.split('.').pop();
       const fileName = `org_chart_${Date.now()}.${fileExt}`;
       const filePath = fileName;
@@ -155,24 +146,12 @@ export const useOrgChartImage = () => {
       if (uploadError) {
         console.error("Error uploading file:", uploadError);
         
-        if (uploadError.message.includes('new row violates row-level security policy')) {
-          logEvent({
-            requestId: uploadRequestId,
-            userId: user?.id,
-            eventType: 'rls_policy_violation',
-            component: 'useOrgChartImage',
-            message: 'RLS Policy Error during file upload'
-          });
-          
-          toast.error("Upload failed due to permission issues. Please contact an administrator.");
-        } else {
-          logError(
-            uploadRequestId,
-            'useOrgChartImage',
-            'Error uploading file',
-            uploadError
-          );
-        }
+        logError(
+          uploadRequestId,
+          'useOrgChartImage',
+          'Error uploading file',
+          uploadError
+        );
         
         throw uploadError;
       }
