@@ -238,38 +238,30 @@ export const useOrgChartImage = () => {
           message: 'Updating app settings with new file info'
         });
   
-        // Use a direct RPC call to update settings as admin
-        const { error: rpcError } = await supabase.rpc('update_app_settings', {
-          setting_id: 'org_chart_image',
-          setting_value: newSettings
-        });
-  
-        if (rpcError) {
-          // Fallback to direct update if RPC fails
-          const { error: updateError } = await supabase
-            .from('app_settings')
-            .update({ value: newSettings as unknown as Json })
-            .eq('id', 'org_chart_image');
-  
-          if (updateError) {
-            logError(
-              uploadRequestId,
-              'useOrgChartImage',
-              'Error updating org chart image settings',
-              updateError
-            );
-            
-            // Detailed error information for debugging
-            console.error("Update error details:", {
-              error: updateError,
-              userId: user?.id,
-              isAdmin,
-              adminVerified: adminPermissionVerified,
-              sessionExpiry: session ? new Date(session.expires_at * 1000).toISOString() : 'No session'
-            });
-            
-            throw updateError;
-          }
+        // Use direct update instead of RPC to resolve TypeScript issues
+        const { error: updateError } = await supabase
+          .from('app_settings')
+          .update({ value: newSettings as unknown as Json })
+          .eq('id', 'org_chart_image');
+
+        if (updateError) {
+          logError(
+            uploadRequestId,
+            'useOrgChartImage',
+            'Error updating org chart image settings',
+            updateError
+          );
+          
+          // Detailed error information for debugging
+          console.error("Update error details:", {
+            error: updateError,
+            userId: user?.id,
+            isAdmin,
+            adminVerified: adminPermissionVerified,
+            sessionExpiry: session ? new Date(session.expires_at * 1000).toISOString() : 'No session'
+          });
+          
+          throw updateError;
         }
   
         logEvent({
@@ -358,7 +350,7 @@ export const useOrgChartImage = () => {
         throw deleteError;
       }
 
-      // Try with RPC first, then fallback to direct update
+      // Use direct update instead of RPC
       const newSettings: OrgChartImageSettings = {
         url: null,
         filename: null,
@@ -367,20 +359,13 @@ export const useOrgChartImage = () => {
       };
       
       try {
-        const { error: rpcError } = await supabase.rpc('update_app_settings', {
-          setting_id: 'org_chart_image',
-          setting_value: newSettings
-        });
-        
-        if (rpcError) {
-          // Fallback to direct update
-          const { error: updateError } = await supabase
-            .from('app_settings')
-            .update({ value: newSettings as unknown as Json })
-            .eq('id', 'org_chart_image');
+        // Direct update to app_settings
+        const { error: updateError } = await supabase
+          .from('app_settings')
+          .update({ value: newSettings as unknown as Json })
+          .eq('id', 'org_chart_image');
             
-          if (updateError) throw updateError;
-        }
+        if (updateError) throw updateError;
       } catch (error) {
         console.error("Error updating settings:", error);
         throw error;
