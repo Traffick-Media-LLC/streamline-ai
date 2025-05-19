@@ -28,25 +28,46 @@ async function logEvent(supabase, requestId, eventType, component, message, meta
   }
 }
 
-// Function to check if a message is asking about product legality in a state
-function isProductLegalityQuestion(message) {
-  const legalityKeywords = [
-    'legal', 'allowed', 'available', 'permitted', 'lawful', 'compliant',
-    'illegal', 'banned', 'prohibited', 'restricted', 'not allowed'
-  ];
+// Improved function to identify common product categories
+const PRODUCT_CATEGORIES = {
+  NICOTINE: ['pouches', 'pouch', 'vape', 'vapes', 'e-liquid', 'e-juice', 'ejuice', 'eliquid', 'disposable', 'disposables', 'mod', 'mods', 'cigarette', 'cigarettes', 'tobacco', 'nicotine'],
+  HEMP: ['delta-8', 'delta-10', 'delta 8', 'delta 10', 'cbd', 'hemp', 'thc', 'gummies', 'edible', 'edibles'],
+  KRATOM: ['kratom', 'mitragyna', 'speciosa', 'capsules', 'extract'],
+};
+
+// Function to identify the likely product category from a message
+function identifyProductCategory(message) {
+  message = message.toLowerCase();
   
-  const stateKeywords = [
-    'state', 'in', 'at', 'region', 'location', 'area'
+  for (const [category, keywords] of Object.entries(PRODUCT_CATEGORIES)) {
+    if (keywords.some(keyword => message.includes(keyword))) {
+      return category;
+    }
+  }
+  
+  return null;
+}
+
+// Improved function to check if a message is asking about product legality in a state
+function isProductLegalityQuestion(message) {
+  const legalityPatterns = [
+    /legal\s+in/i,
+    /allowed\s+in/i,
+    /available\s+in/i,
+    /permitted\s+in/i,
+    /sell\s+in/i,
+    /sold\s+in/i,
+    /banned\s+in/i,
+    /prohibited\s+in/i,
+    /restricted\s+in/i,
+    /legal.*state/i,
+    /are\s+\w+\s+legal/i, // Matches "are pouches legal"
   ];
   
   message = message.toLowerCase();
   
-  // Check for presence of legality-related words
-  const hasLegalityKeyword = legalityKeywords.some(keyword => message.includes(keyword));
-  // Check for state-related words
-  const hasStateKeyword = stateKeywords.some(keyword => message.includes(keyword));
-  
-  return hasLegalityKeyword && hasStateKeyword;
+  // Check for presence of legality-related patterns
+  return legalityPatterns.some(pattern => pattern.test(message));
 }
 
 // Function to extract state name from a message
@@ -76,33 +97,129 @@ function extractStateFromMessage(message) {
   return null;
 }
 
-// Function to extract product or brand name from a message
-function extractProductOrBrandFromMessage(message) {
-  // This is a simplified extraction - in production, 
-  // this might use NLP techniques or a more sophisticated approach
+// Enhanced function to extract product or brand from a message
+async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   const messageLower = message.toLowerCase();
   
-  // Look for product/brand name patterns
-  // This assumes the message mentions the product clearly in some way
-  // These are simplistic patterns - would need refinement in production
-  let match = null;
-  
-  // Pattern: "Product X" or "Brand X"
-  const productMatch = messageLower.match(/product\s+([a-z0-9\s]+)/i);
-  const brandMatch = messageLower.match(/brand\s+([a-z0-9\s]+)/i);
-  
-  if (productMatch) {
-    match = productMatch[1].trim();
-  } else if (brandMatch) {
-    match = brandMatch[1].trim();
+  try {
+    // First, fetch common product names from the database to look for
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('id, name, brand_id, brands(name)')
+      .order('name');
+    
+    if (productsError) {
+      console.error('Error fetching products for extraction:', productsError);
+      await logEvent(supabase, requestId, 'product_extraction_error', 'extract_product', 
+        'Failed to fetch products for extraction', { error: productsError.message });
+      return null;
+    }
+    
+    // Fetch brands to check against
+    const { data: brands, error: brandsError } = await supabase
+      .from('brands')
+      .select('id, name')
+      .order('name');
+      
+    if (brandsError) {
+      console.error('Error fetching brands for extraction:', brandsError);
+      await logEvent(supabase, requestId, 'product_extraction_error', 'extract_product', 
+        'Failed to fetch brands for extraction', { error: brandsError.message });
+      return null;
+    }
+    
+    // Identify any explicit brand mentions
+    let brandMatch = null;
+    for (const brand of brands) {
+      if (messageLower.includes(brand.name.toLowerCase())) {
+        brandMatch = brand.name;
+        break;
+      }
+    }
+    
+    // Check for direct product mentions
+    let productMatch = null;
+    for (const product of products) {
+      // Check for both singular and potential plural forms
+      const productName = product.name.toLowerCase();
+      const pluralName = productName.endsWith('s') ? productName : productName + 's';
+      
+      if (messageLower.includes(productName) || messageLower.includes(pluralName)) {
+        productMatch = {
+          name: product.name,
+          brand: product.brands?.name || null,
+          type: productMatch || 'unknown'
+        };
+        break;
+      }
+    }
+    
+    // If we found a direct product match, return it
+    if (productMatch) {
+      await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+        `Extracted product: ${productMatch.name}`, { product: productMatch });
+      return productMatch.name;
+    }
+    
+    // If we found a brand match, return it
+    if (brandMatch) {
+      await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+        `Extracted brand: ${brandMatch}`);
+      return brandMatch;
+    }
+    
+    // Handle common category words like "pouches", "vapes", etc.
+    const categories = {
+      pouches: ["nicotine pouches", "tobacco-free pouches", "pouch"],
+      vapes: ["vape", "disposable vape", "vaporizer"],
+      gummies: ["gummy", "edible"],
+      tinctures: ["tincture", "oil", "drops"],
+      cigarettes: ["cigarette", "cig"],
+    };
+    
+    for (const [category, synonyms] of Object.entries(categories)) {
+      if ([category, ...synonyms].some(term => messageLower.includes(term.toLowerCase()))) {
+        // Try to find an associated brand if mentioned
+        await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+          `Extracted product category: ${category}`);
+        return category;
+      }
+    }
+    
+    // Look for explicit product/brand patterns as a fallback
+    const productMatch1 = messageLower.match(/product\s+([a-z0-9\s]+)/i);
+    const brandMatch1 = messageLower.match(/brand\s+([a-z0-9\s]+)/i);
+    
+    if (productMatch1) {
+      return productMatch1[1].trim();
+    } else if (brandMatch1) {
+      return brandMatch1[1].trim();
+    }
+    
+    // If we get here, we don't have a clear product or brand
+    const productCategory = identifyProductCategory(message);
+    if (productCategory) {
+      await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+        `Identified product category: ${productCategory}`);
+      // Return the general category as a fallback
+      return productCategory.toLowerCase();
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error in product/brand extraction:', error);
+    await logEvent(supabase, requestId, 'product_extraction_error', 'extract_product', 
+      'Error in extractProductOrBrandFromMessage', { error: error.message });
+    return null;
   }
-  
-  return match;
 }
 
-// Function to query the database for product legality in a state
+// Improved function to query the database for product legality in a state
 async function checkProductLegality(supabase, stateName, productNameOrBrand, requestId) {
   try {
+    await logEvent(supabase, requestId, 'legality_check_start', 'check_product_legality', 
+      `Starting legality check for "${productNameOrBrand}" in ${stateName}`);
+    
     // Find the state ID first
     const { data: stateData, error: stateError } = await supabase
       .from('states')
@@ -169,6 +286,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
             brandLogo: ap.products.brands ? ap.products.brands.logo_url : null
           })),
+          category: identifyProductCategory(productNameOrBrand) || 'Unknown',
           source: 'product_database'
         };
       } else {
@@ -182,6 +300,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             brand: p.brands ? p.brands.name : 'Unknown',
             brandLogo: p.brands ? p.brands.logo_url : null
           })),
+          category: identifyProductCategory(productNameOrBrand) || 'Unknown',
           source: 'product_database'
         };
       }
@@ -246,6 +365,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
               brand: abp.products.brands ? abp.products.brands.name : brandData[0].name,
               brandLogo: abp.products.brands ? abp.products.brands.logo_url : brandData[0].logo_url
             })),
+            category: identifyProductCategory(productNameOrBrand) || 'Unknown',
             source: 'brand_database'
           };
         } else {
@@ -257,6 +377,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             brand: brandData[0].name,
             brandLogo: brandData[0].logo_url,
             message: `No products from ${brandData[0].name} are permitted in ${stateName}.`,
+            category: identifyProductCategory(productNameOrBrand) || 'Unknown',
             source: 'brand_database'
           };
         }
@@ -329,7 +450,7 @@ serve(async (req) => {
     
     if (isProductLegalityQuestion(message)) {
       const stateName = extractStateFromMessage(message);
-      const productOrBrand = extractProductOrBrandFromMessage(message);
+      const productOrBrand = await extractProductOrBrandFromMessage(supabase, message, requestId);
       
       if (stateName && productOrBrand) {
         await logEvent(supabase, requestId, 'product_legality_check', 'chat_function', 
@@ -367,6 +488,16 @@ When answering product legality questions:
 - Clearly state which products are legal or not legal in specific states
 - Include brand information when available
 - Do not speculate on legal status when database information is missing
+
+VERY IMPORTANT: The company primarily works with nicotine products, especially pouches, vapes, disposables, and other nicotine delivery systems. When users ask about products like "pouches", assume they are referring to NICOTINE pouches (like tobacco-free nicotine pouches) NOT cannabis/THC products unless explicitly stated otherwise.
+
+Key product categories:
+- Pouches: These are nicotine pouches, placed in the mouth (examples: ZYN, VELO, etc.)
+- Disposables: These are disposable vape devices (examples: Elf Bar, Hyde, etc.)
+- Vapes/E-cigarettes: Electronic nicotine delivery devices
+- E-liquids: Liquid nicotine for refillable vape devices
+
+If a customer mentions a specific brand, like "Juice Head pouches", correctly associate the products with that brand and its proper product category.
 
 Always cite your sources where appropriate (e.g., 'According to our State Map database...' or 'Based on the Knowledge Base...').
 
