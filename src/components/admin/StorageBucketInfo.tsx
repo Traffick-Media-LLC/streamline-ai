@@ -8,6 +8,7 @@ import { InfoIcon, RefreshCw, ShieldAlert, ShieldCheck, FileLock2 } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { BUCKET_ID } from "@/utils/storage/ensureBucketAccess";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 interface StoragePolicy {
   name: string;
@@ -51,7 +52,7 @@ const StorageBucketInfo = () => {
     setPolicyLoading(true);
     try {
       // Fetch policies that apply to our bucket
-      const { data, error } = await (supabase.rpc as any)('get_storage_policies', { bucket_name: BUCKET_ID });
+      const { data, error } = await supabase.rpc('get_storage_policies', { bucket_name: BUCKET_ID });
       
       if (error) {
         console.error("Error fetching policies:", error);
@@ -83,6 +84,8 @@ const StorageBucketInfo = () => {
         // For other errors, provide a generic fallback
         setPolicies([]);
       } else {
+        // Log the data to help with debugging
+        console.log("Policies fetched successfully:", data);
         setPolicies(data || []);
       }
     } catch (err) {
@@ -112,6 +115,7 @@ const StorageBucketInfo = () => {
   };
 
   const refreshInfo = () => {
+    toast.success("Refreshing storage information");
     fetchBucketInfo();
     fetchPolicies();
   };
