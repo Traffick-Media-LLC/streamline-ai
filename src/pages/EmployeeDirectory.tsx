@@ -9,10 +9,12 @@ import { generateRequestId } from '@/utils/logging';
 import { useAuth } from '@/contexts/AuthContext';
 import { ensureBucketAccess, BUCKET_ID } from '@/utils/storage/ensureBucketAccess';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 
 const EmployeeDirectory: React.FC = () => {
   const { data: employees = [], isLoading, error } = useEmployeesData();
   const { user } = useAuth();
+  const { imageSettings } = useOrgChartImage();
   const pageRequestId = generateRequestId();
 
   // Check if the storage bucket exists and create it if it doesn't
@@ -49,8 +51,18 @@ const EmployeeDirectory: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">Employee Directory</h1>
 
-      {/* Employee Table */}
+      {/* Organization Chart */}
       <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Organization Chart</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <OrgChartViewer />
+        </CardContent>
+      </Card>
+
+      {/* Employee Table */}
+      <Card>
         <CardHeader>
           <CardTitle>Employee Directory</CardTitle>
         </CardHeader>
@@ -93,16 +105,6 @@ const EmployeeDirectory: React.FC = () => {
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Organization Chart Viewer */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Organization Chart</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <OrgChartViewer />
         </CardContent>
       </Card>
     </div>
