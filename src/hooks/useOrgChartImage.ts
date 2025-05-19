@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -129,97 +130,123 @@ export const useOrgChartImage = () => {
       });
 
       console.log("Starting upload with authenticated user:", user?.id);
-      console.log("Using bucket:", BUCKET_ID);
-
-      // Upload the file directly
-      const fileExt = file.name.split('.').pop();
-      const fileName = `org_chart_${Date.now()}.${fileExt}`;
-      const filePath = fileName;
-
-      const { error: uploadError, data } = await supabase.storage
-        .from(BUCKET_ID)
-        .upload(filePath, file, {
-          upsert: true,
-          contentType: file.type,
-        });
-
-      if (uploadError) {
-        console.error("Error uploading file:", uploadError);
-        
-        logError(
-          uploadRequestId,
-          'useOrgChartImage',
-          'Error uploading file',
-          uploadError
-        );
-        
-        throw uploadError;
-      }
       
-      logEvent({
-        requestId: uploadRequestId,
-        userId: user?.id,
-        eventType: 'file_uploaded',
-        component: 'useOrgChartImage',
-        message: 'File uploaded successfully'
-      });
-
-      // Get the public URL for the uploaded file
-      const { data: { publicUrl } } = supabase.storage
-        .from(BUCKET_ID)
-        .getPublicUrl(filePath);
-
-      // Remove old image if exists
-      if (imageSettings?.filename && imageSettings.filename !== fileName) {
-        await supabase.storage
+      try {
+        // Upload the file directly
+        const fileExt = file.name.split('.').pop();
+        const fileName = `org_chart_${Date.now()}.${fileExt}`;
+        const filePath = fileName;
+  
+        const { error: uploadError, data } = await supabase.storage
           .from(BUCKET_ID)
-          .remove([imageSettings.filename]);
-      }
-
-      // Determine file type
-      const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
-
-      // Update the app_settings with the new image info
-      const newSettings: OrgChartImageSettings = {
-        url: publicUrl,
-        filename: filePath,
-        updated_at: new Date().toISOString(),
-        fileType: fileType,
-      };
-
-      logEvent({
-        requestId: uploadRequestId,
-        userId: user?.id,
-        eventType: 'updating_settings',
-        component: 'useOrgChartImage',
-        message: 'Updating app settings with new file info'
-      });
-
-      const { error: updateError } = await supabase
-        .from('app_settings')
-        .update({ value: newSettings as unknown as Json })
-        .eq('id', 'org_chart_image');
-
-      if (updateError) {
+          .upload(filePath, file, {
+            upsert: true,
+            contentType: file.type,
+          });
+  
+        if (uploadError) {
+          console.error("Error uploading file:", uploadError);
+          
+          logError(
+            uploadRequestId,
+            'useOrgChartImage',
+            'Error uploading file',
+            uploadError
+          );
+          
+          throw uploadError;
+        }
+        
+        logEvent({
+          requestId: uploadRequestId,
+          userId: user?.id,
+          eventType: 'file_uploaded',
+          component: 'useOrgChartImage',
+          message: 'File uploaded successfully'
+        });
+  
+        // Get the public URL for the uploaded file
+        const { data: { publicUrl } } = supabase.storage
+          .from(BUCKET_ID)
+          .getPublicUrl(filePath);
+  
+        // Remove old image if exists
+        if (imageSettings?.filename && imageSettings.filename !== fileName) {
+          await supabase.storage
+            .from(BUCKET_ID)
+            .remove([imageSettings.filename]);
+        }
+  
+        // Determine file type
+        const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
+  
+        // Update the app_settings with the new image info
+        const newSettings: OrgChartImageSettings = {
+          url: publicUrl,
+          filename: filePath,
+          updated_at: new Date().toISOString(),
+          fileType: fileType,
+        };
+  
+        logEvent({
+          requestId: uploadRequestId,
+          userId: user?.id,
+          eventType: 'updating_settings',
+          component: 'useOrgChartImage',
+          message: 'Updating app settings with new file info'
+        });
+  
+        // Make sure we're using the admin's session token for this update
+        const { error: updateError } = await supabase
+          .from('app_settings')
+          .update({ value: newSettings as unknown as Json })
+          .eq('id', 'org_chart_image');
+  
+        if (updateError) {
+          logError(
+            uploadRequestId,
+            'useOrgChartImage',
+            'Error updating org chart image settings',
+            updateError
+          );
+          
+          // Detailed error information for debugging
+          console.error("Update error details:", {
+            error: updateError,
+            userId: user?.id,
+            isAdmin,
+            sessionExpiry: session ? new Date(session.expires_at * 1000).toISOString() : 'No session'
+          });
+          
+          throw updateError;
+        }
+  
+        logEvent({
+          requestId: uploadRequestId,
+          userId: user?.id,
+          eventType: 'upload_complete',
+          component: 'useOrgChartImage',
+          message: 'Org chart upload and settings update completed successfully'
+        });
+  
+        return newSettings;
+      } catch (error: any) {
+        // Enhanced error logging with more context
         logError(
           uploadRequestId,
           'useOrgChartImage',
-          'Error updating org chart image settings',
-          updateError
+          'Upload process error',
+          error,
+          {
+            userId: user?.id,
+            isAdmin,
+            hasValidSession: !!session,
+            errorMessage: error.message || 'Unknown error'
+          }
         );
         
-        throw updateError;
+        throw error;
       }
-
-      logEvent({
-        requestId: uploadRequestId,
-        userId: user?.id,
-        eventType: 'upload_complete',
-        component: 'useOrgChartImage',
-        message: 'Org chart upload and settings update completed successfully'
-      });
-
-      return newSettings;
     },
     onSuccess: (data) => {
       toast.success("Organization chart updated successfully");
@@ -244,7 +271,7 @@ export const useOrgChartImage = () => {
       );
       
       toast.error("Failed to update organization chart", {
-        description: error.message
+        description: error.message || "Check that you have admin permissions"
       });
     }
   });
@@ -297,7 +324,7 @@ export const useOrgChartImage = () => {
     },
     onError: (error: any) => {
       toast.error("Failed to remove organization chart", {
-        description: error.message
+        description: error.message || "Check that you have admin permissions"
       });
     }
   });
