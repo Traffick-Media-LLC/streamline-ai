@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,22 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
+  // Helper function to ensure URLs are absolute
+  const ensureAbsoluteUrl = (url: string | null): string | null => {
+    if (!url) return null;
+    
+    // If URL already includes http(s), it's already absolute
+    if (url.match(/^https?:\/\//)) return url;
+    
+    // If URL starts with a slash, prepend origin
+    if (url.startsWith('/')) {
+      return `${window.location.origin}${url}`;
+    }
+    
+    // Otherwise, assume it's relative to the origin
+    return `${window.location.origin}/${url}`;
+  };
+
   // For debugging purposes
   useEffect(() => {
     const log = `OrgChartViewer current image settings: ${JSON.stringify(imageSettings)}`;
@@ -29,7 +44,9 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
     
     // Set local image URL state from imageSettings
     if (imageSettings?.url && !imageLoadError) {
-      setLocalImageUrl(imageSettings.url);
+      const absoluteUrl = ensureAbsoluteUrl(imageSettings.url);
+      setLocalImageUrl(absoluteUrl);
+      console.log("Setting absolute URL:", absoluteUrl);
     }
   }, [imageSettings, imageLoadError]);
 
@@ -60,8 +77,10 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
         // Manually set the local image URL from the fresh data
         const settings = data.value as any;
         if (settings.url) {
-          setLocalImageUrl(settings.url);
+          const absoluteUrl = ensureAbsoluteUrl(settings.url);
+          setLocalImageUrl(absoluteUrl);
           toast.success('Chart data refreshed');
+          console.log("URL after refresh:", absoluteUrl);
         }
       } else {
         setDebugLogs(prev => [...prev, "No chart data available from refresh"]);
@@ -123,7 +142,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   const handleDownload = () => {
     if (localImageUrl || imageSettings?.url) {
       try {
-        const url = localImageUrl || imageSettings?.url;
+        const url = localImageUrl || ensureAbsoluteUrl(imageSettings?.url!);
         const link = document.createElement('a');
         link.href = url!;
         link.download = imageSettings?.fileType === 'pdf' 
@@ -152,7 +171,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
             <div className="flex flex-row gap-2">
               <Button 
                 variant="secondary" 
-                onClick={() => window.open(imageSettings.url!, '_blank')}
+                onClick={() => window.open(ensureAbsoluteUrl(imageSettings.url!)!, '_blank')}
                 className="flex items-center gap-2"
               >
                 <Eye className="h-4 w-4" />
@@ -171,7 +190,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
         ) : (
           <div>
             <img 
-              src={localImageUrl || imageSettings?.url || "https://placehold.co/800x600?text=Organization+Chart+Loading"} 
+              src={localImageUrl || ensureAbsoluteUrl(imageSettings?.url!) || "https://placehold.co/800x600?text=Organization+Chart+Loading"} 
               alt="Organization Chart" 
               className="w-full object-contain bg-muted"
               style={{ maxHeight: '600px' }}
@@ -233,7 +252,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
           <DialogContent className="max-w-[90vw] max-h-[90vh] w-fit p-0">
             <div className="relative overflow-auto max-h-[90vh]">
               <img 
-                src={localImageUrl || imageSettings!.url!} 
+                src={localImageUrl || ensureAbsoluteUrl(imageSettings!.url!)} 
                 alt="Organization Chart (Full Size)" 
                 className="w-auto h-auto object-contain"
                 onError={(e) => {

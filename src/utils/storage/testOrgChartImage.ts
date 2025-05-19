@@ -5,9 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
 // It directly sets the organization chart image in app_settings
 export const setTestOrgChartImage = async () => {
   try {
-    // Create a test settings object with a reliable image URL
+    // Get the hostname to create an absolute URL
+    const origin = window.location.origin;
+    
+    // Create a test settings object with an absolute URL
     const testSettings = {
-      url: "/lovable-uploads/ee38a52a-ff90-4b90-a8e8-b7aaee777bb2.png",
+      url: `${origin}/lovable-uploads/ee38a52a-ff90-4b90-a8e8-b7aaee777bb2.png`,
       filename: "test_org_chart.png",
       updated_at: new Date().toISOString(),
       fileType: "image"

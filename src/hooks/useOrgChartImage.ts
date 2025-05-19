@@ -27,6 +27,22 @@ export const useOrgChartImage = () => {
   const uploadRequestId = generateRequestId();
   const [adminPermissionVerified, setAdminPermissionVerified] = useState<boolean | null>(null);
 
+  // Helper function to ensure URLs are absolute
+  const ensureAbsoluteUrl = (url: string | null): string | null => {
+    if (!url) return null;
+    
+    // If URL already includes http(s), it's already absolute
+    if (url.match(/^https?:\/\//)) return url;
+    
+    // If URL starts with a slash, prepend origin
+    if (url.startsWith('/')) {
+      return `${window.location.origin}${url}`;
+    }
+    
+    // Otherwise, assume it's relative to the origin
+    return `${window.location.origin}/${url}`;
+  };
+
   // Verify admin permissions directly using the function
   useEffect(() => {
     const verifyAdminPermissions = async () => {
@@ -120,11 +136,17 @@ export const useOrgChartImage = () => {
         
         // Handle legacy data that might not have fileType
         const settings = data.value as unknown as OrgChartImageSettings;
-        if (settings && settings.url && !settings.fileType) {
+        
+        // Ensure URL is absolute
+        if (settings && settings.url) {
+          settings.url = ensureAbsoluteUrl(settings.url);
+          
           // Infer file type from URL if it's not set
-          const isImage = settings.url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i);
-          const isPdf = settings.url.match(/\.(pdf)$/i);
-          settings.fileType = isPdf ? "pdf" : "image";
+          if (!settings.fileType) {
+            const isImage = settings.url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i);
+            const isPdf = settings.url.match(/\.(pdf)$/i);
+            settings.fileType = isPdf ? "pdf" : "image";
+          }
         }
         
         logEvent({
@@ -135,6 +157,7 @@ export const useOrgChartImage = () => {
           message: 'Successfully fetched org chart settings'
         });
         
+        console.log("Retrieved settings with URL:", settings?.url);
         return settings;
       } catch (error) {
         logError(
@@ -216,6 +239,11 @@ export const useOrgChartImage = () => {
         const { data: { publicUrl } } = supabase.storage
           .from(BUCKET_ID)
           .getPublicUrl(filePath);
+          
+        // Make sure the URL is absolute
+        const absoluteUrl = ensureAbsoluteUrl(publicUrl);
+        console.log("Generated public URL:", publicUrl);
+        console.log("Absolute URL:", absoluteUrl);
   
         // Remove old image if exists
         if (imageSettings?.filename && imageSettings.filename !== fileName) {
@@ -229,7 +257,7 @@ export const useOrgChartImage = () => {
   
         // Update the app_settings with the new image info
         const newSettings: OrgChartImageSettings = {
-          url: publicUrl,
+          url: absoluteUrl,
           filename: filePath,
           updated_at: new Date().toISOString(),
           fileType: fileType,
