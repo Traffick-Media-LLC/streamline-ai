@@ -1,9 +1,16 @@
 
 import React from 'react';
 
+// Regular expressions for detecting different types of content
 const urlRegex = /(https?:\/\/[^\s]+)/g;
 const boldTitleRegex = /\*\*(.*?)\*\*/g;
 const fileExtensionRegex = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|jpg|jpeg|png|gif)(?=\s|$|\)|\])/i;
+const logoUrlRegex = /logo|icon|brand.*\.(jpg|jpeg|png|gif|webp|svg)/i;
+
+// Function to check if a URL is likely a logo image
+const isLogoImageUrl = (url: string): boolean => {
+  return logoUrlRegex.test(url.toLowerCase());
+};
 
 export const renderTextWithLinks = (text: string) => {
   // First, split by URLs but keep them
@@ -12,6 +19,12 @@ export const renderTextWithLinks = (text: string) => {
   return parts.map((part, index) => {
     // Handle URLs
     if (part.match(urlRegex)) {
+      // Check if this appears to be a logo image URL
+      if (isLogoImageUrl(part)) {
+        // For logo images, don't render the raw URL
+        return null;
+      }
+      
       // Determine if this is likely a file link
       const isFileLink = fileExtensionRegex.test(part);
       
@@ -61,7 +74,7 @@ export const renderTextWithLinks = (text: string) => {
         })}
       </React.Fragment>
     );
-  });
+  }).filter(Boolean); // Filter out null values (removed logo URLs)
 };
 
 // Function to extract URLs from text
