@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useOrgChartImage } from '@/hooks/useOrgChartImage';
 import { Button } from "@/components/ui/button";
@@ -10,15 +11,22 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface OrgChartViewerProps {
   employees?: Employee[];
+  // Add an optional override URL prop
+  overrideUrl?: string;
 }
 
-const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
+const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ 
+  employees,
+  // Use the specified URL as default override
+  overrideUrl = "https://vtetryrdbntasdlutbdr.supabase.co/storage/v1/object/public/org_chart//org_chart_1747673921077.pdf"
+}) => {
   const { imageSettings, isLoading, error, uploadImage } = useOrgChartImage();
   const [fullscreenImage, setFullscreenImage] = useState(false);
-  const [localImageUrl, setLocalImageUrl] = useState<string | null>(null);
+  const [localImageUrl, setLocalImageUrl] = useState<string | null>(overrideUrl);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [usingOverrideUrl, setUsingOverrideUrl] = useState(!!overrideUrl);
 
   // Helper function to ensure URLs are absolute
   const ensureAbsoluteUrl = (url: string | null): string | null => {
@@ -40,15 +48,16 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   useEffect(() => {
     const log = `OrgChartViewer current image settings: ${JSON.stringify(imageSettings)}`;
     console.log(log);
+    console.log("Using override URL:", overrideUrl);
     setDebugLogs(prev => [...prev, log]);
     
-    // Set local image URL state from imageSettings
-    if (imageSettings?.url && !imageLoadError) {
+    // Set local image URL state from imageSettings only if not using an override
+    if (!overrideUrl && imageSettings?.url && !imageLoadError) {
       const absoluteUrl = ensureAbsoluteUrl(imageSettings.url);
       setLocalImageUrl(absoluteUrl);
-      console.log("Setting absolute URL:", absoluteUrl);
+      console.log("Setting absolute URL from settings:", absoluteUrl);
     }
-  }, [imageSettings, imageLoadError]);
+  }, [imageSettings, imageLoadError, overrideUrl]);
 
   // Force refresh the org chart data from the database
   const handleRefreshData = async () => {
@@ -74,28 +83,60 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
         console.log(dataLog);
         setDebugLogs(prev => [...prev, dataLog]);
         
-        // Manually set the local image URL from the fresh data
-        const settings = data.value as any;
-        if (settings.url) {
-          const absoluteUrl = ensureAbsoluteUrl(settings.url);
+        // Use override URL if set, otherwise use the URL from the database
+        if (overrideUrl) {
+          setLocalImageUrl(overrideUrl);
+          setUsingOverrideUrl(true);
+          toast.success('Using specified PDF URL');
+        } else if (data.value.url) {
+          const absoluteUrl = ensureAbsoluteUrl(data.value.url);
           setLocalImageUrl(absoluteUrl);
           toast.success('Chart data refreshed');
           console.log("URL after refresh:", absoluteUrl);
         }
       } else {
         setDebugLogs(prev => [...prev, "No chart data available from refresh"]);
-        toast.info('No chart data available');
+        
+        if (overrideUrl) {
+          setLocalImageUrl(overrideUrl);
+          setUsingOverrideUrl(true);
+          toast.info('Using specified PDF URL');
+        } else {
+          toast.info('No chart data available');
+        }
       }
     } catch (e) {
       const exLog = `Exception refreshing chart data: ${e}`;
       console.error(exLog);
       setDebugLogs(prev => [...prev, exLog]);
+      
+      // Still use override URL if available, even if refresh fails
+      if (overrideUrl) {
+        setLocalImageUrl(overrideUrl);
+        setUsingOverrideUrl(true);
+      }
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  if (error) {
+  // Toggle between override URL and database URL
+  const toggleUrlSource = () => {
+    if (usingOverrideUrl && imageSettings?.url) {
+      // Switch to URL from database
+      setUsingOverrideUrl(false);
+      const absoluteUrl = ensureAbsoluteUrl(imageSettings.url);
+      setLocalImageUrl(absoluteUrl);
+      toast.info('Using URL from database');
+    } else if (overrideUrl) {
+      // Switch to override URL
+      setUsingOverrideUrl(true);
+      setLocalImageUrl(overrideUrl);
+      toast.info('Using specified PDF URL');
+    }
+  };
+
+  if (error && !overrideUrl) {
     return (
       <Alert variant="destructive">
         <AlertTriangle className="h-4 w-4" />
@@ -106,7 +147,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && !overrideUrl) {
     return (
       <div className="h-[400px] w-full bg-muted animate-pulse rounded flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
@@ -114,8 +155,12 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
     );
   }
 
+  // If we have an override URL, always use it
+  const displayUrl = localImageUrl || overrideUrl;
+  const isPdf = displayUrl?.endsWith('.pdf') || imageSettings?.fileType === 'pdf';
+
   // If no image is available or there was a load error, show a message
-  if ((!localImageUrl && !imageSettings?.url) || (imageLoadError && !localImageUrl)) {
+  if (!displayUrl && ((!imageSettings?.url) || (imageLoadError))) {
     return (
       <div className="h-[200px] border rounded-md flex items-center justify-center bg-muted/30 text-muted-foreground flex-col gap-4">
         <p>No organization chart available</p>
@@ -140,14 +185,12 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   }
 
   const handleDownload = () => {
-    if (localImageUrl || imageSettings?.url) {
+    if (displayUrl) {
       try {
-        const url = localImageUrl || ensureAbsoluteUrl(imageSettings?.url!);
+        const url = displayUrl;
         const link = document.createElement('a');
-        link.href = url!;
-        link.download = imageSettings?.fileType === 'pdf' 
-          ? 'organization_chart.pdf' 
-          : 'organization_chart.png';
+        link.href = url;
+        link.download = isPdf ? 'organization_chart.pdf' : 'organization_chart.png';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -159,8 +202,6 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
     }
   };
 
-  const isPdf = imageSettings?.fileType === 'pdf';
-
   return (
     <div className="space-y-4">
       <div className="relative border rounded-md overflow-hidden">
@@ -171,7 +212,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
             <div className="flex flex-row gap-2">
               <Button 
                 variant="secondary" 
-                onClick={() => window.open(ensureAbsoluteUrl(imageSettings.url!)!, '_blank')}
+                onClick={() => window.open(displayUrl, '_blank')}
                 className="flex items-center gap-2"
               >
                 <Eye className="h-4 w-4" />
@@ -190,16 +231,16 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
         ) : (
           <div>
             <img 
-              src={localImageUrl || ensureAbsoluteUrl(imageSettings?.url!) || "https://placehold.co/800x600?text=Organization+Chart+Loading"} 
+              src={displayUrl} 
               alt="Organization Chart" 
               className="w-full object-contain bg-muted"
               style={{ maxHeight: '600px' }}
               onLoad={() => {
-                console.log("Image loaded successfully:", localImageUrl || imageSettings?.url);
+                console.log("Image loaded successfully:", displayUrl);
                 setImageLoadError(false);
               }}
               onError={(e) => {
-                console.error("Image failed to load:", localImageUrl || imageSettings?.url);
+                console.error("Image failed to load:", displayUrl);
                 setImageLoadError(true);
                 toast.error("Image failed to load");
                 // Replace with a placeholder image as fallback
@@ -242,17 +283,45 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
         )}
         
         <div className="p-2 bg-muted text-xs text-muted-foreground">
-          Updated: {imageSettings?.updated_at ? new Date(imageSettings.updated_at).toLocaleString() : 'N/A'}
-          {isPdf && " • PDF document"}
+          {usingOverrideUrl ? (
+            <span className="flex items-center justify-between">
+              <span>Using manually specified PDF URL</span>
+              {imageSettings?.url && (
+                <Button 
+                  variant="ghost" 
+                  size="xs" 
+                  className="h-5 text-xs"
+                  onClick={toggleUrlSource}
+                >
+                  Switch to DB URL
+                </Button>
+              )}
+            </span>
+          ) : (
+            <>
+              Updated: {imageSettings?.updated_at ? new Date(imageSettings.updated_at).toLocaleString() : 'N/A'}
+              {isPdf && " • PDF document"}
+              {overrideUrl && (
+                <Button 
+                  variant="ghost" 
+                  size="xs" 
+                  className="h-5 text-xs ml-2"
+                  onClick={toggleUrlSource}
+                >
+                  Use specified URL
+                </Button>
+              )}
+            </>
+          )}
         </div>
       </div>
       
-      {!isPdf && (localImageUrl || imageSettings?.url) && (
+      {!isPdf && displayUrl && (
         <Dialog open={fullscreenImage} onOpenChange={setFullscreenImage}>
           <DialogContent className="max-w-[90vw] max-h-[90vh] w-fit p-0">
             <div className="relative overflow-auto max-h-[90vh]">
               <img 
-                src={localImageUrl || ensureAbsoluteUrl(imageSettings!.url!)} 
+                src={displayUrl} 
                 alt="Organization Chart (Full Size)" 
                 className="w-auto h-auto object-contain"
                 onError={(e) => {
