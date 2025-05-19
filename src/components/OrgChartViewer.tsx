@@ -19,10 +19,13 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   const [localImageUrl, setLocalImageUrl] = useState<string | null>(null);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
   // For debugging purposes
   useEffect(() => {
-    console.log('OrgChartViewer current image settings:', imageSettings);
+    const log = `OrgChartViewer current image settings: ${JSON.stringify(imageSettings)}`;
+    console.log(log);
+    setDebugLogs(prev => [...prev, log]);
     
     // Set local image URL state from imageSettings
     if (imageSettings?.url && !imageLoadError) {
@@ -45,10 +48,15 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
         .single();
       
       if (error) {
-        console.error('Error refreshing chart data:', error);
+        const errLog = `Error refreshing chart data: ${JSON.stringify(error)}`;
+        console.error(errLog);
+        setDebugLogs(prev => [...prev, errLog]);
         toast.error('Failed to refresh chart data');
       } else if (data?.value) {
-        console.log('Refreshed chart data:', data.value);
+        const dataLog = `Refreshed chart data: ${JSON.stringify(data.value)}`;
+        console.log(dataLog);
+        setDebugLogs(prev => [...prev, dataLog]);
+        
         // Manually set the local image URL from the fresh data
         const settings = data.value as any;
         if (settings.url) {
@@ -56,10 +64,13 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
           toast.success('Chart data refreshed');
         }
       } else {
+        setDebugLogs(prev => [...prev, "No chart data available from refresh"]);
         toast.info('No chart data available');
       }
     } catch (e) {
-      console.error('Exception refreshing chart data:', e);
+      const exLog = `Exception refreshing chart data: ${e}`;
+      console.error(exLog);
+      setDebugLogs(prev => [...prev, exLog]);
     } finally {
       setIsRefreshing(false);
     }
@@ -87,7 +98,7 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
   // If no image is available or there was a load error, show a message
   if ((!localImageUrl && !imageSettings?.url) || (imageLoadError && !localImageUrl)) {
     return (
-      <div className="h-[200px] border rounded-md flex items-center justify-center bg-muted/30 text-muted-foreground flex-col gap-2">
+      <div className="h-[200px] border rounded-md flex items-center justify-center bg-muted/30 text-muted-foreground flex-col gap-4">
         <p>No organization chart available</p>
         <Button 
           variant="outline" 
@@ -98,6 +109,13 @@ const OrgChartViewer: React.FC<OrgChartViewerProps> = ({ employees }) => {
           <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           Refresh Data
         </Button>
+        
+        <div className="mt-4 text-xs text-muted-foreground">
+          <p>Debug Information:</p>
+          <p>Image URL: {imageSettings?.url || 'Not set'}</p>
+          <p>Image Type: {imageSettings?.fileType || 'Not set'}</p>
+          <p>Updated: {imageSettings?.updated_at || 'Not set'}</p>
+        </div>
       </div>
     );
   }

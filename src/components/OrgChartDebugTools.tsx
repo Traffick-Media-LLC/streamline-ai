@@ -20,6 +20,7 @@ const OrgChartDebugTools: React.FC = () => {
         window.location.reload();
       } else {
         toast.error('Failed to set test image settings');
+        console.error("Error details:", result.error);
       }
     } catch (error) {
       console.error('Error setting test image:', error);
@@ -38,6 +39,7 @@ const OrgChartDebugTools: React.FC = () => {
         toast.success('Retrieved current settings');
       } else {
         toast.error('Failed to get current settings');
+        console.error("Error details:", result.error);
       }
     } catch (error) {
       console.error('Error getting settings:', error);
