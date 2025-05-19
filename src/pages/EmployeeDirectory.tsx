@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,6 +14,7 @@ import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 import OrgChartDebugTools from '@/components/OrgChartDebugTools';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const EmployeeDirectory: React.FC = () => {
   const { data: employees = [], isLoading, error } = useEmployeesData();
@@ -93,86 +95,97 @@ const EmployeeDirectory: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">Employee Directory</h1>
 
-      {/* Organization Chart */}
-      <Card className="mb-8">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Organization Chart</CardTitle>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setShowDebugTools(!showDebugTools)}
-          >
-            {showDebugTools ? 'Hide Debug Tools' : 'Show Debug Tools'}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <OrgChartViewer />
-          
-          {/* Debug info - will be removed in production */}
-          {(!imageSettings?.url || debugInfo) && showDebugTools && (
-            <div className="mt-4 p-4 bg-muted rounded-md text-xs">
-              <p className="font-semibold">Debug Information:</p>
-              <p>Image URL: {imageSettings?.url || 'Not set'}</p>
-              <p>Image Type: {imageSettings?.fileType || 'Not set'}</p>
-              <p>Updated: {imageSettings?.updated_at || 'Not set'}</p>
-              {debugInfo && (
-                <pre className="mt-2 overflow-auto max-h-[150px]">
-                  {JSON.stringify(debugInfo, null, 2)}
-                </pre>
-              )}
-            </div>
-          )}
-          
-          {showDebugTools && <OrgChartDebugTools />}
-        </CardContent>
-      </Card>
-
-      {/* Employee Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Employee Directory</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="h-[200px] flex items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {employees && employees.length > 0 ? (
-                    employees.map((employee) => (
-                      <TableRow key={employee.id}>
-                        <TableCell className="font-medium">{employee.first_name} {employee.last_name}</TableCell>
-                        <TableCell>{employee.title}</TableCell>
-                        <TableCell>{employee.department}</TableCell>
-                        <TableCell>{employee.email}</TableCell>
-                        <TableCell>{employee.phone || '-'}</TableCell>
+      <Tabs defaultValue="employees" className="w-full">
+        <TabsList className="w-full mb-6">
+          <TabsTrigger value="employees" className="flex-1">Employees</TabsTrigger>
+          <TabsTrigger value="org-chart" className="flex-1">Organization Chart</TabsTrigger>
+        </TabsList>
+        
+        {/* Employees Tab Content */}
+        <TabsContent value="employees">
+          <Card>
+            <CardHeader>
+              <CardTitle>Employee Directory</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="h-[200px] flex items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
-                        No employees found
-                      </TableCell>
-                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {employees && employees.length > 0 ? (
+                        employees.map((employee) => (
+                          <TableRow key={employee.id}>
+                            <TableCell className="font-medium">{employee.first_name} {employee.last_name}</TableCell>
+                            <TableCell>{employee.title}</TableCell>
+                            <TableCell>{employee.department}</TableCell>
+                            <TableCell>{employee.email}</TableCell>
+                            <TableCell>{employee.phone || '-'}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                            No employees found
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Organization Chart Tab Content */}
+        <TabsContent value="org-chart">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Organization Chart</CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowDebugTools(!showDebugTools)}
+              >
+                {showDebugTools ? 'Hide Debug Tools' : 'Show Debug Tools'}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <OrgChartViewer />
+              
+              {/* Debug info - will be removed in production */}
+              {(!imageSettings?.url || debugInfo) && showDebugTools && (
+                <div className="mt-4 p-4 bg-muted rounded-md text-xs">
+                  <p className="font-semibold">Debug Information:</p>
+                  <p>Image URL: {imageSettings?.url || 'Not set'}</p>
+                  <p>Image Type: {imageSettings?.fileType || 'Not set'}</p>
+                  <p>Updated: {imageSettings?.updated_at || 'Not set'}</p>
+                  {debugInfo && (
+                    <pre className="mt-2 overflow-auto max-h-[150px]">
+                      {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
                   )}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+              )}
+              
+              {showDebugTools && <OrgChartDebugTools />}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
