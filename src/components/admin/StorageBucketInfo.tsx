@@ -62,7 +62,7 @@ const StorageBucketInfo = () => {
             // For non-admins, show simplified policy information
             const simplePolicies = [
               {
-                name: "Admins can upload and manage org chart files",
+                name: "Admins can manage org chart files",
                 action: "ALL",
                 definition: "Administrators can manage all files",
                 command: "USING"
