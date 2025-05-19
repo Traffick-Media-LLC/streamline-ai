@@ -15,6 +15,12 @@ export interface OrgChartImageSettings {
   fileType: "image" | "pdf" | null;
 }
 
+// Define a proper type for our custom RPC function result
+type UpdateAppSettingsResult = {
+  data: boolean | null;
+  error: any;
+}
+
 export const useOrgChartImage = () => {
   const queryClient = useQueryClient();
   const { isAdmin, isAuthenticated, user, session } = useAuth();
@@ -237,13 +243,17 @@ export const useOrgChartImage = () => {
           message: 'Updating app settings with new file info'
         });
   
-        // Use the secure function to update settings with type assertion
-        const { error: updateError } = await (supabase
-          .rpc('update_app_settings', {
+        // Use the secure function to update settings with proper type safety
+        const response = await supabase.rpc(
+          'update_app_settings' as any, 
+          {
             setting_id: 'org_chart_image',
             setting_value: newSettings as unknown as Json
-          }) as any);
-
+          }
+        ) as unknown as UpdateAppSettingsResult;
+        
+        const updateError = response.error;
+        
         if (updateError) {
           logError(
             uploadRequestId,
@@ -359,13 +369,16 @@ export const useOrgChartImage = () => {
       };
       
       try {
-        // Use the secure function to update settings with type assertion
-        const { error: updateError } = await (supabase
-          .rpc('update_app_settings', {
+        // Use the secure function to update settings with proper type safety
+        const response = await supabase.rpc(
+          'update_app_settings' as any, 
+          {
             setting_id: 'org_chart_image',
             setting_value: newSettings as unknown as Json
-          }) as any);
-            
+          }
+        ) as unknown as UpdateAppSettingsResult;
+        
+        const updateError = response.error;
         if (updateError) throw updateError;
       } catch (error) {
         console.error("Error updating settings:", error);
