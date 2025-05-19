@@ -7,6 +7,7 @@ import { Animated, AnimatedImage, AnimatedList } from "@/components/ui/animated"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useState, useEffect } from "react"
 import { usePerformance } from "@/contexts/PerformanceContext"
+import OrgChartViewer from "@/components/OrgChartViewer"
 
 const HomePage = () => {
   const [imagesLoaded, setImagesLoaded] = useState(false);
@@ -83,6 +84,20 @@ const HomePage = () => {
           </div>
         </div>
       </Animated>
+
+      {/* Organization Chart Section */}
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+        <Animated type="fade" threshold={0.1}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-2xl">Organization Chart</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OrgChartViewer />
+            </CardContent>
+          </Card>
+        </Animated>
+      </div>
 
       {/* Navigation Cards */}
       <div className="max-w-7xl mx-auto px-4 py-12 space-y-12">
