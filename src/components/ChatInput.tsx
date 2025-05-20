@@ -34,11 +34,12 @@ const ChatInput = () => {
       
       console.log("Sending message:", message);
       const result = await sendMessage(message);
+      console.log("Send message result:", result); // Add this log to check result
       
-      if (!result.success) {
+      if (result && !result.success) {
         console.error("Error sending message:", result.error);
-        toast.error("Failed to send message. Please try again.");
-      } else {
+        toast.error(result.error || "Failed to send message. Please try again.");
+      } else if (result && result.success) {
         // Only clear the message if it was sent successfully
         setMessage("");
       }

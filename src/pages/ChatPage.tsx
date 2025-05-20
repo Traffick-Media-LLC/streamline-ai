@@ -25,9 +25,10 @@ const ChatPageContent = () => {
   const { user } = useAuth();
   const { clearChat } = useChatContext();
   const [debugInfo, setDebugInfo] = useState<string>("");
-  const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
+  const [showDebugPanel, setShowDebugPanel] = useState<boolean>(process.env.NODE_ENV === 'development');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [healthCheckStatus, setHealthCheckStatus] = useState<string>("Not checked");
+  const [testResponse, setTestResponse] = useState<string>("");
   const isMobile = useIsMobile();
   
   // Clear chat state when component mounts
@@ -71,6 +72,7 @@ const ChatPageContent = () => {
           console.log("Edge Function health check passed:", data);
           setDebugInfo(`Edge Function OK (${duration}ms)`);
           setHealthCheckStatus(`Connected (${duration}ms)`);
+          setTestResponse(JSON.stringify(data, null, 2));
           await errorTracker.logStage('edge_function_check', 'complete', {
             duration,
             response: data
@@ -97,17 +99,38 @@ const ChatPageContent = () => {
     
     checkEdgeFunctionConnection();
   }, []);
+
+  const handleTestMessage = async () => {
+    try {
+      setTestResponse("Testing...");
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: { 
+          content: "Hello", 
+          messages: [{ role: "user", content: "Hello" }],
+          mode: "test"
+        },
+      });
+
+      if (error) {
+        setTestResponse(`Error: ${error.message}`);
+      } else {
+        setTestResponse(JSON.stringify(data, null, 2));
+      }
+    } catch (err) {
+      setTestResponse(`Exception: ${err.message}`);
+    }
+  };
   
   // Render debugging panel (development or when toggled)
   const renderDebugPanel = () => {
     if (process.env.NODE_ENV !== 'development' && !showDebugPanel) return null;
     
     return (
-      <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50 max-w-[350px]">
+      <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50 max-w-[400px] overflow-auto max-h-[50vh]">
         <h4 className="font-medium text-sm">Chat Debug</h4>
         <p className="text-xs text-muted-foreground mb-1">Status: {debugInfo || "Ready"}</p>
         <p className="text-xs text-muted-foreground">Edge Function: {healthCheckStatus}</p>
-        <div className="mt-2 text-xs">
+        <div className="mt-2 text-xs flex gap-2 flex-wrap">
           <Button 
             size="sm" 
             variant="outline" 
@@ -116,7 +139,20 @@ const ChatPageContent = () => {
           >
             Refresh Page
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-6 px-2"
+            onClick={handleTestMessage}
+          >
+            Test Message
+          </Button>
         </div>
+        {testResponse && (
+          <div className="mt-2 p-2 bg-muted rounded text-xs overflow-auto max-h-[200px]">
+            <pre className="whitespace-pre-wrap">{testResponse}</pre>
+          </div>
+        )}
       </div>
     );
   };

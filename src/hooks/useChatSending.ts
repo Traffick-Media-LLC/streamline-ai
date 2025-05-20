@@ -71,7 +71,7 @@ export const useChatSending = (
         // Send to edge function
         const { data, error } = await supabase.functions.invoke('chat', {
           body: { 
-            content, // This matches what the edge function expects
+            content: content, // Make sure to use consistent parameter naming
             messages: messages.map(msg => ({
               role: msg.role,
               content: msg.content
@@ -80,6 +80,8 @@ export const useChatSending = (
             requestId
           },
         });
+        
+        console.log("Response from edge function:", { data, error });
         
         if (error) {
           console.error("Error from edge function:", error);
@@ -122,7 +124,7 @@ export const useChatSending = (
         }
         
         // Check for message in response
-        if (!data.message) {
+        if (!data.message && !data.content) {
           console.error("No message in response:", data);
           await errorTracker.logError(
             "No message in response", 
@@ -135,11 +137,14 @@ export const useChatSending = (
           return { success: false, error: "No message in response" };
         }
         
+        // Support both message and content fields in the response
+        const responseContent = data.message || data.content;
+        
         // Create assistant message
         const assistantMessage: Message = {
           id: uuidv4(),
           role: "assistant",
-          content: data.message,
+          content: responseContent,
           createdAt: new Date().toISOString(),
           timestamp: Date.now(),
           metadata: {
