@@ -32,9 +32,8 @@ export const PerformanceProvider = ({ children }: { children: React.ReactNode })
         await import('../pages/MapPage');
       } else if (path.includes('chat')) {
         await import('../pages/ChatPage');
-      } else if (path.includes('profile')) {
-        await import('../pages/ProfilePage');
       }
+      // Removed the reference to '../pages/ProfilePage' since it no longer exists
     } catch (error) {
       console.error("Failed to prefetch route:", error);
     } finally {

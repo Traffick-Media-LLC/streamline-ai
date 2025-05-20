@@ -86,15 +86,6 @@ const HamburgerMenu = () => {
               Admin Dashboard
             </Link>
           )}
-          {isAuthenticated && (
-            <Link 
-              to="/profile" 
-              className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
-              onClick={handleLinkClick}
-            >
-              My Profile
-            </Link>
-          )}
           <div className="mt-4 pt-4 border-t">
             {isAuthenticated && (
               <Button 
