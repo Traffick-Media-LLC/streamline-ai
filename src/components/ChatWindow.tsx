@@ -26,7 +26,7 @@ const ChatWindow = () => {
   // Clear chat when component is mounted
   useEffect(() => {
     clearChat();
-  }, []);
+  }, [clearChat]);
 
   // Get user's name from auth context
   const userName = useMemo(() => {

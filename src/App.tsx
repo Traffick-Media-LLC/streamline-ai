@@ -19,7 +19,6 @@ const ChatPage = lazy(() => import("./pages/ChatPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
-const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const KnowledgeManager = lazy(() => import("./components/KnowledgeManager"));
 const EmployeeDirectory = lazy(() => import("./pages/EmployeeDirectory"));
 
@@ -119,14 +118,6 @@ const App = () => {
                                 element={
                                   <ProtectedRoute>
                                     <ChatPage />
-                                  </ProtectedRoute>
-                                }
-                              />
-                              <Route 
-                                path="/profile" 
-                                element={
-                                  <ProtectedRoute>
-                                    <ProfilePage />
                                   </ProtectedRoute>
                                 }
                               />

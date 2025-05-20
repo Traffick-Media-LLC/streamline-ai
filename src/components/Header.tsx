@@ -178,9 +178,6 @@ const Header = () => {
                 align="end" 
                 className="text-black bg-white z-50 min-w-[200px]"
               >
-                <DropdownMenuItem asChild>
-                  <Link to="/profile" className="text-black hover:text-black/80">Profile</Link>
-                </DropdownMenuItem>
                 {isAdmin && (
                   <>
                     <DropdownMenuItem asChild>

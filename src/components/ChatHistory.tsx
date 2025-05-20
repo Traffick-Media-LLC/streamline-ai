@@ -1,3 +1,4 @@
+
 import { useChatContext } from "../contexts/ChatContext";
 import { formatDate } from "../utils/chatUtils";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,6 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from "@/components/ui/scroll-area";
-import ProfileEditDialog from "./ProfileEditDialog";
 import { Chat } from "../types/chat";
 
 const ChatHistory = ({
@@ -151,21 +151,14 @@ const ChatHistory = ({
       <div className="border-t p-2 mt-auto">
         <div className="flex items-center justify-between px-2">
           <div className="flex items-center gap-2">
-            <ProfileEditDialog
-              firstName={userProfile.first_name || ''}
-              lastName={userProfile.last_name || ''}
-              onProfileUpdate={() => {
-                if (!user?.id) return;
-                supabase
-                  .from('profiles')
-                  .select('first_name, last_name')
-                  .eq('id', user.id)
-                  .single()
-                  .then(({ data: profile }) => {
-                    if (profile) setUserProfile(profile);
-                  });
-              }}
-            />
+            <Avatar className="h-8 w-8">
+              {user?.user_metadata?.avatar_url && (
+                <AvatarImage src={user.user_metadata.avatar_url} alt="Profile" />
+              )}
+              <AvatarFallback>
+                {getUserInitials()}
+              </AvatarFallback>
+            </Avatar>
             <div className="text-sm font-medium truncate max-w-[120px]">
               {getUserDisplayName()}
             </div>
