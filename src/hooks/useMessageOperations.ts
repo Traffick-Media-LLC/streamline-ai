@@ -87,21 +87,7 @@ export const useMessageOperations = (
         }
       }
 
-      // Update React state
-      setChats(prev => {
-        const updatedChats = prev.map(chat => {
-          if (chat.id === chatId) {
-            return {
-              ...chat,
-              messages: [...chat.messages, message],
-              updatedAt: Date.now(),
-            };
-          }
-          return chat;
-        });
-        
-        return updatedChats;
-      });
+      // REMOVED: No longer updating React state here since it's now handled exclusively in useChatSending
       
       await errorTracker.logStage('message_update', 'complete', {
         durationMs: calculateDuration(startTime),

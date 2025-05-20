@@ -25,6 +25,8 @@ export const useChatOperations = () => {
   } = useChatState();
   
   const { createNewChat } = useChatCreation(user, setChats, setCurrentChatId);
+  
+  // This now only handles database operations, not state updates
   const { handleMessageUpdate } = useMessageOperations(user, setChats);
   
   const { fetchChats } = useChatFetching(
@@ -57,6 +59,6 @@ export const useChatOperations = () => {
     selectChat,
     isInitializing,
     clearChat,
-    fetchChats  // Make sure to include fetchChats in the returned object
+    fetchChats
   };
 };
