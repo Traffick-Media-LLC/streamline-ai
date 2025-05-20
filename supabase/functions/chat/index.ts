@@ -1,4 +1,3 @@
-
 // Import required Deno modules
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -36,7 +35,7 @@ async function logEvent(supabase, requestId, eventType, component, message, meta
 // Improved function to identify common product categories with enhanced hemp product awareness
 const PRODUCT_CATEGORIES = {
   NICOTINE: ['pouches', 'pouch', 'vape', 'vapes', 'e-liquid', 'e-juice', 'ejuice', 'eliquid', 'disposable', 'disposables', 'mod', 'mods', 'cigarette', 'cigarettes', 'tobacco', 'nicotine'],
-  HEMP: ['delta-8', 'delta-10', 'delta 8', 'delta 10', 'cbd', 'hemp', 'thc', 'gummies', 'edible', 'edibles', 'thca', 'thc-a', 'thcp', 'thc-p', 'phc', 'cbn', 'thcv', 'galaxy treats', 'mcro'],
+  HEMP: ['delta-8', 'delta 8', 'delta-9', 'delta 9', 'delta-10', 'delta 10', 'cbd', 'hemp', 'thc', 'gummies', 'edible', 'edibles', 'thca', 'thc-a', 'thcp', 'thc-p', 'phc', 'cbn', 'thcv', 'galaxy treats', 'mcro'],
   KRATOM: ['kratom', 'mitragyna', 'speciosa', 'capsules', 'extract'],
 };
 
@@ -108,12 +107,52 @@ function extractStateFromMessage(message) {
   return null;
 }
 
+// Function to extract specific product variants from a message
+function extractProductVariant(message) {
+  // Safety check
+  if (!message) return null;
+  
+  const messageLower = message.toLowerCase();
+  
+  // Look for specific cannabinoid variants
+  const variantPatterns = {
+    'delta 9': [/delta[\s-]*9/i, /d9/i],
+    'delta 8': [/delta[\s-]*8/i, /d8/i],
+    'delta 10': [/delta[\s-]*10/i, /d10/i],
+    'thca': [/thc[\s-]*a/i],
+    'thcp': [/thc[\s-]*p/i],
+    'hhc': [/hhc/i],
+  };
+  
+  for (const [variant, patterns] of Object.entries(variantPatterns)) {
+    if (patterns.some(pattern => pattern.test(messageLower))) {
+      return variant;
+    }
+  }
+  
+  // Look for product type mentions
+  const productTypes = {
+    'gummies': [/gummies/i, /gummy/i, /edible/i],
+    'disposable': [/disposable/i, /vape/i, /cart/i, /cartridge/i],
+    'tincture': [/tincture/i, /oil/i, /drops/i],
+  };
+  
+  for (const [productType, patterns] of Object.entries(productTypes)) {
+    if (patterns.some(pattern => pattern.test(messageLower))) {
+      return productType;
+    }
+  }
+  
+  return null;
+}
+
 // Enhanced function to extract product or brand from a message with special handling for hemp brands
 async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   // Safety check to prevent errors if message is undefined or null
   if (!message) return null;
   
   const messageLower = message.toLowerCase();
+  const productVariant = extractProductVariant(message);
   
   try {
     // First, fetch common product names from the database to look for
@@ -144,12 +183,23 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
     
     // Special handling for Galaxy Treats and MCRO brands (hemp products)
     const hempBrands = ['galaxy treats', 'mcro'];
+    let identifiedBrand = null;
+    
     for (const brand of hempBrands) {
       if (messageLower.includes(brand)) {
         await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
-          `Identified hemp brand: ${brand}`, { category: 'HEMP' });
-        return brand;
+          `Identified hemp brand: ${brand}`, { category: 'HEMP', variant: productVariant });
+        identifiedBrand = brand;
+        break;
       }
+    }
+    
+    // Return brand with variant information if found
+    if (identifiedBrand) {
+      return {
+        brand: identifiedBrand,
+        variant: productVariant
+      };
     }
     
     // Identify any explicit brand mentions
@@ -187,11 +237,14 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
       return productMatch.name;
     }
     
-    // If we found a brand match, return it
+    // If we found a brand match, return it with variant information if available
     if (brandMatch) {
       await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
-        `Extracted brand: ${brandMatch}`);
-      return brandMatch;
+        `Extracted brand: ${brandMatch}`, { variant: productVariant });
+      return {
+        brand: brandMatch,
+        variant: productVariant
+      };
     }
     
     // Handle common category words like "pouches", "vapes", "disposables", etc.
@@ -226,9 +279,12 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
     const productCategory = identifyProductCategory(message);
     if (productCategory) {
       await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
-        `Identified product category: ${productCategory}`);
+        `Identified product category: ${productCategory}`, { variant: productVariant });
       // Return the general category as a fallback
-      return productCategory.toLowerCase();
+      return {
+        category: productCategory.toLowerCase(),
+        variant: productVariant
+      };
     }
     
     return null;
@@ -240,12 +296,12 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   }
 }
 
-// Enhanced function to get product ingredients with ingredient regulation info
-async function getProductIngredients(supabase, productId, requestId) {
+// Get all ingredients for a product with comprehensive information
+async function getAllProductIngredients(supabase, productId, requestId) {
   try {
     const { data: ingredients, error } = await supabase
       .from('product_ingredients')
-      .select('ingredient, product_type, concentration, regulation_notes')
+      .select('*')
       .eq('product_id', productId);
       
     if (error) {
@@ -255,11 +311,31 @@ async function getProductIngredients(supabase, productId, requestId) {
       return null;
     }
     
-    return ingredients;
+    // Process ingredients to return a comprehensive list
+    if (ingredients && ingredients.length > 0) {
+      const allIngredients = [];
+      
+      // Extract all non-null ingredients from ingredient1-5 fields
+      ingredients.forEach(record => {
+        // Check each ingredient field and add non-empty ones
+        if (record.ingredient1) allIngredients.push(record.ingredient1);
+        if (record.ingredient2) allIngredients.push(record.ingredient2);
+        if (record.ingredient3) allIngredients.push(record.ingredient3);
+        if (record.ingredient4) allIngredients.push(record.ingredient4);
+        if (record.ingredient5) allIngredients.push(record.ingredient5);
+      });
+      
+      return {
+        ingredients: allIngredients,
+        product_type: ingredients[0].product_type || 'unknown'
+      };
+    }
+    
+    return null;
   } catch (error) {
-    console.error('Error in getProductIngredients:', error);
+    console.error('Error in getAllProductIngredients:', error);
     await logEvent(supabase, requestId, 'ingredient_fetch_error', 'get_product_ingredients', 
-      'Exception in getProductIngredients', { productId, error: error.message });
+      'Exception in getAllProductIngredients', { productId, error: error.message });
     return null;
   }
 }
@@ -293,7 +369,7 @@ async function getIngredientRegulationsForState(supabase, ingredient, stateId, r
 async function checkProductLegality(supabase, stateName, productNameOrBrand, requestId) {
   try {
     await logEvent(supabase, requestId, 'legality_check_start', 'check_product_legality', 
-      `Starting legality check for "${productNameOrBrand}" in ${stateName}`);
+      `Starting legality check for "${JSON.stringify(productNameOrBrand)}" in ${stateName}`);
     
     // Find the state ID first
     const { data: stateData, error: stateError } = await supabase
@@ -312,284 +388,261 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
     
     const stateId = stateData[0].id;
     
+    // Handle different types of product identification
+    let brandName = null;
+    let productVariant = null;
+    let productCategory = null;
+    
+    // Extract brand and variant information
+    if (typeof productNameOrBrand === 'object') {
+      if (productNameOrBrand.brand) {
+        brandName = productNameOrBrand.brand;
+      }
+      if (productNameOrBrand.variant) {
+        productVariant = productNameOrBrand.variant;
+      }
+      if (productNameOrBrand.category) {
+        productCategory = productNameOrBrand.category;
+      }
+    } else if (typeof productNameOrBrand === 'string') {
+      brandName = productNameOrBrand;
+    }
+    
     // Special handling for hemp product brands (Galaxy Treats, MCRO)
-    const isHempBrand = ['galaxy treats', 'mcro'].some(brand => 
-      productNameOrBrand.toLowerCase().includes(brand)
+    const isHempBrand = brandName && ['galaxy treats', 'mcro'].some(brand => 
+      brandName.toLowerCase().includes(brand)
     );
     
-    // First try to find a direct match to a product
-    const { data: productData, error: productError } = await supabase
-      .from('products')
-      .select(`
-        id,
-        name,
-        product_type,
-        brand_id,
-        brands (
-          id,
-          name,
-          logo_url
-        )
-      `)
-      .ilike('name', `%${productNameOrBrand}%`)
-      .order('name')
-      .limit(10);
+    // Log what we're searching for clarity
+    await logEvent(supabase, requestId, 'legality_check_params', 'check_product_legality', 
+      `Legality check parameters`, { 
+        stateName, 
+        stateId, 
+        brandName, 
+        productVariant,
+        isHempBrand 
+      });
+    
+    // If we have a brand name, look for that brand's products
+    if (brandName) {
+      // Find the brand ID
+      const { data: brandData, error: brandError } = await supabase
+        .from('brands')
+        .select('id, name, logo_url')
+        .ilike('name', `%${brandName}%`)
+        .limit(5);
       
-    // If we found products, check if they're allowed in the state
-    if (!productError && productData && productData.length > 0) {
-      // Get the IDs of all products that matched
-      const productIds = productData.map(p => p.id);
+      if (brandError || !brandData || brandData.length === 0) {
+        return {
+          found: false,
+          state: stateName,
+          message: `Brand "${brandName}" not found in database.`,
+          source: 'no_match',
+          date: new Date().toISOString().split('T')[0]
+        };
+      }
       
-      // Check which of these products are allowed in the state
+      // Get all products for this brand
+      const brandIds = brandData.map(b => b.id);
+      
+      let productQuery = supabase
+        .from('products')
+        .select('id, name, brand_id, product_type')
+        .in('brand_id', brandIds);
+        
+      // Filter by product variant if specified
+      if (productVariant) {
+        productQuery = productQuery.ilike('name', `%${productVariant}%`);
+      }
+      
+      const { data: brandProducts, error: bpError } = await productQuery.order('name');
+      
+      if (bpError || !brandProducts || brandProducts.length === 0) {
+        return {
+          found: true,
+          legal: false,
+          state: stateName,
+          brand: brandData[0].name,
+          brandLogo: brandData[0].logo_url,
+          message: `No products found for brand "${brandData[0].name}"${productVariant ? ` matching "${productVariant}"` : ''}.`,
+          source: 'brand_database',
+          date: new Date().toISOString().split('T')[0],
+          isHempBrand: isHempBrand
+        };
+      }
+      
+      // Now check which of these products are allowed in this state
+      const productIds = brandProducts.map(p => p.id);
+      
+      // Get list of state's allowed products
       const { data: allowedProducts, error: allowedError } = await supabase
         .from('state_allowed_products')
         .select(`
           product_id,
           products (
             id,
-            name,
+            name, 
             product_type,
             brands (
-              id, 
+              id,
               name,
               logo_url
             )
           )
         `)
         .eq('state_id', stateId)
-        .in('product_id', productIds);
-        
-      // Fetch ingredients for the products with enhanced ingredient info
-      const productIngredientsMap = {};
-      const ingredientRegulationsMap = {};
+        .in('product_id', productIds)
+        .order('products(name)');
       
-      for (const pid of productIds) {
-        const ingredients = await getProductIngredients(supabase, pid, requestId);
-        if (ingredients && ingredients.length > 0) {
-          productIngredientsMap[pid] = ingredients;
+      // Get ingredients for all products of this brand
+      const productIngredientsMap = {};
+      const allBrandProductsWithIngredients = [];
+      
+      for (const product of brandProducts) {
+        const ingredientInfo = await getAllProductIngredients(supabase, product.id, requestId);
+        
+        if (ingredientInfo) {
+          productIngredientsMap[product.id] = ingredientInfo;
           
-          // For each ingredient, fetch state-specific regulations
-          for (const ingredient of ingredients) {
-            if (!ingredient.ingredient) continue;
-            
-            const regulations = await getIngredientRegulationsForState(
-              supabase, 
-              ingredient.ingredient, 
-              stateId, 
-              requestId
-            );
-            
-            if (regulations && regulations.length > 0) {
-              if (!ingredientRegulationsMap[ingredient.ingredient]) {
-                ingredientRegulationsMap[ingredient.ingredient] = [];
-              }
-              ingredientRegulationsMap[ingredient.ingredient] = regulations;
-            }
-          }
+          allBrandProductsWithIngredients.push({
+            id: product.id,
+            name: product.name,
+            type: product.product_type || 'Unknown',
+            ingredients: ingredientInfo.ingredients || []
+          });
         }
       }
       
-      if (!allowedError && allowedProducts && allowedProducts.length > 0) {
-        const result = {
+      // Get list of all products that are allowed in this state
+      const { data: allStateProducts, error: allStateError } = await supabase
+        .from('state_allowed_products')
+        .select(`
+          product_id
+        `)
+        .eq('state_id', stateId);
+      
+      const allowedProductIds = allStateProducts?.map(p => p.product_id) || [];
+      
+      // Check each product to see if it's allowed
+      const legalProducts = [];
+      const illegalProducts = [];
+      
+      for (const product of allBrandProductsWithIngredients) {
+        if (allowedProductIds.includes(product.id)) {
+          legalProducts.push(product);
+        } else {
+          illegalProducts.push(product);
+        }
+      }
+      
+      // Process results based on what we found
+      if (legalProducts.length > 0) {
+        return {
           found: true,
           legal: true,
           state: stateName,
-          products: allowedProducts.map(ap => ({
-            name: ap.products.name,
-            type: ap.products.product_type || 'Unknown',
-            brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
-            brandLogo: ap.products.brands ? ap.products.brands.logo_url : null,
-            ingredients: productIngredientsMap[ap.product_id] || []
-          })),
-          category: identifyProductCategory(productNameOrBrand) || 'Unknown',
-          ingredientRegulations: ingredientRegulationsMap,
-          source: 'product_database',
+          brand: brandData[0].name,
+          brandLogo: brandData[0].logo_url,
+          legalProducts: legalProducts,
+          illegalProducts: illegalProducts.length > 0 ? illegalProducts : undefined,
+          message: `${legalProducts.length} product(s) from ${brandData[0].name}${productVariant ? ` matching "${productVariant}"` : ''} are legal in ${stateName}.`,
+          category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
+          source: 'brand_database',
           date: new Date().toISOString().split('T')[0]
         };
-        
-        // Log the ingredients information
-        await logEvent(supabase, requestId, 'product_ingredients_fetched', 'check_product_legality', 
-          `Found ingredients for products in ${stateName}`, { 
-            ingredients: productIngredientsMap,
-            regulations: ingredientRegulationsMap 
-          });
-          
-        return result;
       } else {
-        // Products found but not allowed in this state
         return {
           found: true,
           legal: false,
           state: stateName,
-          products: productData.map(p => ({
-            name: p.name,
-            type: p.product_type || 'Unknown',
-            brand: p.brands ? p.brands.name : 'Unknown',
-            brandLogo: p.brands ? p.brands.logo_url : null,
-            ingredients: productIngredientsMap[p.id] || []
-          })),
-          category: identifyProductCategory(productNameOrBrand) || 'Unknown',
-          ingredientRegulations: ingredientRegulationsMap,
-          source: 'product_database',
-          date: new Date().toISOString().split('T')[0]
-        };
-      }
-    }
-    
-    // If no product match, try to find by brand
-    const { data: brandData, error: brandError } = await supabase
-      .from('brands')
-      .select('id, name, logo_url')
-      .ilike('name', `%${productNameOrBrand}%`)
-      .limit(5);
-      
-    if (!brandError && brandData && brandData.length > 0) {
-      // Get products for these brands
-      const brandIds = brandData.map(b => b.id);
-      
-      const { data: brandProducts, error: bpError } = await supabase
-        .from('products')
-        .select('id, name, brand_id, product_type')
-        .in('brand_id', brandIds)
-        .order('name');
-        
-      if (!bpError && brandProducts && brandProducts.length > 0) {
-        // Fetch ingredients for all products of this brand with enhanced ingredient info
-        const productIngredientsMap = {};
-        const ingredientRegulationsMap = {};
-        
-        for (const product of brandProducts) {
-          const ingredients = await getProductIngredients(supabase, product.id, requestId);
-          if (ingredients && ingredients.length > 0) {
-            productIngredientsMap[product.id] = ingredients;
-            
-            // For each ingredient, fetch state-specific regulations
-            for (const ingredient of ingredients) {
-              if (!ingredient.ingredient) continue;
-              
-              const regulations = await getIngredientRegulationsForState(
-                supabase, 
-                ingredient.ingredient, 
-                stateId, 
-                requestId
-              );
-              
-              if (regulations && regulations.length > 0) {
-                if (!ingredientRegulationsMap[ingredient.ingredient]) {
-                  ingredientRegulationsMap[ingredient.ingredient] = [];
-                }
-                ingredientRegulationsMap[ingredient.ingredient] = regulations;
-              }
-            }
-          }
-        }
-        
-        // Check which of these brand's products are allowed in the state
-        const productIds = brandProducts.map(p => p.id);
-        
-        const { data: allowedBrandProducts, error: abpError } = await supabase
-          .from('state_allowed_products')
-          .select(`
-            product_id,
-            products (
-              id,
-              name, 
-              brand_id,
-              product_type,
-              brands (
-                id,
-                name,
-                logo_url
-              )
-            )
-          `)
-          .eq('state_id', stateId)
-          .in('product_id', productIds)
-          .order('products(name)');
-          
-        const brandsInfo = {};
-        brandData.forEach(brand => {
-          brandsInfo[brand.id] = {
-            name: brand.name,
-            logo_url: brand.logo_url
-          };
-        });
-        
-        if (!abpError && allowedBrandProducts && allowedBrandProducts.length > 0) {
-          // Some products from this brand are allowed
-          const result = {
-            found: true,
-            legal: true,
-            state: stateName,
-            brand: brandData[0].name,
-            brandLogo: brandData[0].logo_url,
-            products: allowedBrandProducts.map(abp => ({
-              name: abp.products.name,
-              type: abp.products.product_type || 'Unknown',
-              brand: abp.products.brands ? abp.products.brands.name : brandData[0].name,
-              brandLogo: abp.products.brands ? abp.products.brands.logo_url : brandData[0].logo_url,
-              ingredients: productIngredientsMap[abp.product_id] || []
-            })),
-            category: identifyProductCategory(productNameOrBrand) || (isHempBrand ? 'HEMP' : 'Unknown'),
-            ingredientRegulations: ingredientRegulationsMap,
-            source: 'brand_database',
-            date: new Date().toISOString().split('T')[0],
-            isHempBrand: isHempBrand
-          };
-          
-          // Log the ingredients for this brand's products
-          await logEvent(supabase, requestId, 'brand_ingredients_fetched', 'check_product_legality', 
-            `Found ingredients for ${brandData[0].name} products in ${stateName}`, {
-              regulationCount: Object.keys(ingredientRegulationsMap).length
-            });
-            
-          return result;
-        } else {
-          // Brand found but no products allowed in this state
-          // Include ingredient information for research purposes
-          const allBrandProductsWithIngredients = brandProducts.map(bp => ({
-            name: bp.name,
-            type: bp.product_type || 'Unknown',
-            brand: brandData[0].name,
-            ingredients: productIngredientsMap[bp.id] || []
-          }));
-          
-          return {
-            found: true,
-            legal: false,
-            state: stateName,
-            brand: brandData[0].name,
-            brandLogo: brandData[0].logo_url,
-            message: `No products from ${brandData[0].name} are permitted in ${stateName}.`,
-            productIngredients: allBrandProductsWithIngredients,
-            category: identifyProductCategory(productNameOrBrand) || (isHempBrand ? 'HEMP' : 'Unknown'),
-            ingredientRegulations: ingredientRegulationsMap,
-            source: 'brand_database',
-            date: new Date().toISOString().split('T')[0],
-            isHempBrand: isHempBrand
-          };
-        }
-      } else {
-        // Brand found but no products for this brand
-        return {
-          found: true,
           brand: brandData[0].name,
-          state: stateName,
-          message: `Found brand ${brandData[0].name}, but no products are registered in the database.`,
+          brandLogo: brandData[0].logo_url,
+          illegalProducts: illegalProducts,
+          message: `No products from ${brandData[0].name}${productVariant ? ` matching "${productVariant}"` : ''} are legal in ${stateName}.`,
+          category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
           source: 'brand_database',
           date: new Date().toISOString().split('T')[0]
         };
       }
     }
     
-    // If we get here, we didn't find any matching products or brands
-    return {
-      found: false,
-      state: stateName,
-      message: `No information found for "${productNameOrBrand}" in ${stateName}.`,
-      source: 'no_match',
-      date: new Date().toISOString().split('T')[0]
-    };
+    // General case for non-brand specific queries
+    // Check for direct product matches
+    const { data: productData, error: productError } = await supabase
+      .from('products')
+      .select('id, name, product_type, brand_id')
+      .ilike('name', `%${productNameOrBrand}%`)
+      .order('name');
+    
+    if (productError || !productData || productData.length === 0) {
+      return {
+        found: false,
+        state: stateName,
+        message: `No information found for "${JSON.stringify(productNameOrBrand)}" in ${stateName}.`,
+        source: 'no_match',
+        date: new Date().toISOString().split('T')[0]
+      };
+    }
+    
+    // Get allowed products for the found products
+    const productIds = productData.map(p => p.id);
+    
+    const { data: allowedProducts, error: allowedError } = await supabase
+      .from('state_allowed_products')
+      .select(`
+        product_id,
+        products (
+          id,
+          name,
+          product_type,
+          brands (
+            id,
+            name,
+            logo_url
+          )
+        )
+      `)
+      .eq('state_id', stateId)
+      .in('product_id', productIds);
+    
+    if (allowedError) {
+      console.error('Error fetching allowed products:', allowedError);
+      return {
+        found: false,
+        state: stateName,
+        message: `Error fetching allowed products for "${JSON.stringify(productNameOrBrand)}" in ${stateName}.`,
+        source: 'database_error',
+        date: new Date().toISOString().split('T')[0]
+      };
+    }
+    
+    const legalProducts = allowedProducts.map(ap => ({
+      name: ap.products.name,
+      type: ap.products.product_type || 'Unknown',
+      brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
+      brandLogo: ap.products.brands ? ap.products.brands.logo_url : null,
+    }));
+    
+    if (legalProducts.length > 0) {
+      return {
+        found: true,
+        legal: true,
+        state: stateName,
+        products: legalProducts,
+        message: `The following products are legal in ${stateName}: ${legalProducts.map(p => p.name).join(', ')}.`,
+        source: 'product_database',
+        date: new Date().toISOString().split('T')[0]
+      };
+    } else {
+      return {
+        found: true,
+        legal: false,
+        state: stateName,
+        message: `No products from "${JSON.stringify(productNameOrBrand)}" are legal in ${stateName}.`,
+        source: 'product_database',
+        date: new Date().toISOString().split('T')[0]
+      };
+    }
     
   } catch (error) {
     console.error('Error checking product legality:', error);
@@ -699,7 +752,8 @@ serve(async (req) => {
     try {
       await logEvent(supabase, requestId, 'chat_request_received', 'chat_function', 'Chat request received', {
         chatId,
-        hasHistory: chatHistory && chatHistory.length > 0
+        hasHistory: chatHistory && chatHistory.length > 0,
+        message: userMessage.substring(0, 100) // Log first 100 chars of message
       });
     } catch (logError) {
       console.error('Error logging chat request:', logError);
@@ -716,7 +770,7 @@ serve(async (req) => {
         
         if (stateName && productOrBrand) {
           await logEvent(supabase, requestId, 'product_legality_check', 'chat_function', 
-            `Checking legality for "${productOrBrand}" in "${stateName}"`, {
+            `Checking legality for "${JSON.stringify(productOrBrand)}" in "${stateName}"`, {
               state: stateName,
               productOrBrand: productOrBrand
           });
@@ -730,6 +784,8 @@ serve(async (req) => {
       }
     } catch (legalityCheckError) {
       console.error('Error checking product legality:', legalityCheckError);
+      await logEvent(supabase, requestId, 'product_legality_error', 'chat_function', 
+        'Error checking product legality', { error: legalityCheckError.message });
       // Continue execution even if legality check fails
     }
     
@@ -759,9 +815,15 @@ When answering product legality questions:
 - When ingredient information is available, use it to provide additional context about why certain products may or may not be legal in specific states
 - Always include the date of the information when available
 
+When dealing with hemp products (especially Galaxy Treats and MCRO brands):
+- Distinguish clearly between different cannabinoid variants (Delta-8, Delta-9, Delta-10, etc.)
+- Acknowledge that different variants may have different legal statuses in the same state
+- Present each product variant with its specific legal status
+- Explain that some states have specific regulations for different hemp-derived cannabinoids
+
 VERY IMPORTANT: The company primarily works with:
 1. Nicotine products: especially pouches, vapes, disposables, and other nicotine delivery systems
-2. Hemp products: Galaxy Treats and MCRO are hemp product brands that include both disposables and edibles
+2. Hemp products: Galaxy Treats and MCRO are hemp product brands that include both disposables and edibles with various cannabinoids (Delta-8, Delta-9, Delta-10, etc.)
 
 When users ask about products like "pouches", assume they are referring to NICOTINE pouches (like tobacco-free nicotine pouches) unless explicitly stated otherwise.
 
@@ -770,7 +832,7 @@ Key product categories:
 - Disposables: These are disposable vape devices (examples: Elf Bar, Hyde, Galaxy Treats, MCRO, etc.)
 - Vapes/E-cigarettes: Electronic nicotine delivery devices
 - E-liquids: Liquid nicotine for refillable vape devices
-- Hemp products: Products containing hemp-derived cannabinoids (THC-A, THCP, Delta-8, etc.) including both edibles and disposables
+- Hemp products: Products containing hemp-derived cannabinoids (Delta-9, Delta-8, THCP, etc.) including both edibles and disposables
 
 FORMAT FOR PRODUCT LEGALITY RESPONSES:
 Use this structure:
@@ -800,8 +862,8 @@ Use this information to answer the current question. This data comes directly fr
 - If the query was about a brand, list ALL products from this brand and their legal status in the specified state
 - If specific products were found, clearly state their legal status
 - Present the information using the format specified above, with the LEGAL STATUS header and ingredient information
-- For hemp products (especially Galaxy Treats and MCRO), explain why specific ingredients are regulated in the state being asked about
-- Use the ingredient regulations information to explain WHY certain products are regulated differently by state
+- For hemp products (especially Galaxy Treats and MCRO), explain the specific variant mentioned (Delta-8, Delta-9, etc.) and its legal status in the specified state
+- Use the ingredient information to explain WHY certain products are regulated differently by state
 - Always include the date of the database information when available`;
     }
 
