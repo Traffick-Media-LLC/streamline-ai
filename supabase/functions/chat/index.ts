@@ -1,3 +1,4 @@
+
 // Import required Deno modules
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -27,10 +28,10 @@ async function logEvent(supabase, requestId, eventType, component, message, meta
   }
 }
 
-// Improved function to identify common product categories
+// Improved function to identify common product categories with enhanced hemp product awareness
 const PRODUCT_CATEGORIES = {
   NICOTINE: ['pouches', 'pouch', 'vape', 'vapes', 'e-liquid', 'e-juice', 'ejuice', 'eliquid', 'disposable', 'disposables', 'mod', 'mods', 'cigarette', 'cigarettes', 'tobacco', 'nicotine'],
-  HEMP: ['delta-8', 'delta-10', 'delta 8', 'delta 10', 'cbd', 'hemp', 'thc', 'gummies', 'edible', 'edibles'],
+  HEMP: ['delta-8', 'delta-10', 'delta 8', 'delta 10', 'cbd', 'hemp', 'thc', 'gummies', 'edible', 'edibles', 'thca', 'thc-a', 'thcp', 'thc-p', 'phc', 'cbn', 'thcv', 'galaxy treats', 'mcro'],
   KRATOM: ['kratom', 'mitragyna', 'speciosa', 'capsules', 'extract'],
 };
 
@@ -96,7 +97,7 @@ function extractStateFromMessage(message) {
   return null;
 }
 
-// Enhanced function to extract product or brand from a message
+// Enhanced function to extract product or brand from a message with special handling for hemp brands
 async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   const messageLower = message.toLowerCase();
   
@@ -104,7 +105,7 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
     // First, fetch common product names from the database to look for
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, name, brand_id, brands(name)')
+      .select('id, name, brand_id, product_type, brands(name)')
       .order('name');
     
     if (productsError) {
@@ -127,6 +128,16 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
       return null;
     }
     
+    // Special handling for Galaxy Treats and MCRO brands (hemp products)
+    const hempBrands = ['galaxy treats', 'mcro'];
+    for (const brand of hempBrands) {
+      if (messageLower.includes(brand)) {
+        await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+          `Identified hemp brand: ${brand}`, { category: 'HEMP' });
+        return brand;
+      }
+    }
+    
     // Identify any explicit brand mentions
     let brandMatch = null;
     for (const brand of brands) {
@@ -138,6 +149,7 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
     
     // Check for direct product mentions
     let productMatch = null;
+    let productType = null;
     for (const product of products) {
       // Check for both singular and potential plural forms
       const productName = product.name.toLowerCase();
@@ -147,8 +159,9 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
         productMatch = {
           name: product.name,
           brand: product.brands?.name || null,
-          type: productMatch || 'unknown'
+          type: product.product_type || 'unknown'
         };
+        productType = product.product_type;
         break;
       }
     }
@@ -167,10 +180,10 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
       return brandMatch;
     }
     
-    // Handle common category words like "pouches", "vapes", etc.
+    // Handle common category words like "pouches", "vapes", "disposables", etc.
     const categories = {
       pouches: ["nicotine pouches", "tobacco-free pouches", "pouch"],
-      vapes: ["vape", "disposable vape", "vaporizer"],
+      vapes: ["vape", "disposable vape", "vaporizer", "disposable"],
       gummies: ["gummy", "edible"],
       tinctures: ["tincture", "oil", "drops"],
       cigarettes: ["cigarette", "cig"],
@@ -213,12 +226,12 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   }
 }
 
-// New function to get product ingredients
+// Enhanced function to get product ingredients with ingredient regulation info
 async function getProductIngredients(supabase, productId, requestId) {
   try {
     const { data: ingredients, error } = await supabase
       .from('product_ingredients')
-      .select('ingredient, product_type')
+      .select('ingredient, product_type, concentration, regulation_notes')
       .eq('product_id', productId);
       
     if (error) {
@@ -237,7 +250,32 @@ async function getProductIngredients(supabase, productId, requestId) {
   }
 }
 
-// Improved function to query the database for product legality in a state
+// Function to get ingredient regulation information for a given state
+async function getIngredientRegulationsForState(supabase, ingredient, stateId, requestId) {
+  try {
+    const { data: regulations, error } = await supabase
+      .from('ingredient_state_regulations')
+      .select('regulation_type, regulation_text, legal_status, effective_date')
+      .eq('state_id', stateId)
+      .ilike('ingredient', `%${ingredient}%`);
+      
+    if (error) {
+      console.error('Error fetching ingredient regulations:', error);
+      await logEvent(supabase, requestId, 'ingredient_regulation_fetch_error', 'get_ingredient_regulations', 
+        'Failed to fetch ingredient regulations', { ingredient, stateId, error: error.message });
+      return null;
+    }
+    
+    return regulations;
+  } catch (error) {
+    console.error('Error in getIngredientRegulationsForState:', error);
+    await logEvent(supabase, requestId, 'ingredient_regulation_fetch_error', 'get_ingredient_regulations', 
+      'Exception in getIngredientRegulationsForState', { ingredient, stateId, error: error.message });
+    return null;
+  }
+}
+
+// Improved function to query the database for product legality in a state with enhanced ingredient analysis
 async function checkProductLegality(supabase, stateName, productNameOrBrand, requestId) {
   try {
     await logEvent(supabase, requestId, 'legality_check_start', 'check_product_legality', 
@@ -260,12 +298,18 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
     
     const stateId = stateData[0].id;
     
+    // Special handling for hemp product brands (Galaxy Treats, MCRO)
+    const isHempBrand = ['galaxy treats', 'mcro'].some(brand => 
+      productNameOrBrand.toLowerCase().includes(brand)
+    );
+    
     // First try to find a direct match to a product
     const { data: productData, error: productError } = await supabase
       .from('products')
       .select(`
         id,
         name,
+        product_type,
         brand_id,
         brands (
           id,
@@ -274,6 +318,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         )
       `)
       .ilike('name', `%${productNameOrBrand}%`)
+      .order('name')
       .limit(10);
       
     // If we found products, check if they're allowed in the state
@@ -289,6 +334,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           products (
             id,
             name,
+            product_type,
             brands (
               id, 
               name,
@@ -299,12 +345,33 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         .eq('state_id', stateId)
         .in('product_id', productIds);
         
-      // Fetch ingredients for the products
+      // Fetch ingredients for the products with enhanced ingredient info
       const productIngredientsMap = {};
+      const ingredientRegulationsMap = {};
+      
       for (const pid of productIds) {
         const ingredients = await getProductIngredients(supabase, pid, requestId);
         if (ingredients && ingredients.length > 0) {
           productIngredientsMap[pid] = ingredients;
+          
+          // For each ingredient, fetch state-specific regulations
+          for (const ingredient of ingredients) {
+            if (!ingredient.ingredient) continue;
+            
+            const regulations = await getIngredientRegulationsForState(
+              supabase, 
+              ingredient.ingredient, 
+              stateId, 
+              requestId
+            );
+            
+            if (regulations && regulations.length > 0) {
+              if (!ingredientRegulationsMap[ingredient.ingredient]) {
+                ingredientRegulationsMap[ingredient.ingredient] = [];
+              }
+              ingredientRegulationsMap[ingredient.ingredient] = regulations;
+            }
+          }
         }
       }
       
@@ -315,17 +382,23 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           state: stateName,
           products: allowedProducts.map(ap => ({
             name: ap.products.name,
+            type: ap.products.product_type || 'Unknown',
             brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
             brandLogo: ap.products.brands ? ap.products.brands.logo_url : null,
             ingredients: productIngredientsMap[ap.product_id] || []
           })),
           category: identifyProductCategory(productNameOrBrand) || 'Unknown',
-          source: 'product_database'
+          ingredientRegulations: ingredientRegulationsMap,
+          source: 'product_database',
+          date: new Date().toISOString().split('T')[0]
         };
         
         // Log the ingredients information
         await logEvent(supabase, requestId, 'product_ingredients_fetched', 'check_product_legality', 
-          `Found ingredients for products in ${stateName}`, { ingredients: productIngredientsMap });
+          `Found ingredients for products in ${stateName}`, { 
+            ingredients: productIngredientsMap,
+            regulations: ingredientRegulationsMap 
+          });
           
         return result;
       } else {
@@ -336,12 +409,15 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           state: stateName,
           products: productData.map(p => ({
             name: p.name,
+            type: p.product_type || 'Unknown',
             brand: p.brands ? p.brands.name : 'Unknown',
             brandLogo: p.brands ? p.brands.logo_url : null,
             ingredients: productIngredientsMap[p.id] || []
           })),
           category: identifyProductCategory(productNameOrBrand) || 'Unknown',
-          source: 'product_database'
+          ingredientRegulations: ingredientRegulationsMap,
+          source: 'product_database',
+          date: new Date().toISOString().split('T')[0]
         };
       }
     }
@@ -359,16 +435,38 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       
       const { data: brandProducts, error: bpError } = await supabase
         .from('products')
-        .select('id, name, brand_id')
-        .in('brand_id', brandIds);
+        .select('id, name, brand_id, product_type')
+        .in('brand_id', brandIds)
+        .order('name');
         
       if (!bpError && brandProducts && brandProducts.length > 0) {
-        // Fetch ingredients for all products of this brand
+        // Fetch ingredients for all products of this brand with enhanced ingredient info
         const productIngredientsMap = {};
+        const ingredientRegulationsMap = {};
+        
         for (const product of brandProducts) {
           const ingredients = await getProductIngredients(supabase, product.id, requestId);
           if (ingredients && ingredients.length > 0) {
             productIngredientsMap[product.id] = ingredients;
+            
+            // For each ingredient, fetch state-specific regulations
+            for (const ingredient of ingredients) {
+              if (!ingredient.ingredient) continue;
+              
+              const regulations = await getIngredientRegulationsForState(
+                supabase, 
+                ingredient.ingredient, 
+                stateId, 
+                requestId
+              );
+              
+              if (regulations && regulations.length > 0) {
+                if (!ingredientRegulationsMap[ingredient.ingredient]) {
+                  ingredientRegulationsMap[ingredient.ingredient] = [];
+                }
+                ingredientRegulationsMap[ingredient.ingredient] = regulations;
+              }
+            }
           }
         }
         
@@ -383,6 +481,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
               id,
               name, 
               brand_id,
+              product_type,
               brands (
                 id,
                 name,
@@ -391,7 +490,8 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             )
           `)
           .eq('state_id', stateId)
-          .in('product_id', productIds);
+          .in('product_id', productIds)
+          .order('products(name)');
           
         const brandsInfo = {};
         brandData.forEach(brand => {
@@ -411,17 +511,23 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             brandLogo: brandData[0].logo_url,
             products: allowedBrandProducts.map(abp => ({
               name: abp.products.name,
+              type: abp.products.product_type || 'Unknown',
               brand: abp.products.brands ? abp.products.brands.name : brandData[0].name,
               brandLogo: abp.products.brands ? abp.products.brands.logo_url : brandData[0].logo_url,
               ingredients: productIngredientsMap[abp.product_id] || []
             })),
-            category: identifyProductCategory(productNameOrBrand) || 'Unknown',
-            source: 'brand_database'
+            category: identifyProductCategory(productNameOrBrand) || (isHempBrand ? 'HEMP' : 'Unknown'),
+            ingredientRegulations: ingredientRegulationsMap,
+            source: 'brand_database',
+            date: new Date().toISOString().split('T')[0],
+            isHempBrand: isHempBrand
           };
           
           // Log the ingredients for this brand's products
           await logEvent(supabase, requestId, 'brand_ingredients_fetched', 'check_product_legality', 
-            `Found ingredients for ${brandData[0].name} products in ${stateName}`);
+            `Found ingredients for ${brandData[0].name} products in ${stateName}`, {
+              regulationCount: Object.keys(ingredientRegulationsMap).length
+            });
             
           return result;
         } else {
@@ -429,6 +535,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           // Include ingredient information for research purposes
           const allBrandProductsWithIngredients = brandProducts.map(bp => ({
             name: bp.name,
+            type: bp.product_type || 'Unknown',
             brand: brandData[0].name,
             ingredients: productIngredientsMap[bp.id] || []
           }));
@@ -441,8 +548,11 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             brandLogo: brandData[0].logo_url,
             message: `No products from ${brandData[0].name} are permitted in ${stateName}.`,
             productIngredients: allBrandProductsWithIngredients,
-            category: identifyProductCategory(productNameOrBrand) || 'Unknown',
-            source: 'brand_database'
+            category: identifyProductCategory(productNameOrBrand) || (isHempBrand ? 'HEMP' : 'Unknown'),
+            ingredientRegulations: ingredientRegulationsMap,
+            source: 'brand_database',
+            date: new Date().toISOString().split('T')[0],
+            isHempBrand: isHempBrand
           };
         }
       } else {
@@ -452,7 +562,8 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           brand: brandData[0].name,
           state: stateName,
           message: `Found brand ${brandData[0].name}, but no products are registered in the database.`,
-          source: 'brand_database'
+          source: 'brand_database',
+          date: new Date().toISOString().split('T')[0]
         };
       }
     }
@@ -462,7 +573,8 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       found: false,
       state: stateName,
       message: `No information found for "${productNameOrBrand}" in ${stateName}.`,
-      source: 'no_match'
+      source: 'no_match',
+      date: new Date().toISOString().split('T')[0]
     };
     
   } catch (error) {
@@ -470,7 +582,8 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
     return { 
       found: false,
       error: `Error querying product database: ${error.message}`,
-      source: 'database_error'
+      source: 'database_error',
+      date: new Date().toISOString().split('T')[0]
     };
   }
 }
@@ -548,30 +661,44 @@ Follow this strict source hierarchy based on the type of question:
 3. If the user asks general questions about company information (e.g., "What brands does Streamline sell?" or "Where can I find the marketing request form?"), reference the AI Knowledge Base.
 
 When answering product legality questions:
+- Begin with a clear "LEGAL STATUS: [LEGAL/NOT LEGAL] in [STATE]" heading
+- List the brand, products, and primary ingredients in a structured format
 - Be definitive when database information is available
 - Clearly state which products are legal or not legal in specific states
 - Include brand information when available
 - Do not speculate on legal status when database information is missing
 - When ingredient information is available, use it to provide additional context about why certain products may or may not be legal in specific states
+- Always include the date of the information when available
 
-VERY IMPORTANT: The company primarily works with nicotine products, especially pouches, vapes, disposables, and other nicotine delivery systems. When users ask about products like "pouches", assume they are referring to NICOTINE pouches (like tobacco-free nicotine pouches) NOT cannabis/THC products unless explicitly stated otherwise.
+VERY IMPORTANT: The company primarily works with:
+1. Nicotine products: especially pouches, vapes, disposables, and other nicotine delivery systems
+2. Hemp products: Galaxy Treats and MCRO are hemp product brands that include both disposables and edibles
+
+When users ask about products like "pouches", assume they are referring to NICOTINE pouches (like tobacco-free nicotine pouches) unless explicitly stated otherwise.
 
 Key product categories:
 - Pouches: These are nicotine pouches, placed in the mouth (examples: ZYN, VELO, etc.)
-- Disposables: These are disposable vape devices (examples: Elf Bar, Hyde, etc.)
+- Disposables: These are disposable vape devices (examples: Elf Bar, Hyde, Galaxy Treats, MCRO, etc.)
 - Vapes/E-cigarettes: Electronic nicotine delivery devices
 - E-liquids: Liquid nicotine for refillable vape devices
+- Hemp products: Products containing hemp-derived cannabinoids (THC-A, THCP, Delta-8, etc.) including both edibles and disposables
 
-If a customer mentions a specific brand, like "Juice Head pouches", correctly associate the products with that brand and its proper product category.
+FORMAT FOR PRODUCT LEGALITY RESPONSES:
+Use this structure:
+\`\`\`
+**LEGAL STATUS: [LEGAL/NOT LEGAL] in [STATE]**
 
-PRESENTATION GUIDELINES:
-- NEVER include raw image URLs in your responses
-- NEVER use markdown image syntax like ![alt text](url) in your responses
-- NEVER include bracketed descriptive text like [Brand Logo] or [Product Image]
-- When brand logo URLs are provided in the data, DO NOT mention them in any way
-- When answering about product legality, ALWAYS list ALL products from the queried brand that are legal or illegal in the state
+Brand: [Brand Name]
+Products: [List of Products]
+Primary Ingredients: [Main Ingredients]
 
-Always cite your sources where appropriate (e.g., 'According to our State Map database...' or 'Based on the Knowledge Base...').
+---
+
+[Detailed explanation of ingredient regulations in this state]
+[Any relevant regulatory context about why these ingredients are regulated]
+\`\`\`
+
+Always cite your sources where appropriate (e.g., 'According to our State Map database from [DATE]...' or 'Based on the Knowledge Base...').
 
 Answer in a professional, clear, and helpful tone. If you cannot find an answer from the available sources, politely let the user know and suggest submitting a request via the Marketing Request Form or contacting the appropriate department.`;
 
@@ -583,8 +710,10 @@ ${JSON.stringify(productLegalityData, null, 2)}
 Use this information to answer the current question. This data comes directly from our regulatory database and should be considered the final authority on product legality by state. When responding:
 - If the query was about a brand, list ALL products from this brand and their legal status in the specified state
 - If specific products were found, clearly state their legal status
-- If ingredient information is available, use it to provide context on why certain products may be regulated in specific ways
-- Present the information in a clear, organized way without raw image URLs or markdown image syntax`;
+- Present the information using the format specified above, with the LEGAL STATUS header and ingredient information
+- For hemp products (especially Galaxy Treats and MCRO), explain why specific ingredients are regulated in the state being asked about
+- Use the ingredient regulations information to explain WHY certain products are regulated differently by state
+- Always include the date of the database information when available`;
     }
 
     messages.push({
