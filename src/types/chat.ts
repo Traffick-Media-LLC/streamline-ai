@@ -58,6 +58,7 @@ export type ChatContextType = {
   getCurrentChat: () => Chat;
   selectChat: (chatId: string) => Promise<boolean>;
   isInitializing: boolean;
+  clearChat: () => void;
 };
 
 export interface ChatOperationsProps {

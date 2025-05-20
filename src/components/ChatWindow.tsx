@@ -5,7 +5,7 @@ import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Animated, AnimatedList } from "@/components/ui/animated";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Extend Message type for internal use to include animation delay
@@ -15,12 +15,18 @@ const ChatWindow = () => {
   const {
     getCurrentChat,
     isLoadingResponse,
-    isInitializing
+    isInitializing,
+    clearChat
   } = useChatContext();
   const {
     user
   } = useAuth();
   const currentChat = getCurrentChat();
+
+  // Clear chat when component is mounted
+  useEffect(() => {
+    clearChat();
+  }, []);
 
   // Get user's name from auth context
   const userName = useMemo(() => {

@@ -13,6 +13,10 @@ export const useChatState = () => {
     if (!currentChatId) return null;
     return chats.find(chat => chat.id === currentChatId) || null;
   };
+  
+  const clearChat = () => {
+    setCurrentChatId(null);
+  };
 
   return {
     chats,
@@ -23,6 +27,7 @@ export const useChatState = () => {
     setIsLoadingResponse,
     isInitializing,
     setIsInitializing,
-    getCurrentChat
+    getCurrentChat,
+    clearChat
   };
 };

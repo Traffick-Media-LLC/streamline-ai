@@ -23,10 +23,16 @@ import { ErrorTracker } from "@/utils/logging";
 
 const ChatPageContent = () => {
   const { user } = useAuth();
+  const { clearChat } = useChatContext();
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const isMobile = useIsMobile();
+  
+  // Clear chat state when component mounts
+  useEffect(() => {
+    clearChat();
+  }, []);
   
   // Check connection to Edge Function
   useEffect(() => {

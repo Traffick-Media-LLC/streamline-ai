@@ -1,9 +1,12 @@
 
-import { User } from "@supabase/supabase-js";
-import { v4 as uuidv4 } from 'uuid';
-import { Message, SendMessageResult } from "@/types/chat";
-import { generateRequestId, ErrorTracker, startTimer, calculateDuration } from "@/utils/logging";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { v4 as uuidv4 } from "uuid";
+import { toast } from "@/components/ui/sonner";
+import { Chat, Message, SendMessageResult } from "../types/chat";
+import { User } from "@supabase/supabase-js";
+import { generateChatTitle } from "../utils/chatUtils";
+import { ErrorTracker, generateRequestId } from "@/utils/logging";
 
 export const useChatSending = (
   user: User | null,
@@ -11,120 +14,145 @@ export const useChatSending = (
   createNewChat: () => Promise<string | null>,
   handleMessageUpdate: (chatId: string, message: Message, requestId?: string) => Promise<void>,
   setIsLoadingResponse: (loading: boolean) => void,
-  getCurrentChat: () => any
+  getCurrentChat: () => Chat | null
 ) => {
   const sendMessage = async (content: string): Promise<SendMessageResult> => {
     const requestId = generateRequestId();
-    const errorTracker = new ErrorTracker('useChatSending', user?.id, currentChatId || undefined, requestId);
-    const startTime = startTimer();
-
+    const errorTracker = new ErrorTracker('useChatSending', user?.id);
+    
     try {
-      await errorTracker.logStage('send_message', 'start');
+      await errorTracker.logStage('send_message', 'start', { requestId });
       
-      if (!user) {
-        await errorTracker.logStage('send_message', 'error', { reason: 'unauthorized' });
-        return { success: false, error: 'Authentication required' };
+      if (!content.trim()) {
+        toast.error("Message cannot be empty");
+        return { success: false, error: "Message cannot be empty" };
       }
-
-      const now = new Date().toISOString();
+      
+      // If no current chat, create a new one
+      let chatId = currentChatId;
+      let isNewChat = false;
+      
+      if (!chatId) {
+        chatId = await createNewChat();
+        if (!chatId) {
+          return { success: false, error: "Failed to create chat" };
+        }
+        isNewChat = true;
+      }
+      
+      // Create and add user message
       const userMessage: Message = {
         id: uuidv4(),
-        role: 'user',
-        content,
-        createdAt: now
+        role: "user",
+        content: content,
+        createdAt: new Date().toISOString(),
+        timestamp: Date.now()
       };
-
-      // Create a new chat if needed
-      let activeChatId = currentChatId;
       
-      if (!activeChatId) {
-        await errorTracker.logStage('create_new_chat', 'start');
-        activeChatId = await createNewChat();
-        
-        if (!activeChatId) {
-          await errorTracker.logStage('send_message', 'error', { reason: 'failed_to_create_chat' });
-          return { success: false, error: 'Failed to create chat' };
-        }
-        
-        await errorTracker.logStage('create_new_chat', 'complete', { chatId: activeChatId });
-      }
-
-      // Add user message to chat
-      await errorTracker.logStage('add_user_message', 'start');
-      await handleMessageUpdate(activeChatId, userMessage, requestId);
-      await errorTracker.logStage('add_user_message', 'complete');
-
-      // Set loading state for UI
+      await handleMessageUpdate(chatId, userMessage, requestId);
+      
+      // Set loading state
       setIsLoadingResponse(true);
       
       try {
-        // Get current chat context
-        const currentChat = getCurrentChat();
-        const messages = currentChat?.messages || [];
+        await errorTracker.logStage('ai_request', 'start', { chatId, messageId: userMessage.id });
         
-        // Generate AI response
-        await errorTracker.logStage('generate_response', 'start');
+        // Get current chat to send context to the AI
+        const chat = getCurrentChat();
+        const messages = chat?.messages || [];
         
-        const generationStartTime = startTimer();
-        
-        // Call the edge function with the message and chat history
+        // Send to edge function
         const { data, error } = await supabase.functions.invoke('chat', {
-          body: {
-            message: content,
-            chatId: activeChatId,
-            chatHistory: messages,
-            requestId
-          }
+          body: { 
+            content,
+            messages: messages.map(msg => ({
+              role: msg.role,
+              content: msg.content
+            }))
+          },
         });
         
         if (error) {
-          await errorTracker.logError('Error calling chat edge function', error);
-          return { success: false, error: 'Failed to generate response: ' + error.message };
+          await errorTracker.logError(
+            "Error from edge function", 
+            error,
+            { chatId }
+          );
+          
+          toast.error("Failed to get AI response");
+          setIsLoadingResponse(false);
+          return { success: false, error: error.message };
         }
         
-        await errorTracker.logStage('generate_response', 'complete', {
-          durationMs: calculateDuration(generationStartTime),
-          sourceInfo: data.sourceInfo ? true : false,
-          model: data.model
-        });
-
-        // Add assistant message to chat with metadata
+        // Create assistant message
         const assistantMessage: Message = {
           id: uuidv4(),
-          role: 'assistant',
-          content: data.message,
+          role: "assistant",
+          content: data.message || "I couldn't generate a response at this time.",
           createdAt: new Date().toISOString(),
+          timestamp: Date.now(),
           metadata: {
             model: data.model,
-            tokensUsed: data.tokensUsed,
-            responseTimeMs: data.responseTime,
-            sourceInfo: data.sourceInfo
+            tokensUsed: data.tokens_used,
+            responseTimeMs: data.response_time_ms,
+            sourceInfo: data.source_info
           }
         };
         
-        await errorTracker.logStage('add_assistant_message', 'start');
-        await handleMessageUpdate(activeChatId, assistantMessage, requestId);
-        await errorTracker.logStage('add_assistant_message', 'complete');
-        
-        await errorTracker.logStage('send_message', 'complete', {
-          durationMs: calculateDuration(startTime),
-          userMessageLength: content.length,
-          aiResponseLength: data.message.length
+        await errorTracker.logStage('ai_request', 'complete', { 
+          chatId,
+          responseTimeMs: data.response_time_ms,
+          tokensUsed: data.tokens_used
         });
-
-        return { success: true };
         
+        // Add assistant response
+        await handleMessageUpdate(chatId, assistantMessage, requestId);
+        
+        // If this is a new chat, generate title from first message and update the chat title
+        if (isNewChat) {
+          try {
+            const title = await generateChatTitle(content);
+            
+            // Update the chat title in the database
+            const { error: updateError } = await supabase
+              .from('chats')
+              .update({ title })
+              .eq('id', chatId);
+              
+            if (updateError) {
+              console.error("Error updating chat title:", updateError);
+            }
+          } catch (e) {
+            console.error("Error generating chat title:", e);
+          }
+        }
+        
+        await errorTracker.logStage('send_message', 'complete', { 
+          requestId,
+          chatId 
+        });
+        
+        return { success: true };
       } catch (error) {
-        await errorTracker.logError('Error generating response', error);
-        return { success: false, error: 'Failed to generate response' };
+        await errorTracker.logError(
+          "Exception in AI request",
+          error,
+          { chatId, requestId }
+        );
+        
+        toast.error("Failed to process your request");
+        return { success: false, error: String(error) };
       } finally {
         setIsLoadingResponse(false);
       }
-      
     } catch (error) {
-      await errorTracker.logError('Error in sendMessage', error);
-      setIsLoadingResponse(false);
-      return { success: false, error: 'An unexpected error occurred' };
+      await errorTracker.logError(
+        "Exception in sendMessage",
+        error
+      );
+      
+      toast.error("Something went wrong");
+      return { success: false, error: String(error) };
     }
   };
 

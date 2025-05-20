@@ -20,7 +20,8 @@ export const useChatOperations = () => {
     setIsLoadingResponse,
     isInitializing,
     setIsInitializing,
-    getCurrentChat
+    getCurrentChat,
+    clearChat
   } = useChatState();
   
   const { createNewChat } = useChatCreation(user, setChats, setCurrentChatId);
@@ -53,6 +54,7 @@ export const useChatOperations = () => {
     getCurrentChat,
     chats,
     selectChat,
-    isInitializing
+    isInitializing,
+    clearChat
   };
 };
