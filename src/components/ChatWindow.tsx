@@ -5,7 +5,7 @@ import ChatMessage from "./ChatMessage";
 import TypingIndicator from "./TypingIndicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Animated, AnimatedList } from "@/components/ui/animated";
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Extend Message type for internal use to include animation delay
@@ -16,12 +16,26 @@ const ChatWindow = () => {
     getCurrentChat,
     isLoadingResponse,
     isInitializing,
-    clearChat
+    clearChat,
+    chats,
+    currentChatId
   } = useChatContext();
+  
   const {
     user
   } = useAuth();
+  
   const currentChat = getCurrentChat();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll when new messages arrive
+  useEffect(() => {
+    if (scrollRef.current && currentChat?.messages.length) {
+      setTimeout(() => {
+        scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }, 100);
+    }
+  }, [currentChat?.messages.length]);
 
   // Clear chat when component is mounted
   useEffect(() => {
@@ -46,6 +60,9 @@ const ChatWindow = () => {
   // Calculate optimized messages array with staggered animation delays
   const optimizedMessages = useMemo(() => {
     if (!currentChat) return [];
+    
+    console.log("Current chat messages:", currentChat.messages);
+    
     // Only apply staggered animations to the most recent messages (up to 5)
     const messages = [...currentChat.messages] as MessageWithAnimation[];
     const messageCount = messages.length;
@@ -63,6 +80,16 @@ const ChatWindow = () => {
     }
     return messages;
   }, [currentChat]);
+
+  // Log current state for debugging
+  useEffect(() => {
+    console.log("ChatWindow state:", {
+      currentChatId,
+      hasChat: !!currentChat,
+      messageCount: currentChat?.messages?.length || 0,
+      chatsCount: chats?.length || 0
+    });
+  }, [currentChat, currentChatId, chats]);
 
   if (isInitializing) {
     return <div className="flex items-center justify-center h-full">
@@ -107,6 +134,7 @@ const ChatWindow = () => {
               {optimizedMessages.map(message => <Animated key={message.id} type={message.role === 'user' ? 'slide-in' : 'fade'} delay={message.animationDelay || 0} threshold={0.01}>
                   <ChatMessage message={message} />
                 </Animated>)}
+              <div ref={scrollRef} />
             </div>}
           {isLoadingResponse && <Animated type="fade">
               <TypingIndicator />

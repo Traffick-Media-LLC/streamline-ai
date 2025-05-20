@@ -49,7 +49,9 @@ export const useChatSending = (
         timestamp: Date.now()
       };
       
+      // Make sure to wait for this to complete
       await handleMessageUpdate(chatId, userMessage, requestId);
+      console.log("User message added to chat:", chatId, userMessage);
       
       // Set loading state
       setIsLoadingResponse(true);
@@ -59,6 +61,12 @@ export const useChatSending = (
         
         // Get current chat to send context to the AI
         const chat = getCurrentChat();
+        if (!chat) {
+          console.error("Failed to get current chat after message update");
+          setIsLoadingResponse(false);
+          return { success: false, error: "Failed to load chat context" };
+        }
+        
         const messages = chat?.messages || [];
         
         console.log("Sending request to edge function with:", {
@@ -71,7 +79,7 @@ export const useChatSending = (
         // Send to edge function
         const { data, error } = await supabase.functions.invoke('chat', {
           body: { 
-            content: content, // Make sure to use consistent parameter naming
+            content: content,
             messages: messages.map(msg => ({
               role: msg.role,
               content: msg.content
@@ -163,6 +171,7 @@ export const useChatSending = (
         
         // Add assistant response
         await handleMessageUpdate(chatId, assistantMessage, requestId);
+        console.log("Assistant response added to chat:", chatId, assistantMessage);
         
         // If this is a new chat, generate title from first message and update the chat title
         if (isNewChat) {
@@ -177,6 +186,8 @@ export const useChatSending = (
               
             if (updateError) {
               console.error("Error updating chat title:", updateError);
+            } else {
+              console.log("Chat title updated:", title);
             }
           } catch (e) {
             console.error("Error generating chat title:", e);
@@ -209,6 +220,7 @@ export const useChatSending = (
         error
       );
       
+      setIsLoadingResponse(false);
       toast.error("Something went wrong");
       return { success: false, error: String(error) };
     }

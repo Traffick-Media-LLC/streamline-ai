@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
 import { Database, Settings, History } from "lucide-react";
@@ -23,7 +22,7 @@ import { ErrorTracker } from "@/utils/logging";
 
 const ChatPageContent = () => {
   const { user } = useAuth();
-  const { clearChat } = useChatContext();
+  const { clearChat, currentChatId, chats } = useChatContext();
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(process.env.NODE_ENV === 'development');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -121,6 +120,27 @@ const ChatPageContent = () => {
     }
   };
   
+  // Debug function to log current state
+  const logChatState = () => {
+    console.log("Current chat state:", {
+      currentChatId,
+      chats,
+      hasCurrentChat: !!chats.find(c => c.id === currentChatId),
+      chatCount: chats.length,
+      messageCount: chats.find(c => c.id === currentChatId)?.messages.length || 0
+    });
+    
+    setTestResponse(JSON.stringify({
+      currentChatId,
+      chats: chats.map(c => ({
+        id: c.id,
+        title: c.title,
+        messageCount: c.messages.length
+      })),
+      messageCount: chats.find(c => c.id === currentChatId)?.messages.length || 0
+    }, null, 2));
+  };
+  
   // Render debugging panel (development or when toggled)
   const renderDebugPanel = () => {
     if (process.env.NODE_ENV !== 'development' && !showDebugPanel) return null;
@@ -130,6 +150,7 @@ const ChatPageContent = () => {
         <h4 className="font-medium text-sm">Chat Debug</h4>
         <p className="text-xs text-muted-foreground mb-1">Status: {debugInfo || "Ready"}</p>
         <p className="text-xs text-muted-foreground">Edge Function: {healthCheckStatus}</p>
+        <p className="text-xs text-muted-foreground">Current Chat ID: {currentChatId || "none"}</p>
         <div className="mt-2 text-xs flex gap-2 flex-wrap">
           <Button 
             size="sm" 
@@ -146,6 +167,14 @@ const ChatPageContent = () => {
             onClick={handleTestMessage}
           >
             Test Message
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-6 px-2"
+            onClick={logChatState}
+          >
+            Log State
           </Button>
         </div>
         {testResponse && (

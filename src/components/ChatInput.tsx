@@ -14,7 +14,8 @@ const ChatInput = () => {
   const {
     sendMessage,
     createNewChat,
-    isLoadingResponse
+    isLoadingResponse,
+    currentChatId
   } = useChatContext();
   
   const { isAuthenticated } = useAuth();
@@ -32,9 +33,22 @@ const ChatInput = () => {
         return;
       }
       
-      console.log("Sending message:", message);
+      // Log the current state before sending
+      console.log("Sending message:", message, "Current chat ID:", currentChatId);
+      
+      // Always make sure we have a chat to send to
+      let chatID = currentChatId;
+      if (!chatID) {
+        console.log("No current chat, creating new one");
+        chatID = await createNewChat();
+        if (!chatID) {
+          toast.error("Failed to create chat");
+          return;
+        }
+      }
+      
       const result = await sendMessage(message);
-      console.log("Send message result:", result); // Add this log to check result
+      console.log("Send message result:", result);
       
       if (result && !result.success) {
         console.error("Error sending message:", result.error);
