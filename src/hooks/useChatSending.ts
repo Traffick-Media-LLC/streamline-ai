@@ -61,14 +61,16 @@ export const useChatSending = (
         const chat = getCurrentChat();
         const messages = chat?.messages || [];
         
-        // Send to edge function
+        // Send to edge function - ensure we're sending the content parameter matching what the edge function expects
         const { data, error } = await supabase.functions.invoke('chat', {
           body: { 
-            content,
+            content, // Use 'content' instead of 'message' to match what the edge function expects
             messages: messages.map(msg => ({
               role: msg.role,
               content: msg.content
-            }))
+            })),
+            chatId,
+            requestId
           },
         });
         
@@ -93,16 +95,16 @@ export const useChatSending = (
           timestamp: Date.now(),
           metadata: {
             model: data.model,
-            tokensUsed: data.tokens_used,
+            tokensUsed: data.tokensUsed,
             responseTimeMs: data.response_time_ms,
-            sourceInfo: data.source_info
+            sourceInfo: data.sourceInfo
           }
         };
         
         await errorTracker.logStage('ai_request', 'complete', { 
           chatId,
           responseTimeMs: data.response_time_ms,
-          tokensUsed: data.tokens_used
+          tokensUsed: data.tokensUsed
         });
         
         // Add assistant response

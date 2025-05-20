@@ -50,6 +50,9 @@ function identifyProductCategory(message) {
 
 // Improved function to check if a message is asking about product legality in a state
 function isProductLegalityQuestion(message) {
+  // Safety check to prevent errors if message is undefined or null
+  if (!message) return false;
+  
   const legalityPatterns = [
     /legal\s+in/i,
     /allowed\s+in/i,
@@ -72,6 +75,9 @@ function isProductLegalityQuestion(message) {
 
 // Function to extract state name from a message
 function extractStateFromMessage(message) {
+  // Safety check to prevent errors if message is undefined or null
+  if (!message) return null;
+  
   // List of US states
   const states = [
     'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 
@@ -99,6 +105,9 @@ function extractStateFromMessage(message) {
 
 // Enhanced function to extract product or brand from a message with special handling for hemp brands
 async function extractProductOrBrandFromMessage(supabase, message, requestId) {
+  // Safety check to prevent errors if message is undefined or null
+  if (!message) return null;
+  
   const messageLower = message.toLowerCase();
   
   try {
@@ -598,7 +607,28 @@ serve(async (req) => {
   try {
     const requestTime = new Date();
     const reqJson = await req.json();
-    const { message, chatId, chatHistory, requestId } = reqJson;
+    
+    // Log the raw request for debugging
+    console.log('Raw request received:', JSON.stringify(reqJson));
+    
+    // Handle both possible parameter names (message or content)
+    const userMessage = reqJson.content || reqJson.message;
+    const { chatId, chatHistory, requestId } = reqJson;
+    
+    // Validate required parameters
+    if (!userMessage) {
+      console.error('Required parameter missing: No message content found in request');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Missing required parameter: No message content found in request',
+          details: 'The request must include either a "content" or "message" field'
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -625,9 +655,9 @@ serve(async (req) => {
     // Check if the message is asking about product legality
     let productLegalityData = null;
     
-    if (isProductLegalityQuestion(message)) {
-      const stateName = extractStateFromMessage(message);
-      const productOrBrand = await extractProductOrBrandFromMessage(supabase, message, requestId);
+    if (isProductLegalityQuestion(userMessage)) {
+      const stateName = extractStateFromMessage(userMessage);
+      const productOrBrand = await extractProductOrBrandFromMessage(supabase, userMessage, requestId);
       
       if (stateName && productOrBrand) {
         await logEvent(supabase, requestId, 'product_legality_check', 'chat_function', 
@@ -738,7 +768,7 @@ Use this information to answer the current question. This data comes directly fr
     // Add current user message
     messages.push({
       role: "user",
-      content: message
+      content: userMessage
     });
     
     // Get OpenAI API key
@@ -753,57 +783,65 @@ Use this information to answer the current question. This data comes directly fr
       
     const openaiStartTime = Date.now();
     
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1500
-      })
-    });
-    
-    const responseTime = Date.now() - openaiStartTime;
-    
-    if (!response.ok) {
-      const error = await response.text();
-      await logEvent(supabase, requestId, 'openai_request_failed', 'chat_function', 
-        `OpenAI request failed: ${error}`, { status: response.status });
-        
-      throw new Error(`OpenAI API error: ${error}`);
-    }
-    
-    const data = await response.json();
-    
-    await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 
-      'Received response from OpenAI', { 
-        responseTime, 
-        tokens: data.usage?.total_tokens || 0,
-        model: data.model
-      });
-    
-    // Respond with the AI assistant's message and metadata
-    const responseData = {
-      message: data.choices[0].message.content,
-      model: data.model,
-      tokensUsed: data.usage?.total_tokens || 0,
-      responseTime,
-      sourceInfo: productLegalityData || null
-    };
-    
-    return new Response(
-      JSON.stringify(responseData),
-      { 
-        headers: { 
-          ...corsHeaders,
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
           'Content-Type': 'application/json'
-        } 
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 1500
+        })
+      });
+      
+      const responseTime = Date.now() - openaiStartTime;
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        await logEvent(supabase, requestId, 'openai_request_failed', 'chat_function', 
+          `OpenAI request failed: ${errorText}`, { status: response.status });
+          
+        throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
       }
-    );
+      
+      const data = await response.json();
+      
+      await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 
+        'Received response from OpenAI', { 
+          responseTime, 
+          tokens: data.usage?.total_tokens || 0,
+          model: data.model
+        });
+      
+      // Respond with the AI assistant's message and metadata
+      const responseData = {
+        message: data.choices[0].message.content,
+        model: data.model,
+        tokensUsed: data.usage?.total_tokens || 0,
+        response_time_ms: responseTime,
+        sourceInfo: productLegalityData || null
+      };
+      
+      return new Response(
+        JSON.stringify(responseData),
+        { 
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          } 
+        }
+      );
+    } catch (openAiError) {
+      console.error('Error calling OpenAI API:', openAiError);
+      await logEvent(supabase, requestId, 'openai_request_exception', 'chat_function', 
+        `Exception calling OpenAI: ${openAiError.message}`);
+        
+      throw openAiError;
+    }
     
   } catch (error) {
     console.error('Error processing chat request:', error);
