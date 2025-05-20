@@ -1,6 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { useIsMobile } from "../hooks/use-mobile";
-import { Database, Settings, History } from "lucide-react";
+import { Database, Settings, History, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import ChatWindow from "../components/ChatWindow";
@@ -22,7 +23,7 @@ import { ErrorTracker } from "@/utils/logging";
 
 const ChatPageContent = () => {
   const { user } = useAuth();
-  const { clearChat, currentChatId, chats } = useChatContext();
+  const { clearChat, currentChatId, chats, fetchChats } = useChatContext();
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(process.env.NODE_ENV === 'development');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -137,8 +138,15 @@ const ChatPageContent = () => {
         title: c.title,
         messageCount: c.messages.length
       })),
-      messageCount: chats.find(c => c.id === currentChatId)?.messages.length || 0
+      messageCount: chats.find(c => c.id === currentChatId)?.messages.length || 0,
+      user: user?.id
     }, null, 2));
+  };
+
+  // Refresh chats from database
+  const handleRefreshChats = () => {
+    fetchChats();
+    toast.success("Chats refreshed from database");
   };
   
   // Render debugging panel (development or when toggled)
@@ -159,6 +167,15 @@ const ChatPageContent = () => {
             onClick={() => window.location.reload()}
           >
             Refresh Page
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-6 px-2"
+            onClick={handleRefreshChats}
+          >
+            <RefreshCw size={12} className="mr-1" />
+            Refresh Chats
           </Button>
           <Button
             size="sm"

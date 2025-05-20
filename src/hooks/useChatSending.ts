@@ -14,7 +14,8 @@ export const useChatSending = (
   createNewChat: () => Promise<string | null>,
   handleMessageUpdate: (chatId: string, message: Message, requestId?: string) => Promise<void>,
   setIsLoadingResponse: (loading: boolean) => void,
-  getCurrentChat: () => Chat | null
+  getCurrentChat: () => Chat | null,
+  addMessageToChat: (chatId: string, message: Message) => void
 ) => {
   const sendMessage = async (content: string): Promise<SendMessageResult> => {
     const requestId = generateRequestId();
@@ -28,7 +29,12 @@ export const useChatSending = (
         return { success: false, error: "Message cannot be empty" };
       }
       
-      // If no current chat, create a new one
+      if (!user) {
+        toast.error("Please sign in to send messages");
+        return { success: false, error: "Authentication required" };
+      }
+      
+      // Get or create chat ID
       let chatId = currentChatId;
       let isNewChat = false;
       
@@ -38,9 +44,10 @@ export const useChatSending = (
           return { success: false, error: "Failed to create chat" };
         }
         isNewChat = true;
+        console.log("Created new chat:", chatId);
       }
       
-      // Create and add user message
+      // Create and add user message - both to state and DB
       const userMessage: Message = {
         id: uuidv4(),
         role: "user",
@@ -49,9 +56,13 @@ export const useChatSending = (
         timestamp: Date.now()
       };
       
-      // Make sure to wait for this to complete
-      await handleMessageUpdate(chatId, userMessage, requestId);
-      console.log("User message added to chat:", chatId, userMessage);
+      // Update UI state immediately for better user experience
+      addMessageToChat(chatId, userMessage);
+      console.log("Added user message to state:", userMessage);
+      
+      // Then persist to database (don't wait for this to complete)
+      handleMessageUpdate(chatId, userMessage, requestId)
+        .catch(err => console.error("Error saving user message:", err));
       
       // Set loading state
       setIsLoadingResponse(true);
@@ -59,7 +70,7 @@ export const useChatSending = (
       try {
         await errorTracker.logStage('ai_request', 'start', { chatId, messageId: userMessage.id });
         
-        // Get current chat to send context to the AI
+        // Get current chat to send context
         const chat = getCurrentChat();
         if (!chat) {
           console.error("Failed to get current chat after message update");
@@ -67,6 +78,7 @@ export const useChatSending = (
           return { success: false, error: "Failed to load chat context" };
         }
         
+        // Use the messages from the chat object we just retrieved
         const messages = chat?.messages || [];
         
         console.log("Sending request to edge function with:", {
@@ -131,22 +143,21 @@ export const useChatSending = (
           return { success: false, error: data.error };
         }
         
-        // Check for message in response
-        if (!data.message && !data.content) {
-          console.error("No message in response:", data);
+        // Support both message and content fields in the response
+        const responseContent = data.message || data.content;
+        
+        if (!responseContent) {
+          console.error("No message content in response:", data);
           await errorTracker.logError(
-            "No message in response", 
-            new Error("No message returned"),
+            "No message content in response", 
+            new Error("No message or content field in response"),
             { chatId, response: data }
           );
           
           toast.error("Received an incomplete response");
           setIsLoadingResponse(false);
-          return { success: false, error: "No message in response" };
+          return { success: false, error: "No message content in response" };
         }
-        
-        // Support both message and content fields in the response
-        const responseContent = data.message || data.content;
         
         // Create assistant message
         const assistantMessage: Message = {
@@ -169,9 +180,13 @@ export const useChatSending = (
           tokensUsed: data.tokensUsed
         });
         
-        // Add assistant response
-        await handleMessageUpdate(chatId, assistantMessage, requestId);
-        console.log("Assistant response added to chat:", chatId, assistantMessage);
+        // Update UI state immediately
+        addMessageToChat(chatId, assistantMessage);
+        console.log("Added assistant response to state:", assistantMessage);
+        
+        // Then persist to database (don't wait for this to complete)
+        handleMessageUpdate(chatId, assistantMessage, requestId)
+          .catch(err => console.error("Error saving assistant message:", err));
         
         // If this is a new chat, generate title from first message and update the chat title
         if (isNewChat) {

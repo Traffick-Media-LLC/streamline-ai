@@ -18,7 +18,7 @@ const ChatInput = () => {
     currentChatId
   } = useChatContext();
   
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +34,7 @@ const ChatInput = () => {
       }
       
       // Log the current state before sending
-      console.log("Sending message:", message, "Current chat ID:", currentChatId);
+      console.log("Sending message:", message, "Current chat ID:", currentChatId, "User:", user?.id);
       
       // Always make sure we have a chat to send to
       let chatID = currentChatId;
@@ -79,7 +79,8 @@ const ChatInput = () => {
         return;
       }
       
-      await createNewChat();
+      const chatId = await createNewChat();
+      console.log("Created new chat with ID:", chatId);
       setMessage("");
     } catch (error) {
       console.error("Error creating new chat:", error);

@@ -7,6 +7,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Animated, AnimatedList } from "@/components/ui/animated";
 import { useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 
 // Extend Message type for internal use to include animation delay
 type MessageWithAnimation = Message & { animationDelay?: number };
@@ -18,7 +21,8 @@ const ChatWindow = () => {
     isInitializing,
     clearChat,
     chats,
-    currentChatId
+    currentChatId,
+    fetchChats
   } = useChatContext();
   
   const {
@@ -87,9 +91,16 @@ const ChatWindow = () => {
       currentChatId,
       hasChat: !!currentChat,
       messageCount: currentChat?.messages?.length || 0,
-      chatsCount: chats?.length || 0
+      chatsCount: chats?.length || 0,
+      userId: user?.id
     });
-  }, [currentChat, currentChatId, chats]);
+  }, [currentChat, currentChatId, chats, user]);
+
+  // Handle chat refresh
+  const handleRefresh = () => {
+    fetchChats();
+    toast.success("Chat data refreshed");
+  };
 
   if (isInitializing) {
     return <div className="flex items-center justify-center h-full">
@@ -120,6 +131,18 @@ const ChatWindow = () => {
             hemp-derived cannabinoids, kratom, and other regulated industries.
           </p>
         </Animated>
+
+        {user && chats.length > 0 && (
+          <Animated type="fade" delay={0.4}>
+            <Button 
+              variant="outline" 
+              onClick={handleRefresh} 
+              className="mt-4 flex items-center gap-2">
+              <RefreshCw size={16} />
+              Refresh Chats
+            </Button>
+          </Animated>
+        )}
       </div>;
   }
 

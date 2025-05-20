@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Chat } from "../types/chat";
 import { logEvent } from "../utils/logging";
 
@@ -9,14 +9,36 @@ export const useChatState = () => {
   const [isLoadingResponse, setIsLoadingResponse] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
 
-  const getCurrentChat = () => {
+  // Get current chat with safety checks
+  const getCurrentChat = useCallback(() => {
     if (!currentChatId) return null;
     return chats.find(chat => chat.id === currentChatId) || null;
-  };
+  }, [currentChatId, chats]);
   
-  const clearChat = () => {
+  // Add message to chat with proper state update
+  const addMessageToChat = useCallback((chatId: string, message: any) => {
+    console.log("Adding message to chat:", chatId, message);
+    
+    setChats(prevChats => {
+      const updatedChats = prevChats.map(chat => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            messages: [...chat.messages, message],
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return chat;
+      });
+      
+      return updatedChats;
+    });
+  }, []);
+  
+  // Clear chat state
+  const clearChat = useCallback(() => {
     setCurrentChatId(null);
-  };
+  }, []);
 
   return {
     chats,
@@ -28,6 +50,7 @@ export const useChatState = () => {
     isInitializing,
     setIsInitializing,
     getCurrentChat,
-    clearChat
+    clearChat,
+    addMessageToChat
   };
 };

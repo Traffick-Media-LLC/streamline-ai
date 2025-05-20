@@ -7,7 +7,6 @@ import { useChatFetching } from "./useChatFetching";
 import { useChatSelection } from "./useChatSelection";
 import { useChatSending } from "./useChatSending";
 import { generateRequestId, ErrorTracker } from "@/utils/logging";
-import { SendMessageResult } from "@/types/chat";
 
 export const useChatOperations = () => {
   const { user } = useAuth();
@@ -21,7 +20,8 @@ export const useChatOperations = () => {
     isInitializing,
     setIsInitializing,
     getCurrentChat,
-    clearChat
+    clearChat,
+    addMessageToChat
   } = useChatState();
   
   const { createNewChat } = useChatCreation(user, setChats, setCurrentChatId);
@@ -43,7 +43,8 @@ export const useChatOperations = () => {
     createNewChat,
     handleMessageUpdate,
     setIsLoadingResponse,
-    getCurrentChat
+    getCurrentChat,
+    addMessageToChat
   );
 
   return {
