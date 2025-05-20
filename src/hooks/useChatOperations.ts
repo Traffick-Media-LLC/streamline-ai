@@ -56,6 +56,7 @@ export const useChatOperations = () => {
     chats,
     selectChat,
     isInitializing,
-    clearChat
+    clearChat,
+    fetchChats  // Make sure to include fetchChats in the returned object
   };
 };

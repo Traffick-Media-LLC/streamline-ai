@@ -1,4 +1,3 @@
-
 import { User } from "@supabase/supabase-js";
 
 export type SourceInfo = {
@@ -50,15 +49,16 @@ export type Chat = {
 export type SendMessageResult = { success: boolean; error?: string };
 
 export type ChatContextType = {
-  currentChatId: string;
+  currentChatId: string | null;
   isLoadingResponse: boolean;
-  chats: Chat[];
-  createNewChat: () => Promise<string>;
-  sendMessage: (content: string) => Promise<SendMessageResult>;
-  getCurrentChat: () => Chat;
-  selectChat: (chatId: string) => Promise<boolean>;
   isInitializing: boolean;
+  createNewChat: () => Promise<string | null>;
+  sendMessage: (content: string) => Promise<any>;
+  getCurrentChat: () => Chat | null;
+  chats: Chat[];
+  selectChat: (chatId: string) => void;
   clearChat: () => void;
+  fetchChats: () => Promise<void>;
 };
 
 export interface ChatOperationsProps {
