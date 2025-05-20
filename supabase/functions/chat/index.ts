@@ -1,4 +1,3 @@
-
 // Import required Deno modules
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -214,6 +213,30 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   }
 }
 
+// New function to get product ingredients
+async function getProductIngredients(supabase, productId, requestId) {
+  try {
+    const { data: ingredients, error } = await supabase
+      .from('product_ingredients')
+      .select('ingredient, product_type')
+      .eq('product_id', productId);
+      
+    if (error) {
+      console.error('Error fetching product ingredients:', error);
+      await logEvent(supabase, requestId, 'ingredient_fetch_error', 'get_product_ingredients', 
+        'Failed to fetch product ingredients', { productId, error: error.message });
+      return null;
+    }
+    
+    return ingredients;
+  } catch (error) {
+    console.error('Error in getProductIngredients:', error);
+    await logEvent(supabase, requestId, 'ingredient_fetch_error', 'get_product_ingredients', 
+      'Exception in getProductIngredients', { productId, error: error.message });
+    return null;
+  }
+}
+
 // Improved function to query the database for product legality in a state
 async function checkProductLegality(supabase, stateName, productNameOrBrand, requestId) {
   try {
@@ -276,19 +299,35 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         .eq('state_id', stateId)
         .in('product_id', productIds);
         
+      // Fetch ingredients for the products
+      const productIngredientsMap = {};
+      for (const pid of productIds) {
+        const ingredients = await getProductIngredients(supabase, pid, requestId);
+        if (ingredients && ingredients.length > 0) {
+          productIngredientsMap[pid] = ingredients;
+        }
+      }
+      
       if (!allowedError && allowedProducts && allowedProducts.length > 0) {
-        return {
+        const result = {
           found: true,
           legal: true,
           state: stateName,
           products: allowedProducts.map(ap => ({
             name: ap.products.name,
             brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
-            brandLogo: ap.products.brands ? ap.products.brands.logo_url : null
+            brandLogo: ap.products.brands ? ap.products.brands.logo_url : null,
+            ingredients: productIngredientsMap[ap.product_id] || []
           })),
           category: identifyProductCategory(productNameOrBrand) || 'Unknown',
           source: 'product_database'
         };
+        
+        // Log the ingredients information
+        await logEvent(supabase, requestId, 'product_ingredients_fetched', 'check_product_legality', 
+          `Found ingredients for products in ${stateName}`, { ingredients: productIngredientsMap });
+          
+        return result;
       } else {
         // Products found but not allowed in this state
         return {
@@ -298,7 +337,8 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           products: productData.map(p => ({
             name: p.name,
             brand: p.brands ? p.brands.name : 'Unknown',
-            brandLogo: p.brands ? p.brands.logo_url : null
+            brandLogo: p.brands ? p.brands.logo_url : null,
+            ingredients: productIngredientsMap[p.id] || []
           })),
           category: identifyProductCategory(productNameOrBrand) || 'Unknown',
           source: 'product_database'
@@ -323,6 +363,15 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         .in('brand_id', brandIds);
         
       if (!bpError && brandProducts && brandProducts.length > 0) {
+        // Fetch ingredients for all products of this brand
+        const productIngredientsMap = {};
+        for (const product of brandProducts) {
+          const ingredients = await getProductIngredients(supabase, product.id, requestId);
+          if (ingredients && ingredients.length > 0) {
+            productIngredientsMap[product.id] = ingredients;
+          }
+        }
+        
         // Check which of these brand's products are allowed in the state
         const productIds = brandProducts.map(p => p.id);
         
@@ -354,7 +403,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         
         if (!abpError && allowedBrandProducts && allowedBrandProducts.length > 0) {
           // Some products from this brand are allowed
-          return {
+          const result = {
             found: true,
             legal: true,
             state: stateName,
@@ -363,13 +412,27 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             products: allowedBrandProducts.map(abp => ({
               name: abp.products.name,
               brand: abp.products.brands ? abp.products.brands.name : brandData[0].name,
-              brandLogo: abp.products.brands ? abp.products.brands.logo_url : brandData[0].logo_url
+              brandLogo: abp.products.brands ? abp.products.brands.logo_url : brandData[0].logo_url,
+              ingredients: productIngredientsMap[abp.product_id] || []
             })),
             category: identifyProductCategory(productNameOrBrand) || 'Unknown',
             source: 'brand_database'
           };
+          
+          // Log the ingredients for this brand's products
+          await logEvent(supabase, requestId, 'brand_ingredients_fetched', 'check_product_legality', 
+            `Found ingredients for ${brandData[0].name} products in ${stateName}`);
+            
+          return result;
         } else {
           // Brand found but no products allowed in this state
+          // Include ingredient information for research purposes
+          const allBrandProductsWithIngredients = brandProducts.map(bp => ({
+            name: bp.name,
+            brand: brandData[0].name,
+            ingredients: productIngredientsMap[bp.id] || []
+          }));
+          
           return {
             found: true,
             legal: false,
@@ -377,6 +440,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             brand: brandData[0].name,
             brandLogo: brandData[0].logo_url,
             message: `No products from ${brandData[0].name} are permitted in ${stateName}.`,
+            productIngredients: allBrandProductsWithIngredients,
             category: identifyProductCategory(productNameOrBrand) || 'Unknown',
             source: 'brand_database'
           };
@@ -488,6 +552,7 @@ When answering product legality questions:
 - Clearly state which products are legal or not legal in specific states
 - Include brand information when available
 - Do not speculate on legal status when database information is missing
+- When ingredient information is available, use it to provide additional context about why certain products may or may not be legal in specific states
 
 VERY IMPORTANT: The company primarily works with nicotine products, especially pouches, vapes, disposables, and other nicotine delivery systems. When users ask about products like "pouches", assume they are referring to NICOTINE pouches (like tobacco-free nicotine pouches) NOT cannabis/THC products unless explicitly stated otherwise.
 
@@ -518,6 +583,7 @@ ${JSON.stringify(productLegalityData, null, 2)}
 Use this information to answer the current question. This data comes directly from our regulatory database and should be considered the final authority on product legality by state. When responding:
 - If the query was about a brand, list ALL products from this brand and their legal status in the specified state
 - If specific products were found, clearly state their legal status
+- If ingredient information is available, use it to provide context on why certain products may be regulated in specific ways
 - Present the information in a clear, organized way without raw image URLs or markdown image syntax`;
     }
 

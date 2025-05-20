@@ -311,6 +311,38 @@ export type Database = {
         }
         Relationships: []
       }
+      product_ingredients: {
+        Row: {
+          created_at: string
+          id: string
+          ingredient: string
+          product_id: number | null
+          product_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ingredient: string
+          product_id?: number | null
+          product_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ingredient?: string
+          product_id?: number | null
+          product_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_ingredients_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           brand_id: number | null

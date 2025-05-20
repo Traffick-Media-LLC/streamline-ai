@@ -1,410 +1,420 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { 
-  addKnowledgeEntry, 
-  findKnowledgeEntryByTitle, 
-  getAllBrands,
-  getProductsByBrand 
-} from "@/utils/chatUtils";
-import KnowledgeCsvUploader from "./KnowledgeCsvUploader";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Plus, Trash2, Edit, Save, X } from "lucide-react";
 import KnowledgeJsonUploader from "./KnowledgeJsonUploader";
+import KnowledgeCsvUploader from "./KnowledgeCsvUploader";
+import ProductIngredientCsvUploader from "./ProductIngredientCsvUploader";
 
-type KnowledgeEntry = {
-  id: string;
-  title: string;
-  content: string;
-  tags: string[];
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
+export default function KnowledgeManager() {
+  const [entries, setEntries] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newEntry, setNewEntry] = useState({
+    title: "",
+    content: "",
+    tags: "",
+  });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    content: "",
+    tags: "",
+  });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState(null);
 
-const ENTRY_TYPES = [
-  { value: "brand", label: "Brand" },
-  { value: "product", label: "Product" },
-  { value: "regulatory", label: "Regulatory" },
-  { value: "json", label: "JSON Data" }
-];
-
-const KnowledgeManager = () => {
-  const { user } = useAuth();
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [selectedType, setSelectedType] = useState("brand");
-  const [customTags, setCustomTags] = useState("");
-  const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedBrand, setSelectedBrand] = useState("");
-  const [brands, setBrands] = useState<KnowledgeEntry[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    const checkAdmin = async () => {
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
-      
-      setIsAdmin(true);
-    };
-    
-    checkAdmin();
-  }, [user]);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    
-    const fetchEntries = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('knowledge_entries')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        setEntries(data || []);
-        
-        const brandEntries = (data || []).filter(entry => 
-          entry.tags && entry.tags.includes('brand')
-        );
-        setBrands(brandEntries);
-      } catch (error) {
-        console.error("Error fetching entries:", error);
-        toast.error("Failed to load knowledge entries");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
+  // Add refreshIngredients function
+  const refreshIngredients = async () => {
+    // This function is a placeholder for refreshing ingredient data display
+    // In a real implementation, you might want to show the ingredients table
     fetchEntries();
-  }, [isAdmin]);
+    toast.success("Ingredient data refreshed");
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !content) {
-      toast.error("Title and content are required");
-      return;
-    }
-
+  const fetchEntries = async () => {
     try {
       setIsLoading(true);
-      
-      const existingEntry = await findKnowledgeEntryByTitle(title);
-      if (existingEntry) {
-        toast.error("An entry with this title already exists");
-        return;
+      const { data, error } = await supabase
+        .from("knowledge_entries")
+        .select("*")
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        throw error;
       }
-      
-      let tags = [selectedType];
-      
-      if (selectedType === "product" && selectedBrand) {
-        tags.push(`brand:${selectedBrand}`);
-      }
-      
-      if (customTags) {
-        const customTagsList = customTags.split(',')
-          .map(tag => tag.trim())
-          .filter(tag => tag);
-        tags = [...tags, ...customTagsList];
-      }
-      
-      if (isJsonContent(content)) {
-        tags.push("json");
-      }
-      
-      let finalContent = content;
-      if (selectedType === "product" && selectedBrand) {
-        const brandEntry = brands.find(b => b.id === selectedBrand);
-        if (brandEntry) {
-          finalContent = `Brand: ${brandEntry.title}\n\n${content}`;
-        }
-      }
-      
-      await addKnowledgeEntry(title, finalContent, tags);
-      
-      toast.success("Knowledge entry added successfully");
-      setTitle("");
-      setContent("");
-      setCustomTags("");
-      
-      const { data } = await supabase
-        .from('knowledge_entries')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      setEntries(data || []);
-      
-      const brandEntries = (data || []).filter(entry => 
-        entry.tags && entry.tags.includes('brand')
-      );
-      setBrands(brandEntries);
-      
+
+      setEntries(data);
     } catch (error) {
-      console.error("Error adding entry:", error);
-      toast.error("Failed to add knowledge entry");
+      toast.error("Failed to fetch knowledge entries");
+      console.error("Error fetching entries:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleToggleActive = async (entry: KnowledgeEntry) => {
+  useEffect(() => {
+    fetchEntries();
+  }, []);
+
+  const createEntry = async () => {
+    try {
+      setIsCreating(true);
+      
+      // Convert comma-separated tags to array
+      const tagsArray = newEntry.tags
+        ? newEntry.tags.split(",").map(tag => tag.trim())
+        : [];
+      
+      const { data, error } = await supabase
+        .from("knowledge_entries")
+        .insert({
+          title: newEntry.title,
+          content: newEntry.content,
+          tags: tagsArray,
+          is_active: true,
+        })
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success("Knowledge entry created successfully");
+      setNewEntry({
+        title: "",
+        content: "",
+        tags: "",
+      });
+      fetchEntries();
+    } catch (error) {
+      toast.error("Failed to create knowledge entry");
+      console.error("Error creating entry:", error);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const startEdit = (entry) => {
+    setEditingId(entry.id);
+    setEditForm({
+      title: entry.title,
+      content: entry.content,
+      tags: entry.tags ? entry.tags.join(", ") : "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async (id) => {
+    try {
+      // Convert comma-separated tags to array
+      const tagsArray = editForm.tags
+        ? editForm.tags.split(",").map(tag => tag.trim())
+        : [];
+      
+      const { error } = await supabase
+        .from("knowledge_entries")
+        .update({
+          title: editForm.title,
+          content: editForm.content,
+          tags: tagsArray,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success("Knowledge entry updated successfully");
+      setEditingId(null);
+      fetchEntries();
+    } catch (error) {
+      toast.error("Failed to update knowledge entry");
+      console.error("Error updating entry:", error);
+    }
+  };
+
+  const confirmDelete = (id) => {
+    setEntryToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const deleteEntry = async () => {
     try {
       const { error } = await supabase
-        .from('knowledge_entries')
-        .update({ is_active: !entry.is_active })
-        .eq('id', entry.id);
-      
-      if (error) throw error;
-      
-      setEntries(entries.map(e => 
-        e.id === entry.id ? { ...e, is_active: !e.is_active } : e
-      ));
-      
-      toast.success(`Entry ${entry.is_active ? 'disabled' : 'enabled'} successfully`);
+        .from("knowledge_entries")
+        .delete()
+        .eq("id", entryToDelete);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success("Knowledge entry deleted successfully");
+      fetchEntries();
     } catch (error) {
-      console.error("Error toggling entry status:", error);
-      toast.error("Failed to update entry status");
+      toast.error("Failed to delete knowledge entry");
+      console.error("Error deleting entry:", error);
+    } finally {
+      setDeleteDialogOpen(false);
+      setEntryToDelete(null);
     }
   };
-
-  const isJsonContent = (content: string): boolean => {
-    try {
-      JSON.parse(content);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
-
-  const formatJsonContent = (content: string): string => {
-    try {
-      const parsed = JSON.parse(content);
-      return JSON.stringify(parsed, null, 2);
-    } catch (e) {
-      return content;
-    }
-  };
-
-  if (!isAdmin) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Card>
-          <CardHeader>
-            <CardTitle>Access Restricted</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>You need admin privileges to access the Knowledge Manager.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
-    <div className="container py-6">
-      <h1 className="text-2xl font-bold mb-6">Knowledge Base Manager</h1>
-      <Tabs defaultValue="add">
-        <TabsList className="mb-4">
-          <TabsTrigger value="add">Add Entry</TabsTrigger>
-          <TabsTrigger value="view">View Entries</TabsTrigger>
+    <div className="space-y-4">
+      {/* Tabs for different sections */}
+      <Tabs defaultValue="knowledge" className="w-full">
+        <TabsList>
+          <TabsTrigger value="knowledge">Knowledge Entries</TabsTrigger>
+          <TabsTrigger value="ingredients">Product Ingredients</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="add">
-          <Card>
-            <CardHeader>
-              <CardTitle>Add Knowledge Entry</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <KnowledgeCsvUploader onComplete={async () => {
-                setIsLoading(true);
-                try {
-                  const { data } = await supabase
-                    .from('knowledge_entries')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-                  setEntries(data || []);
-                  const brandEntries = (data || []).filter(entry =>
-                    entry.tags && entry.tags.includes('brand')
-                  );
-                  setBrands(brandEntries);
-                } finally {
-                  setIsLoading(false);
-                }
-              }} />
-              
-              <KnowledgeJsonUploader onComplete={async () => {
-                setIsLoading(true);
-                try {
-                  const { data } = await supabase
-                    .from('knowledge_entries')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-                  setEntries(data || []);
-                  const brandEntries = (data || []).filter(entry =>
-                    entry.tags && entry.tags.includes('brand')
-                  );
-                  setBrands(brandEntries);
-                } finally {
-                  setIsLoading(false);
-                }
-              }} />
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block mb-2 text-sm font-medium">Entry Type</label>
-                  <Select
-                    value={selectedType}
-                    onValueChange={setSelectedType}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select entry type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ENTRY_TYPES.map(type => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {selectedType === "product" && (
-                  <div>
-                    <label className="block mb-2 text-sm font-medium">Brand</label>
-                    <Select
-                      value={selectedBrand}
-                      onValueChange={setSelectedBrand}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select associated brand" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {brands.map(brand => (
-                          <SelectItem key={brand.id} value={brand.id}>
-                            {brand.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                
-                <div>
-                  <label className="block mb-2 text-sm font-medium">Title</label>
-                  <Input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={`Enter ${selectedType} name`}
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block mb-2 text-sm font-medium">Content</label>
-                  <Textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder={`Enter ${selectedType} details including regulatory information...`}
-                    className="min-h-[200px] font-mono"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label className="block mb-2 text-sm font-medium">Custom Tags (comma-separated)</label>
-                  <Input
-                    value={customTags}
-                    onChange={(e) => setCustomTags(e.target.value)}
-                    placeholder="e.g., nicotine, hemp, kratom"
-                  />
-                </div>
-                
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? "Adding..." : "Add Entry"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
         
-        <TabsContent value="view">
-          <Card>
-            <CardHeader>
-              <CardTitle>Knowledge Entries</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[500px]">
-                <div className="space-y-4">
-                  {entries.length === 0 ? (
-                    <p className="text-center text-muted-foreground">No entries found</p>
-                  ) : (
-                    entries.map(entry => (
-                      <Card key={entry.id} className={!entry.is_active ? "opacity-60" : undefined}>
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <CardTitle className="text-md">{entry.title}</CardTitle>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {entry.tags?.map(tag => (
-                                  <Badge key={tag} variant="outline">{tag}</Badge>
+        <TabsContent value="knowledge">
+          {/* Keep existing Knowledge Entries section */}
+          <div className="space-y-4">
+            {/* Upload Controls */}
+            <div className="mb-4 border rounded-md p-4 bg-background">
+              <h3 className="text-lg font-medium mb-3">Bulk Upload</h3>
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                <KnowledgeJsonUploader onComplete={fetchEntries} />
+                <KnowledgeCsvUploader onComplete={fetchEntries} />
+              </div>
+            </div>
+
+            {/* Entry creation form */}
+            <div className="border rounded-md p-4 bg-background">
+              <h3 className="text-lg font-medium mb-3">Create New Knowledge Entry</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="title">Title</Label>
+                  <Input 
+                    id="title"
+                    value={newEntry.title} 
+                    onChange={(e) => setNewEntry({...newEntry, title: e.target.value})}
+                    placeholder="Enter a descriptive title" 
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="content">Content</Label>
+                  <Textarea 
+                    id="content"
+                    value={newEntry.content} 
+                    onChange={(e) => setNewEntry({...newEntry, content: e.target.value})}
+                    placeholder="Enter detailed content" 
+                    rows={10}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="tags">Tags (comma separated)</Label>
+                  <Input 
+                    id="tags"
+                    value={newEntry.tags} 
+                    onChange={(e) => setNewEntry({...newEntry, tags: e.target.value})}
+                    placeholder="product, policy, document, etc." 
+                  />
+                </div>
+                <Button onClick={createEntry} disabled={isCreating || !newEntry.title || !newEntry.content}>
+                  {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  Create Entry
+                </Button>
+              </div>
+            </div>
+
+            {/* Entries table section */}
+            <div className="border rounded-md overflow-hidden">
+              <h3 className="text-lg font-medium p-4 bg-background border-b">Knowledge Entries</h3>
+              {isLoading ? (
+                <div className="flex justify-center items-center p-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : entries.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  No knowledge entries found. Create your first entry above.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[200px]">Title</TableHead>
+                        <TableHead>Content</TableHead>
+                        <TableHead className="w-[150px]">Tags</TableHead>
+                        <TableHead className="w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {entries.map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell className="font-medium">
+                            {editingId === entry.id ? (
+                              <Input
+                                value={editForm.title}
+                                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                              />
+                            ) : (
+                              entry.title
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingId === entry.id ? (
+                              <Textarea
+                                value={editForm.content}
+                                onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+                                rows={5}
+                              />
+                            ) : (
+                              <div className="max-h-24 overflow-y-auto">
+                                {entry.content.length > 200
+                                  ? `${entry.content.substring(0, 200)}...`
+                                  : entry.content}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingId === entry.id ? (
+                              <Input
+                                value={editForm.tags}
+                                onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                                placeholder="tag1, tag2, tag3"
+                              />
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {entry.tags?.map((tag, i) => (
+                                  <span
+                                    key={i}
+                                    className="bg-secondary text-secondary-foreground px-2 py-1 rounded-md text-xs"
+                                  >
+                                    {tag}
+                                  </span>
                                 ))}
                               </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              {editingId === entry.id ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => saveEdit(entry.id)}
+                                    title="Save"
+                                  >
+                                    <Save className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={cancelEdit}
+                                    title="Cancel"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => startEdit(entry)}
+                                    title="Edit"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => confirmDelete(entry.id)}
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
-                            <Badge variant={entry.is_active ? "default" : "destructive"}>
-                              {entry.is_active ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pb-2">
-                          {entry.tags?.includes('json') ? (
-                            <pre className="text-xs whitespace-pre overflow-x-auto bg-muted p-2 rounded-md">
-                              {formatJsonContent(entry.content)}
-                            </pre>
-                          ) : (
-                            <p className="text-sm whitespace-pre-line">{entry.content}</p>
-                          )}
-                        </CardContent>
-                        <CardFooter className="flex justify-between pt-2">
-                          <div className="text-xs text-muted-foreground">
-                            Added: {new Date(entry.created_at).toLocaleDateString()}
-                          </div>
-                          <Button
-                            size="sm"
-                            variant={entry.is_active ? "destructive" : "default"}
-                            onClick={() => handleToggleActive(entry)}
-                          >
-                            {entry.is_active ? "Disable" : "Enable"}
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))
-                  )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="ingredients">
+          <div className="space-y-4">
+            {/* Upload Controls */}
+            <div className="mb-4 border rounded-md p-4 bg-background">
+              <h3 className="text-lg font-medium mb-3">Product Ingredients Upload</h3>
+              <div className="grid gap-4">
+                <ProductIngredientCsvUploader onComplete={refreshIngredients} />
+              </div>
+              <div className="mt-3 text-sm text-muted-foreground">
+                <p className="mb-2">The CSV file should contain the following columns:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><span className="font-mono">Brand</span> - The brand name of the product</li>
+                  <li><span className="font-mono">Product Type</span> - Category or type of the product</li>
+                  <li><span className="font-mono">Product</span> - The specific product name</li>
+                  <li><span className="font-mono">Ingredient</span> - Ingredient in the product</li>
+                </ul>
+                <p className="mt-2">Products with multiple ingredients should have multiple rows with the same Brand/Product but different Ingredients.</p>
+              </div>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              knowledge entry from the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteEntry}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
-};
-
-export default KnowledgeManager;
+}
