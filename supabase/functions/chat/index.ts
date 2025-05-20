@@ -12,6 +12,11 @@ const corsHeaders = {
 // Function to log events in the edge function
 async function logEvent(supabase, requestId, eventType, component, message, metadata = {}) {
   try {
+    if (!requestId) {
+      console.warn('Missing requestId in logEvent');
+      requestId = crypto.randomUUID();
+    }
+
     const { error } = await supabase.from('chat_logs').insert({
       request_id: requestId,
       event_type: eventType,
@@ -626,9 +631,17 @@ serve(async (req) => {
       );
     }
     
+    // Special mode for health check
+    if (reqJson && reqJson.mode === "health_check") {
+      return new Response(
+        JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     // Handle both possible parameter names (message or content)
     const userMessage = reqJson.content || reqJson.message;
-    const { chatId, chatHistory, requestId } = reqJson;
+    const { chatId, messages: chatHistory = [], requestId = crypto.randomUUID() } = reqJson;
     
     // Validate required parameters
     if (!userMessage) {
@@ -680,14 +693,6 @@ serve(async (req) => {
           status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
-      );
-    }
-    
-    // Special mode for health check
-    if (reqJson && reqJson.mode === "health_check") {
-      return new Response(
-        JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     

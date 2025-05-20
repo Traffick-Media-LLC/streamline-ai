@@ -27,6 +27,7 @@ const ChatPageContent = () => {
   const [debugInfo, setDebugInfo] = useState<string>("");
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [healthCheckStatus, setHealthCheckStatus] = useState<string>("Not checked");
   const isMobile = useIsMobile();
   
   // Clear chat state when component mounts
@@ -37,43 +38,59 @@ const ChatPageContent = () => {
   // Check connection to Edge Function
   useEffect(() => {
     const checkEdgeFunctionConnection = async () => {
-      if (process.env.NODE_ENV === 'development') {
-        try {
-          // Simple health check for the Edge Function
-          const errorTracker = new ErrorTracker('ChatPage');
-          await errorTracker.logStage('edge_function_check', 'start');
+      try {
+        setHealthCheckStatus("Checking connection...");
+        // Simple health check for the Edge Function
+        const errorTracker = new ErrorTracker('ChatPage');
+        await errorTracker.logStage('edge_function_check', 'start');
 
-          const startTime = performance.now();
-          const { data, error } = await supabase.functions.invoke('chat', {
-            body: { mode: "health_check" },
-          });
+        const startTime = performance.now();
+        const { data, error } = await supabase.functions.invoke('chat', {
+          body: { mode: "health_check" },
+        });
+        
+        const duration = Math.round(performance.now() - startTime);
+        
+        if (error) {
+          console.error("Edge Function health check failed:", error);
+          setDebugInfo(`Edge Function Error: ${error.message || 'Unknown error'}`);
+          setHealthCheckStatus(`Failed: ${error.message || 'Unknown error'}`);
+          await errorTracker.logError(
+            "Edge Function health check failed",
+            error,
+            { duration }
+          );
           
-          const duration = Math.round(performance.now() - startTime);
-          
-          if (error) {
-            console.error("Edge Function health check failed:", error);
-            setDebugInfo(`Edge Function Error: ${error.message || 'Unknown error'}`);
-            await errorTracker.logError(
-              "Edge Function health check failed",
-              error,
-              { duration }
-            );
-          } else {
-            console.log("Edge Function health check passed:", data);
-            setDebugInfo(`Edge Function OK (${duration}ms)`);
-            await errorTracker.logStage('edge_function_check', 'complete', {
-              duration,
-              response: data
+          // Only show toast in development mode
+          if (process.env.NODE_ENV === 'development') {
+            toast.error("Edge function health check failed", {
+              description: error.message
             });
           }
-        } catch (err) {
-          console.error("Failed to connect to Edge Function:", err);
-          setDebugInfo(`Connection Error: ${err.message || 'Unknown error'}`);
-          const errorTracker = new ErrorTracker('ChatPage');
-          await errorTracker.logError(
-            "Failed to connect to Edge Function",
-            err
-          );
+        } else {
+          console.log("Edge Function health check passed:", data);
+          setDebugInfo(`Edge Function OK (${duration}ms)`);
+          setHealthCheckStatus(`Connected (${duration}ms)`);
+          await errorTracker.logStage('edge_function_check', 'complete', {
+            duration,
+            response: data
+          });
+        }
+      } catch (err) {
+        console.error("Failed to connect to Edge Function:", err);
+        setDebugInfo(`Connection Error: ${err.message || 'Unknown error'}`);
+        setHealthCheckStatus(`Error: ${err.message || 'Connection failed'}`);
+        const errorTracker = new ErrorTracker('ChatPage');
+        await errorTracker.logError(
+          "Failed to connect to Edge Function",
+          err
+        );
+        
+        // Only show toast in development mode
+        if (process.env.NODE_ENV === 'development') {
+          toast.error("Failed to connect to Edge Function", {
+            description: err.message
+          });
         }
       }
     };
@@ -88,7 +105,18 @@ const ChatPageContent = () => {
     return (
       <div className="fixed bottom-4 right-4 bg-background border p-3 rounded-md shadow-md z-50 max-w-[350px]">
         <h4 className="font-medium text-sm">Chat Debug</h4>
-        <p className="text-xs text-muted-foreground">Status: {debugInfo || "Ready"}</p>
+        <p className="text-xs text-muted-foreground mb-1">Status: {debugInfo || "Ready"}</p>
+        <p className="text-xs text-muted-foreground">Edge Function: {healthCheckStatus}</p>
+        <div className="mt-2 text-xs">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="text-xs h-6 px-2"
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </Button>
+        </div>
       </div>
     );
   };

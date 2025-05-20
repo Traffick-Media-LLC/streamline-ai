@@ -94,11 +94,11 @@ export const useChatSending = (
           return { success: false, error: error.message };
         }
         
-        if (!data || !data.message) {
+        if (!data) {
           console.error("Invalid response from edge function:", data);
           await errorTracker.logError(
             "Invalid response from edge function", 
-            new Error("No message returned"),
+            new Error("No data returned"),
             { chatId, response: data }
           );
           
@@ -107,11 +107,39 @@ export const useChatSending = (
           return { success: false, error: "Invalid response format" };
         }
         
+        // Check for error in the response
+        if (data.error) {
+          console.error("Error in API response:", data.error);
+          await errorTracker.logError(
+            "Error in API response", 
+            new Error(data.error),
+            { chatId, response: data }
+          );
+          
+          toast.error(data.message || "Failed to get AI response");
+          setIsLoadingResponse(false);
+          return { success: false, error: data.error };
+        }
+        
+        // Check for message in response
+        if (!data.message) {
+          console.error("No message in response:", data);
+          await errorTracker.logError(
+            "No message in response", 
+            new Error("No message returned"),
+            { chatId, response: data }
+          );
+          
+          toast.error("Received an incomplete response");
+          setIsLoadingResponse(false);
+          return { success: false, error: "No message in response" };
+        }
+        
         // Create assistant message
         const assistantMessage: Message = {
           id: uuidv4(),
           role: "assistant",
-          content: data.message || "I couldn't generate a response at this time.",
+          content: data.message,
           createdAt: new Date().toISOString(),
           timestamp: Date.now(),
           metadata: {

@@ -5,30 +5,48 @@ import { Textarea } from "@/components/ui/textarea";
 import { SendHorizontal, PlusCircle } from "lucide-react";
 import { useChatContext } from "../contexts/ChatContext";
 import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ChatInput = () => {
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const {
     sendMessage,
     createNewChat,
     isLoadingResponse
   } = useChatContext();
+  
+  const { isAuthenticated } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || isLoadingResponse) return;
+    
+    if (!message.trim() || isLoadingResponse || isSubmitting) return;
     
     try {
+      setIsSubmitting(true);
+      
+      if (!isAuthenticated) {
+        toast.error("Please sign in to send messages");
+        return;
+      }
+      
+      console.log("Sending message:", message);
       const result = await sendMessage(message);
-      setMessage("");
       
       if (!result.success) {
         console.error("Error sending message:", result.error);
         toast.error("Failed to send message. Please try again.");
+      } else {
+        // Only clear the message if it was sent successfully
+        setMessage("");
       }
     } catch (error) {
       console.error("Exception sending message:", error);
       toast.error("Something went wrong sending your message");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -41,7 +59,13 @@ const ChatInput = () => {
 
   const handleCreateNewChat = async () => {
     try {
+      if (!isAuthenticated) {
+        toast.error("Please sign in to create a new chat");
+        return;
+      }
+      
       await createNewChat();
+      setMessage("");
     } catch (error) {
       console.error("Error creating new chat:", error);
       toast.error("Failed to create a new chat");
@@ -58,13 +82,13 @@ const ChatInput = () => {
             onKeyDown={handleKeyDown} 
             placeholder="Ask about legal topics in regulated industries..." 
             className="pr-12 resize-none min-h-[80px]" 
-            disabled={isLoadingResponse} 
+            disabled={isLoadingResponse || isSubmitting} 
           />
           <Button 
             type="submit" 
             size="icon" 
             className="absolute bottom-2 right-2 h-8 w-8" 
-            disabled={!message.trim() || isLoadingResponse}
+            disabled={!message.trim() || isLoadingResponse || isSubmitting}
           >
             <SendHorizontal size={16} />
           </Button>
@@ -75,7 +99,7 @@ const ChatInput = () => {
             variant="outline" 
             onClick={handleCreateNewChat} 
             className="flex items-center gap-2"
-            disabled={isLoadingResponse}
+            disabled={isLoadingResponse || isSubmitting}
           >
             <PlusCircle size={16} />
             New Chat
