@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, Tool } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import FixGalaxyTreatsBrand from './FixGalaxyTreatsBrand';
 
 interface Brand {
   id: number;
@@ -31,6 +32,7 @@ const BrandsManagement: React.FC = () => {
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isFixDialogOpen, setIsFixDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   const { toast } = useToast();
@@ -158,6 +160,11 @@ const BrandsManagement: React.FC = () => {
     brand.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Check for Galaxy Treats duplicate brand issue
+  const hasGalaxyTreatsBrands = brands.filter(brand => 
+    brand.name.trim().toLowerCase() === "galaxy treats" && (brand.id === 2 || brand.id === 11)
+  ).length > 1;
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -169,6 +176,24 @@ const BrandsManagement: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="max-w-xs"
           />
+          
+          {hasGalaxyTreatsBrands && (
+            <Dialog open={isFixDialogOpen} onOpenChange={setIsFixDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Tool className="h-4 w-4" />
+                  Fix Galaxy Treats
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Fix Galaxy Treats Brand</DialogTitle>
+                </DialogHeader>
+                <FixGalaxyTreatsBrand />
+              </DialogContent>
+            </Dialog>
+          )}
+          
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>
