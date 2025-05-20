@@ -1,3 +1,4 @@
+
 // Import required Deno modules
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -69,6 +70,9 @@ function isProductLegalityQuestion(message) {
     /restricted\s+in/i,
     /legal.*state/i,
     /are\s+\w+\s+legal/i, // Matches "are pouches legal"
+    /can\s+we\s+sell/i, // Matches "can we sell X in Y"
+    /what.*products.*sell/i, // Matches "what products can we sell in X"
+    /what.*sell/i, // Matches "what can we sell in X"
   ];
   
   message = message.toLowerCase();
@@ -158,7 +162,7 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
     // First, fetch common product names from the database to look for
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, name, brand_id, product_type, brands(name)')
+      .select('id, name, brand_id, brands(name)')
       .order('name');
     
     if (productsError) {
@@ -447,7 +451,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       
       let productQuery = supabase
         .from('products')
-        .select('id, name, brand_id, product_type')
+        .select('id, name, brand_id, brands(name, logo_url)')
         .in('brand_id', brandIds);
         
       // Filter by product variant if specified
@@ -474,7 +478,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       // Now check which of these products are allowed in this state
       const productIds = brandProducts.map(p => p.id);
       
-      // Get list of state's allowed products
+      // Get list of state's allowed products with detailed product information
       const { data: allowedProducts, error: allowedError } = await supabase
         .from('state_allowed_products')
         .select(`
@@ -482,7 +486,6 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           products (
             id,
             name, 
-            product_type,
             brands (
               id,
               name,
@@ -507,8 +510,20 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           allBrandProductsWithIngredients.push({
             id: product.id,
             name: product.name,
-            type: product.product_type || 'Unknown',
-            ingredients: ingredientInfo.ingredients || []
+            type: ingredientInfo.product_type || 'Unknown',
+            ingredients: ingredientInfo.ingredients || [],
+            brand: product.brands?.name || brandData[0].name,
+            brandLogo: product.brands?.logo_url || brandData[0].logo_url
+          });
+        } else {
+          // Include product even without ingredients
+          allBrandProductsWithIngredients.push({
+            id: product.id,
+            name: product.name,
+            type: 'Unknown',
+            ingredients: [],
+            brand: product.brands?.name || brandData[0].name,
+            brandLogo: product.brands?.logo_url || brandData[0].logo_url
           });
         }
       }
@@ -537,6 +552,19 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       
       // Process results based on what we found
       if (legalProducts.length > 0) {
+        // Format the product names as a list
+        const legalProductNames = legalProducts.map(p => p.name).join(', ');
+        
+        // Collect all ingredients from legal products
+        const allLegalIngredients = new Set();
+        legalProducts.forEach(product => {
+          if (product.ingredients && product.ingredients.length > 0) {
+            product.ingredients.forEach(ingredient => {
+              allLegalIngredients.add(ingredient);
+            });
+          }
+        });
+        
         return {
           found: true,
           legal: true,
@@ -545,7 +573,8 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           brandLogo: brandData[0].logo_url,
           legalProducts: legalProducts,
           illegalProducts: illegalProducts.length > 0 ? illegalProducts : undefined,
-          message: `${legalProducts.length} product(s) from ${brandData[0].name}${productVariant ? ` matching "${productVariant}"` : ''} are legal in ${stateName}.`,
+          allIngredients: Array.from(allLegalIngredients),
+          message: `The following products from ${brandData[0].name} are legal in ${stateName}: ${legalProductNames}.`,
           category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
           source: 'brand_database',
           date: new Date().toISOString().split('T')[0]
@@ -570,7 +599,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
     // Check for direct product matches
     const { data: productData, error: productError } = await supabase
       .from('products')
-      .select('id, name, product_type, brand_id')
+      .select('id, name, brand_id, brands(name, logo_url)')
       .ilike('name', `%${productNameOrBrand}%`)
       .order('name');
     
@@ -594,7 +623,6 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         products (
           id,
           name,
-          product_type,
           brands (
             id,
             name,
@@ -617,19 +645,23 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
     }
     
     const legalProducts = allowedProducts.map(ap => ({
+      id: ap.products.id,
       name: ap.products.name,
-      type: ap.products.product_type || 'Unknown',
+      type: 'Unknown', // Since we don't have product_type in the products table
       brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
       brandLogo: ap.products.brands ? ap.products.brands.logo_url : null,
     }));
     
     if (legalProducts.length > 0) {
+      // Format the product names as a list
+      const legalProductNames = legalProducts.map(p => p.name).join(', ');
+      
       return {
         found: true,
         legal: true,
         state: stateName,
         products: legalProducts,
-        message: `The following products are legal in ${stateName}: ${legalProducts.map(p => p.name).join(', ')}.`,
+        message: `The following products are legal in ${stateName}: ${legalProductNames}.`,
         source: 'product_database',
         date: new Date().toISOString().split('T')[0]
       };
@@ -809,7 +841,7 @@ When answering product legality questions:
 - Begin with a clear "LEGAL STATUS: [LEGAL/NOT LEGAL] in [STATE]" heading
 - List the brand, products, and primary ingredients in a structured format
 - Be definitive when database information is available
-- Clearly state which products are legal or not legal in specific states
+- ALWAYS list each specific legal product by exact name
 - Include brand information when available
 - Do not speculate on legal status when database information is missing
 - When ingredient information is available, use it to provide additional context about why certain products may or may not be legal in specific states
@@ -840,7 +872,7 @@ Use this structure:
 **LEGAL STATUS: [LEGAL/NOT LEGAL] in [STATE]**
 
 Brand: [Brand Name]
-Products: [List of Products]
+Products: [List each product individually by exact name]
 Primary Ingredients: [Main Ingredients]
 
 ---
@@ -859,7 +891,7 @@ Answer in a professional, clear, and helpful tone. If you cannot find an answer 
 ${JSON.stringify(productLegalityData, null, 2)}
 
 Use this information to answer the current question. This data comes directly from our regulatory database and should be considered the final authority on product legality by state. When responding:
-- If the query was about a brand, list ALL products from this brand and their legal status in the specified state
+- If the query was about a brand, list EACH PRODUCT from this brand individually and their legal status in the specified state
 - If specific products were found, clearly state their legal status
 - Present the information using the format specified above, with the LEGAL STATUS header and ingredient information
 - For hemp products (especially Galaxy Treats and MCRO), explain the specific variant mentioned (Delta-8, Delta-9, etc.) and its legal status in the specified state
@@ -1043,3 +1075,4 @@ Use this information to answer the current question. This data comes directly fr
     );
   }
 });
+
