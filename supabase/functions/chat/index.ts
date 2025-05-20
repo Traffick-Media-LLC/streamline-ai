@@ -37,7 +37,7 @@ const PRODUCT_CATEGORIES = {
 
 // Function to identify the likely product category from a message
 function identifyProductCategory(message) {
-  message = message.toLowerCase();
+  message = message?.toLowerCase() || '';
   
   for (const [category, keywords] of Object.entries(PRODUCT_CATEGORIES)) {
     if (keywords.some(keyword => message.includes(keyword))) {
@@ -606,10 +606,25 @@ serve(async (req) => {
   
   try {
     const requestTime = new Date();
-    const reqJson = await req.json();
+    let reqJson;
     
-    // Log the raw request for debugging
-    console.log('Raw request received:', JSON.stringify(reqJson));
+    try {
+      reqJson = await req.json();
+      // Log the raw request for debugging
+      console.log('Raw request received:', JSON.stringify(reqJson));
+    } catch (parseError) {
+      console.error("Error parsing request JSON:", parseError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid JSON in request body',
+          details: parseError.message
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
     
     // Handle both possible parameter names (message or content)
     const userMessage = reqJson.content || reqJson.message;
@@ -635,9 +650,38 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
+    // Check if required environment variables are available
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing required environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Server configuration error',
+          details: 'Missing required environment variables'
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
     // Use the Supabase JS client in Deno
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    try {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
+      var supabase = createClient(supabaseUrl, supabaseServiceKey);
+    } catch (supabaseError) {
+      console.error('Error initializing Supabase client:', supabaseError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to initialize database client',
+          details: supabaseError.message
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
     
     // Special mode for health check
     if (reqJson && reqJson.mode === "health_check") {
@@ -647,31 +691,41 @@ serve(async (req) => {
       );
     }
     
-    await logEvent(supabase, requestId, 'chat_request_received', 'chat_function', 'Chat request received', {
-      chatId,
-      hasHistory: chatHistory && chatHistory.length > 0
-    });
+    try {
+      await logEvent(supabase, requestId, 'chat_request_received', 'chat_function', 'Chat request received', {
+        chatId,
+        hasHistory: chatHistory && chatHistory.length > 0
+      });
+    } catch (logError) {
+      console.error('Error logging chat request:', logError);
+      // Continue execution even if logging fails
+    }
     
     // Check if the message is asking about product legality
     let productLegalityData = null;
     
-    if (isProductLegalityQuestion(userMessage)) {
-      const stateName = extractStateFromMessage(userMessage);
-      const productOrBrand = await extractProductOrBrandFromMessage(supabase, userMessage, requestId);
-      
-      if (stateName && productOrBrand) {
-        await logEvent(supabase, requestId, 'product_legality_check', 'chat_function', 
-          `Checking legality for "${productOrBrand}" in "${stateName}"`, {
-            state: stateName,
-            productOrBrand: productOrBrand
-        });
+    try {
+      if (isProductLegalityQuestion(userMessage)) {
+        const stateName = extractStateFromMessage(userMessage);
+        const productOrBrand = await extractProductOrBrandFromMessage(supabase, userMessage, requestId);
         
-        // Query the database for this product-state combination
-        productLegalityData = await checkProductLegality(supabase, stateName, productOrBrand, requestId);
-        
-        await logEvent(supabase, requestId, 'product_legality_result', 'chat_function', 
-          'Product legality check completed', productLegalityData);
+        if (stateName && productOrBrand) {
+          await logEvent(supabase, requestId, 'product_legality_check', 'chat_function', 
+            `Checking legality for "${productOrBrand}" in "${stateName}"`, {
+              state: stateName,
+              productOrBrand: productOrBrand
+          });
+          
+          // Query the database for this product-state combination
+          productLegalityData = await checkProductLegality(supabase, stateName, productOrBrand, requestId);
+          
+          await logEvent(supabase, requestId, 'product_legality_result', 'chat_function', 
+            'Product legality check completed', productLegalityData);
+        }
       }
+    } catch (legalityCheckError) {
+      console.error('Error checking product legality:', legalityCheckError);
+      // Continue execution even if legality check fails
     }
     
     // Prepare messages for OpenAI
@@ -761,8 +815,12 @@ Use this information to answer the current question. This data comes directly fr
         }))
       );
       
-      await logEvent(supabase, requestId, 'chat_history_processed', 'chat_function', 
-        `Processed ${chatHistory.length} chat history messages`);
+      try {
+        await logEvent(supabase, requestId, 'chat_history_processed', 'chat_function', 
+          `Processed ${chatHistory.length} chat history messages`);
+      } catch (logError) {
+        console.error('Error logging chat history processing:', logError);
+      }
     }
     
     // Add current user message
@@ -774,16 +832,26 @@ Use this information to answer the current question. This data comes directly fr
     // Get OpenAI API key
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {
-      throw new Error('OpenAI API key is missing');
+      console.error('OpenAI API key is missing');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Server configuration error: API key is missing',
+          message: "I'm sorry, but I'm unable to process your request right now due to a configuration issue. Please contact your IT administrator."
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
     
     // Call OpenAI API
-    await logEvent(supabase, requestId, 'openai_request_started', 'chat_function', 
-      'Sending request to OpenAI');
-      
-    const openaiStartTime = Date.now();
-    
     try {
+      await logEvent(supabase, requestId, 'openai_request_started', 'chat_function', 
+        'Sending request to OpenAI');
+        
+      const openaiStartTime = Date.now();
+      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -802,20 +870,53 @@ Use this information to answer the current question. This data comes directly fr
       
       if (!response.ok) {
         const errorText = await response.text();
-        await logEvent(supabase, requestId, 'openai_request_failed', 'chat_function', 
-          `OpenAI request failed: ${errorText}`, { status: response.status });
-          
-        throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
+        try {
+          await logEvent(supabase, requestId, 'openai_request_failed', 'chat_function', 
+            `OpenAI request failed: ${errorText}`, { status: response.status });
+        } catch (logError) {
+          console.error('Error logging OpenAI failure:', logError);
+        }
+        
+        console.error(`OpenAI API error (${response.status}): ${errorText}`);
+        return new Response(
+          JSON.stringify({ 
+            error: `Error from AI service: ${response.status}`,
+            message: "I'm sorry, but I'm unable to process your request right now. Please try again later."
+          }),
+          { 
+            status: 502, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
       }
       
       const data = await response.json();
       
-      await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 
-        'Received response from OpenAI', { 
-          responseTime, 
-          tokens: data.usage?.total_tokens || 0,
-          model: data.model
-        });
+      if (!data || !data.choices || !data.choices[0] || !data.choices[0].message) {
+        console.error("Invalid or empty response from OpenAI:", data);
+        return new Response(
+          JSON.stringify({ 
+            error: "Invalid response from AI service",
+            message: "I received an invalid response. Please try again."
+          }),
+          { 
+            status: 502, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+      
+      try {
+        await logEvent(supabase, requestId, 'openai_response_received', 'chat_function', 
+          'Received response from OpenAI', { 
+            responseTime, 
+            tokens: data.usage?.total_tokens || 0,
+            model: data.model
+          });
+      } catch (logError) {
+        console.error('Error logging OpenAI response:', logError);
+        // Continue execution even if logging fails
+      }
       
       // Respond with the AI assistant's message and metadata
       const responseData = {
@@ -837,10 +938,24 @@ Use this information to answer the current question. This data comes directly fr
       );
     } catch (openAiError) {
       console.error('Error calling OpenAI API:', openAiError);
-      await logEvent(supabase, requestId, 'openai_request_exception', 'chat_function', 
-        `Exception calling OpenAI: ${openAiError.message}`);
-        
-      throw openAiError;
+      
+      try {
+        await logEvent(supabase, requestId, 'openai_request_exception', 'chat_function', 
+          `Exception calling OpenAI: ${openAiError.message}`);
+      } catch (logError) {
+        console.error('Error logging OpenAI exception:', logError);
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'Error processing AI request',
+          message: "I'm sorry, but there was a problem processing your request. Please try again."
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
     
   } catch (error) {
@@ -848,7 +963,8 @@ Use this information to answer the current question. This data comes directly fr
     
     return new Response(
       JSON.stringify({ 
-        error: `Error processing your request: ${error.message}` 
+        error: `Error processing your request: ${error.message}`,
+        message: "I'm sorry, but something went wrong. Please try again."
       }),
       { 
         status: 500,
