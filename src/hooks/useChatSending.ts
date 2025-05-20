@@ -61,10 +61,17 @@ export const useChatSending = (
         const chat = getCurrentChat();
         const messages = chat?.messages || [];
         
-        // Send to edge function - ensure we're sending the content parameter matching what the edge function expects
+        console.log("Sending request to edge function with:", {
+          content,
+          messages: messages.map(msg => ({ role: msg.role, content: msg.content })),
+          chatId,
+          requestId
+        });
+        
+        // Send to edge function
         const { data, error } = await supabase.functions.invoke('chat', {
           body: { 
-            content, // Use 'content' instead of 'message' to match what the edge function expects
+            content, // This matches what the edge function expects
             messages: messages.map(msg => ({
               role: msg.role,
               content: msg.content
@@ -75,6 +82,7 @@ export const useChatSending = (
         });
         
         if (error) {
+          console.error("Error from edge function:", error);
           await errorTracker.logError(
             "Error from edge function", 
             error,
@@ -84,6 +92,19 @@ export const useChatSending = (
           toast.error("Failed to get AI response");
           setIsLoadingResponse(false);
           return { success: false, error: error.message };
+        }
+        
+        if (!data || !data.message) {
+          console.error("Invalid response from edge function:", data);
+          await errorTracker.logError(
+            "Invalid response from edge function", 
+            new Error("No message returned"),
+            { chatId, response: data }
+          );
+          
+          toast.error("Received an invalid response");
+          setIsLoadingResponse(false);
+          return { success: false, error: "Invalid response format" };
         }
         
         // Create assistant message
@@ -136,6 +157,7 @@ export const useChatSending = (
         
         return { success: true };
       } catch (error) {
+        console.error("Exception in AI request:", error);
         await errorTracker.logError(
           "Exception in AI request",
           error,
@@ -148,6 +170,7 @@ export const useChatSending = (
         setIsLoadingResponse(false);
       }
     } catch (error) {
+      console.error("Exception in sendMessage:", error);
       await errorTracker.logError(
         "Exception in sendMessage",
         error
