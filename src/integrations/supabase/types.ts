@@ -315,21 +315,33 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          ingredient: string
+          ingredient1: string
+          ingredient2: string | null
+          ingredient3: string | null
+          ingredient4: string | null
+          ingredient5: string | null
           product_id: number | null
           product_type: string
         }
         Insert: {
           created_at?: string
           id?: string
-          ingredient: string
+          ingredient1: string
+          ingredient2?: string | null
+          ingredient3?: string | null
+          ingredient4?: string | null
+          ingredient5?: string | null
           product_id?: number | null
           product_type: string
         }
         Update: {
           created_at?: string
           id?: string
-          ingredient?: string
+          ingredient1?: string
+          ingredient2?: string | null
+          ingredient3?: string | null
+          ingredient4?: string | null
+          ingredient5?: string | null
           product_id?: number | null
           product_type?: string
         }

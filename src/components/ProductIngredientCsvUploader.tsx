@@ -11,7 +11,11 @@ type IngredientCsvEntry = {
   Brand: string;
   "Product Type": string;
   Product: string;
-  Ingredient: string;
+  "Ingredient 1": string;
+  "Ingredient 2"?: string;
+  "Ingredient 3"?: string;
+  "Ingredient 4"?: string;
+  "Ingredient 5"?: string;
 };
 
 const batchSize = 20; // Process in batches to avoid overwhelming the database
@@ -41,16 +45,16 @@ export default function ProductIngredientCsvUploader({ onComplete }: { onComplet
         complete: async (results) => {
           try {
             const entries = results.data.filter(row => 
-              row.Brand && row["Product Type"] && row.Product && row.Ingredient
+              row.Brand && row["Product Type"] && row.Product && row["Ingredient 1"]
             );
             
             if (!entries.length) {
-              toast.error("No valid entries found in the CSV. Ensure it has Brand, Product Type, Product, and Ingredient columns.");
+              toast.error("No valid entries found in the CSV. Ensure it has Brand, Product Type, Product, and Ingredient 1 columns.");
               setUploading(false);
               return;
             }
 
-            // Process data by product to handle multiple ingredients
+            // Process data by product
             const productMap = new Map();
             
             // Group by product
@@ -61,14 +65,14 @@ export default function ProductIngredientCsvUploader({ onComplete }: { onComplet
                   brand: entry.Brand,
                   product: entry.Product,
                   productType: entry["Product Type"],
-                  ingredients: [entry.Ingredient]
+                  ingredients: {
+                    ingredient1: entry["Ingredient 1"],
+                    ingredient2: entry["Ingredient 2"] || null,
+                    ingredient3: entry["Ingredient 3"] || null,
+                    ingredient4: entry["Ingredient 4"] || null,
+                    ingredient5: entry["Ingredient 5"] || null,
+                  }
                 });
-              } else {
-                // Add ingredient to existing product
-                const product = productMap.get(key);
-                if (!product.ingredients.includes(entry.Ingredient)) {
-                  product.ingredients.push(entry.Ingredient);
-                }
               }
             });
             
@@ -133,30 +137,46 @@ export default function ProductIngredientCsvUploader({ onComplete }: { onComplet
                     productId = existingProducts[0].id;
                   }
                   
-                  // Now add each ingredient
-                  for (const ingredient of product.ingredients) {
-                    // Check if ingredient already exists for this product
-                    const { data: existingIngredient, error: ingredientError } = await supabase
-                      .from("product_ingredients")
-                      .select("id")
-                      .eq("product_id", productId)
-                      .ilike("ingredient", ingredient)
-                      .limit(1);
-                      
-                    if (ingredientError) throw ingredientError;
+                  // Check if product ingredients already exist
+                  const { data: existingIngredient, error: ingredientError } = await supabase
+                    .from("product_ingredients")
+                    .select("id")
+                    .eq("product_id", productId)
+                    .limit(1);
                     
-                    if (existingIngredient?.length === 0) {
-                      // Add ingredient
-                      const { error: createIngredientError } = await supabase
-                        .from("product_ingredients")
-                        .insert({
-                          product_id: productId,
-                          product_type: product.productType,
-                          ingredient: ingredient
-                        });
-                        
-                      if (createIngredientError) throw createIngredientError;
-                    }
+                  if (ingredientError) throw ingredientError;
+                  
+                  // Insert or update product ingredients
+                  if (existingIngredient?.length === 0) {
+                    // Add new ingredients
+                    const { error: createIngredientError } = await supabase
+                      .from("product_ingredients")
+                      .insert({
+                        product_id: productId,
+                        product_type: product.productType,
+                        ingredient1: product.ingredients.ingredient1,
+                        ingredient2: product.ingredients.ingredient2,
+                        ingredient3: product.ingredients.ingredient3,
+                        ingredient4: product.ingredients.ingredient4,
+                        ingredient5: product.ingredients.ingredient5
+                      });
+                      
+                    if (createIngredientError) throw createIngredientError;
+                  } else {
+                    // Update existing ingredients
+                    const { error: updateIngredientError } = await supabase
+                      .from("product_ingredients")
+                      .update({
+                        product_type: product.productType,
+                        ingredient1: product.ingredients.ingredient1,
+                        ingredient2: product.ingredients.ingredient2,
+                        ingredient3: product.ingredients.ingredient3,
+                        ingredient4: product.ingredients.ingredient4,
+                        ingredient5: product.ingredients.ingredient5
+                      })
+                      .eq("id", existingIngredient[0].id);
+                      
+                    if (updateIngredientError) throw updateIngredientError;
                   }
                   
                   successCount++;
@@ -213,7 +233,8 @@ export default function ProductIngredientCsvUploader({ onComplete }: { onComplet
           </Button>
         </div>
         <p className="text-xs mt-1 text-muted-foreground">
-          Required columns: <span className="font-mono">Brand</span>, <span className="font-mono">Product Type</span>, <span className="font-mono">Product</span>, <span className="font-mono">Ingredient</span>
+          Required columns: <span className="font-mono">Brand</span>, <span className="font-mono">Product Type</span>, <span className="font-mono">Product</span>, <span className="font-mono">Ingredient 1</span> 
+          (optional: <span className="font-mono">Ingredient 2-5</span>)
         </p>
       </div>
     </div>

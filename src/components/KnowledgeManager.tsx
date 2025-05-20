@@ -390,9 +390,10 @@ export default function KnowledgeManager() {
                   <li><span className="font-mono">Brand</span> - The brand name of the product</li>
                   <li><span className="font-mono">Product Type</span> - Category or type of the product</li>
                   <li><span className="font-mono">Product</span> - The specific product name</li>
-                  <li><span className="font-mono">Ingredient</span> - Ingredient in the product</li>
+                  <li><span className="font-mono">Ingredient 1</span> - Primary ingredient (required)</li>
+                  <li><span className="font-mono">Ingredient 2-5</span> - Additional ingredients (optional)</li>
                 </ul>
-                <p className="mt-2">Products with multiple ingredients should have multiple rows with the same Brand/Product but different Ingredients.</p>
+                <p className="mt-2">Each row should contain one product with up to 5 ingredients. The first ingredient is required.</p>
               </div>
             </div>
           </div>
