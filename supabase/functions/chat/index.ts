@@ -139,6 +139,7 @@ function extractProductVariant(message) {
     'gummies': [/gummies/i, /gummy/i, /edible/i],
     'disposable': [/disposable/i, /vape/i, /cart/i, /cartridge/i],
     'tincture': [/tincture/i, /oil/i, /drops/i],
+    'pouches': [/pouches/i, /pouch/i],
   };
   
   for (const [productType, patterns] of Object.entries(productTypes)) {
@@ -150,6 +151,118 @@ function extractProductVariant(message) {
   return null;
 }
 
+// NEW: Function to identify brands by product type for clarification
+async function identifyBrandsForProductType(supabase, productType, requestId) {
+  try {
+    // First, try to find product type in the products table
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('id, name, brand_id, brands(id, name, logo_url)')
+      .ilike('name', `%${productType}%`);
+    
+    if (productsError) {
+      console.error('Error fetching products by type:', productsError);
+      await logEvent(supabase, requestId, 'product_type_lookup_error', 'identify_brands_for_product_type', 
+        'Failed to fetch products by type', { error: productsError.message, productType });
+      return { brands: [], uniqueBrand: null, products: [] };
+    }
+    
+    if (!products || products.length === 0) {
+      // Try looking in product_ingredients for product type
+      const { data: ingredients, error: ingredientsError } = await supabase
+        .from('product_ingredients')
+        .select('product_id, product_type')
+        .ilike('product_type', `%${productType}%`);
+        
+      if (ingredientsError || !ingredients || ingredients.length === 0) {
+        await logEvent(supabase, requestId, 'product_type_lookup', 'identify_brands_for_product_type', 
+          'No products found for product type', { productType });
+        return { brands: [], uniqueBrand: null, products: [] };
+      }
+      
+      // Get products by their IDs
+      const productIds = ingredients.map(ing => ing.product_id).filter(id => id !== null);
+      if (productIds.length === 0) {
+        return { brands: [], uniqueBrand: null, products: [] };
+      }
+      
+      const { data: typeProducts, error: typeProductsError } = await supabase
+        .from('products')
+        .select('id, name, brand_id, brands(id, name, logo_url)')
+        .in('id', productIds);
+        
+      if (typeProductsError || !typeProducts || typeProducts.length === 0) {
+        return { brands: [], uniqueBrand: null, products: [] };
+      }
+      
+      // Extract unique brands
+      const brandMap = new Map();
+      typeProducts.forEach(product => {
+        if (product.brands) {
+          brandMap.set(product.brands.id, { 
+            name: product.brands.name,
+            logo: product.brands.logo_url
+          });
+        }
+      });
+      
+      const brands = Array.from(brandMap.values()).map(b => b.name);
+      const uniqueBrand = brands.length === 1 ? {
+        name: brands[0],
+        logo: Array.from(brandMap.values())[0].logo
+      } : null;
+      
+      await logEvent(supabase, requestId, 'product_type_lookup', 'identify_brands_for_product_type', 
+        `Found ${brands.length} brands for product type`, { 
+          productType, 
+          brands, 
+          productCount: typeProducts.length 
+      });
+      
+      return { 
+        brands, 
+        uniqueBrand, 
+        products: typeProducts 
+      };
+    } else {
+      // Extract unique brands from products
+      const brandMap = new Map();
+      products.forEach(product => {
+        if (product.brands) {
+          brandMap.set(product.brands.id, { 
+            name: product.brands.name,
+            logo: product.brands.logo_url
+          });
+        }
+      });
+      
+      const brands = Array.from(brandMap.values()).map(b => b.name);
+      const uniqueBrand = brands.length === 1 ? {
+        name: brands[0],
+        logo: Array.from(brandMap.values())[0].logo
+      } : null;
+      
+      await logEvent(supabase, requestId, 'product_type_lookup', 'identify_brands_for_product_type', 
+        `Found ${brands.length} brands for product type`, { 
+          productType, 
+          brands, 
+          productCount: products.length 
+      });
+      
+      return { 
+        brands, 
+        uniqueBrand, 
+        products 
+      };
+    }
+  } catch (error) {
+    console.error('Error in identifyBrandsForProductType:', error);
+    await logEvent(supabase, requestId, 'product_type_lookup_error', 'identify_brands_for_product_type', 
+      'Exception in identifyBrandsForProductType', { error: error.message, productType });
+    return { brands: [], uniqueBrand: null, products: [] };
+  }
+}
+
 // Enhanced function to extract product or brand from a message with special handling for hemp brands
 async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   // Safety check to prevent errors if message is undefined or null
@@ -157,6 +270,42 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   
   const messageLower = message.toLowerCase();
   const productVariant = extractProductVariant(message);
+  
+  // NEW: Handle common product type queries like "pouches" or "disposables"
+  if (productVariant && ['pouches', 'disposable', 'gummies'].includes(productVariant)) {
+    // Check if this product type maps to specific brands
+    const brandInfo = await identifyBrandsForProductType(supabase, productVariant, requestId);
+    
+    if (brandInfo.uniqueBrand) {
+      // If only one brand makes this product type, we can be specific
+      await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+        `Mapped product type "${productVariant}" to unique brand: ${brandInfo.uniqueBrand.name}`, {
+          productType: productVariant,
+          brand: brandInfo.uniqueBrand.name
+      });
+      
+      return {
+        brand: brandInfo.uniqueBrand.name,
+        variant: productVariant,
+        fromProductType: true,
+        brandLogo: brandInfo.uniqueBrand.logo
+      };
+    } else if (brandInfo.brands.length > 1) {
+      // If multiple brands make this product type, we need clarification
+      await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+        `Product type "${productVariant}" maps to multiple brands, needs clarification`, {
+          productType: productVariant,
+          brands: brandInfo.brands
+      });
+      
+      return {
+        productType: productVariant,
+        needsClarification: true,
+        possibleBrands: brandInfo.brands,
+        variant: productVariant
+      };
+    }
+  }
   
   try {
     // First, fetch common product names from the database to look for
@@ -392,10 +541,26 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
     
     const stateId = stateData[0].id;
     
+    // NEW: Handle product type clarification cases
+    if (productNameOrBrand && typeof productNameOrBrand === 'object' && productNameOrBrand.needsClarification) {
+      return {
+        found: true,
+        needsClarification: true,
+        state: stateName,
+        productType: productNameOrBrand.productType,
+        possibleBrands: productNameOrBrand.possibleBrands,
+        message: `Multiple brands make ${productNameOrBrand.productType}. Please specify which brand you're inquiring about.`,
+        source: 'multiple_brands',
+        date: new Date().toISOString().split('T')[0]
+      };
+    }
+    
     // Handle different types of product identification
     let brandName = null;
     let productVariant = null;
     let productCategory = null;
+    let fromProductType = false;
+    let brandLogo = null;
     
     // Extract brand and variant information
     if (typeof productNameOrBrand === 'object') {
@@ -407,6 +572,12 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       }
       if (productNameOrBrand.category) {
         productCategory = productNameOrBrand.category;
+      }
+      if (productNameOrBrand.fromProductType) {
+        fromProductType = true;
+      }
+      if (productNameOrBrand.brandLogo) {
+        brandLogo = productNameOrBrand.brandLogo;
       }
     } else if (typeof productNameOrBrand === 'string') {
       brandName = productNameOrBrand;
@@ -424,7 +595,8 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         stateId, 
         brandName, 
         productVariant,
-        isHempBrand 
+        isHempBrand,
+        fromProductType
       });
     
     // If we have a brand name, look for that brand's products
@@ -444,6 +616,12 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           source: 'no_match',
           date: new Date().toISOString().split('T')[0]
         };
+      }
+      
+      // If fromProductType is true, add context about how we identified the brand
+      let productTypeContext = '';
+      if (fromProductType && productVariant) {
+        productTypeContext = ` We identified Juice Head as the maker of ${productVariant}.`;
       }
       
       // Get all products for this brand
@@ -467,11 +645,12 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           legal: false,
           state: stateName,
           brand: brandData[0].name,
-          brandLogo: brandData[0].logo_url,
-          message: `No products found for brand "${brandData[0].name}"${productVariant ? ` matching "${productVariant}"` : ''}.`,
+          brandLogo: brandData[0].logo_url || brandLogo,
+          message: `No products found for brand "${brandData[0].name}"${productVariant ? ` matching "${productVariant}"` : ''}.${productTypeContext}`,
           source: 'brand_database',
           date: new Date().toISOString().split('T')[0],
-          isHempBrand: isHempBrand
+          isHempBrand: isHempBrand,
+          fromProductType: fromProductType
         };
       }
       
@@ -513,7 +692,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             type: ingredientInfo.product_type || 'Unknown',
             ingredients: ingredientInfo.ingredients || [],
             brand: product.brands?.name || brandData[0].name,
-            brandLogo: product.brands?.logo_url || brandData[0].logo_url
+            brandLogo: product.brands?.logo_url || brandData[0].logo_url || brandLogo
           });
         } else {
           // Include product even without ingredients
@@ -523,7 +702,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
             type: 'Unknown',
             ingredients: [],
             brand: product.brands?.name || brandData[0].name,
-            brandLogo: product.brands?.logo_url || brandData[0].logo_url
+            brandLogo: product.brands?.logo_url || brandData[0].logo_url || brandLogo
           });
         }
       }
@@ -550,6 +729,12 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         }
       }
       
+      // Add context about how we derived the brand from product type if relevant
+      let derivedFromContext = '';
+      if (fromProductType && productVariant) {
+        derivedFromContext = `\n\nNote: ${brandData[0].name} was identified as the primary manufacturer of ${productVariant} based on our database.`;
+      }
+      
       // Process results based on what we found
       if (legalProducts.length > 0) {
         // Format the product names as a list
@@ -570,14 +755,15 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           legal: true,
           state: stateName,
           brand: brandData[0].name,
-          brandLogo: brandData[0].logo_url,
+          brandLogo: brandData[0].logo_url || brandLogo,
           legalProducts: legalProducts,
           illegalProducts: illegalProducts.length > 0 ? illegalProducts : undefined,
           allIngredients: Array.from(allLegalIngredients),
-          message: `The following products from ${brandData[0].name} are legal in ${stateName}: ${legalProductNames}.`,
+          message: `The following products from ${brandData[0].name} are legal in ${stateName}: ${legalProductNames}.${derivedFromContext}`,
           category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
           source: 'brand_database',
-          date: new Date().toISOString().split('T')[0]
+          date: new Date().toISOString().split('T')[0],
+          fromProductType: fromProductType
         };
       } else {
         return {
@@ -585,12 +771,13 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           legal: false,
           state: stateName,
           brand: brandData[0].name,
-          brandLogo: brandData[0].logo_url,
+          brandLogo: brandData[0].logo_url || brandLogo,
           illegalProducts: illegalProducts,
-          message: `No products from ${brandData[0].name}${productVariant ? ` matching "${productVariant}"` : ''} are legal in ${stateName}.`,
+          message: `No products from ${brandData[0].name}${productVariant ? ` matching "${productVariant}"` : ''} are legal in ${stateName}.${derivedFromContext}`,
           category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
           source: 'brand_database',
-          date: new Date().toISOString().split('T')[0]
+          date: new Date().toISOString().split('T')[0],
+          fromProductType: fromProductType
         };
       }
     }
@@ -866,6 +1053,10 @@ Key product categories:
 - E-liquids: Liquid nicotine for refillable vape devices
 - Hemp products: Products containing hemp-derived cannabinoids (Delta-9, Delta-8, THCP, etc.) including both edibles and disposables
 
+IMPORTANT ABOUT PRODUCT TYPES:
+- When a user asks about a generic product type like "pouches" without specifying a brand, assume they're asking about Juice Head pouches, as this is the only brand that makes pouches according to our database.
+- If the user asks about "disposables" without specifying a brand, ask for clarification since multiple brands make disposables.
+
 FORMAT FOR PRODUCT LEGALITY RESPONSES:
 Use this structure:
 \`\`\`
@@ -881,13 +1072,25 @@ Primary Ingredients: [Main Ingredients]
 [Any relevant regulatory context about why these ingredients are regulated]
 \`\`\`
 
+When clarification is needed:
+If a user asks about a product type that could be made by multiple brands (like "disposables"), ask which specific brand they're referring to before providing an answer. For example: "Multiple brands make disposables. Are you asking about Galaxy Treats disposables, MCRO disposables, or another brand?"
+
 Always cite your sources where appropriate (e.g., 'According to our State Map database from [DATE]...' or 'Based on the Knowledge Base...').
 
 Answer in a professional, clear, and helpful tone. If you cannot find an answer from the available sources, politely let the user know and suggest submitting a request via the Marketing Request Form or contacting the appropriate department.`;
 
     // If we have product legality data, append it to the system prompt
     if (productLegalityData) {
-      baseSystemPrompt += `\n\nIMPORTANT: I've queried our product legality database and found the following information about the user's question:
+      // Check if clarification is needed
+      if (productLegalityData.needsClarification) {
+        baseSystemPrompt += `\n\nIMPORTANT: I've identified that the user is asking about ${productLegalityData.productType}, but multiple brands make this product type:
+${JSON.stringify(productLegalityData.possibleBrands, null, 2)}
+
+You should ask the user to clarify which brand they're referring to. For example: "I see you're asking about ${productLegalityData.productType}. Could you please clarify which brand you're interested in? Our database shows that ${productLegalityData.possibleBrands.join(', ')} all make ${productLegalityData.productType} products."
+
+DO NOT provide specific legality information until the brand is clarified.`;
+      } else {
+        baseSystemPrompt += `\n\nIMPORTANT: I've queried our product legality database and found the following information about the user's question:
 ${JSON.stringify(productLegalityData, null, 2)}
 
 Use this information to answer the current question. This data comes directly from our regulatory database and should be considered the final authority on product legality by state. When responding:
@@ -897,6 +1100,12 @@ Use this information to answer the current question. This data comes directly fr
 - For hemp products (especially Galaxy Treats and MCRO), explain the specific variant mentioned (Delta-8, Delta-9, etc.) and its legal status in the specified state
 - Use the ingredient information to explain WHY certain products are regulated differently by state
 - Always include the date of the database information when available`;
+
+        // If fromProductType is true, add special handling instructions
+        if (productLegalityData.fromProductType) {
+          baseSystemPrompt += `\n\nNOTE: The user asked about a generic product type (${productLegalityData.brand} ${productLegalityData.variant || 'products'}), and our database identified ${productLegalityData.brand} as the primary manufacturer of this product type. Make sure to acknowledge this in your response, e.g., "I see you're asking about ${productLegalityData.variant || 'products'} in ${productLegalityData.state}. According to our database, ${productLegalityData.brand} is the primary brand that makes these products."`;
+        }
+      }
     }
 
     messages.push({
@@ -1075,4 +1284,3 @@ Use this information to answer the current question. This data comes directly fr
     );
   }
 });
-

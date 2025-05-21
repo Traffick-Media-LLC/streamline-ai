@@ -138,3 +138,83 @@ export const getProductsByBrand = async (brandTitle: string) => {
     return [];
   }
 };
+
+// NEW: Identify brands by product type
+export const identifyBrandsByProductType = async (productType: string): Promise<{
+  brands: string[],
+  uniqueBrand: string | null,
+  products: any[]
+}> => {
+  try {
+    // First, try to find product type in the products table
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('id, name, brand_id, brands(id, name, logo_url)')
+      .ilike('name', `%${productType}%`);
+    
+    if (productsError) {
+      console.error('Error fetching products by type:', productsError);
+      return { brands: [], uniqueBrand: null, products: [] };
+    }
+    
+    if (!products || products.length === 0) {
+      // If no direct products found, check product_ingredients for product type
+      const { data: ingredients, error: ingredientsError } = await supabase
+        .from('product_ingredients')
+        .select('product_id, product_type')
+        .eq('product_type', productType.toLowerCase());
+        
+      if (ingredientsError || !ingredients || ingredients.length === 0) {
+        return { brands: [], uniqueBrand: null, products: [] };
+      }
+      
+      // Get products by their IDs
+      const productIds = ingredients.map(ing => ing.product_id);
+      const { data: typeProducts, error: typeProductsError } = await supabase
+        .from('products')
+        .select('id, name, brand_id, brands(id, name, logo_url)')
+        .in('id', productIds);
+        
+      if (typeProductsError || !typeProducts || typeProducts.length === 0) {
+        return { brands: [], uniqueBrand: null, products: [] };
+      }
+      
+      // Extract unique brands
+      const brandMap = new Map();
+      typeProducts.forEach(product => {
+        if (product.brands) {
+          brandMap.set(product.brands.id, product.brands.name);
+        }
+      });
+      
+      const brands = Array.from(brandMap.values());
+      const uniqueBrand = brands.length === 1 ? brands[0] : null;
+      
+      return { 
+        brands, 
+        uniqueBrand, 
+        products: typeProducts 
+      };
+    } else {
+      // Extract unique brands from products
+      const brandMap = new Map();
+      products.forEach(product => {
+        if (product.brands) {
+          brandMap.set(product.brands.id, product.brands.name);
+        }
+      });
+      
+      const brands = Array.from(brandMap.values());
+      const uniqueBrand = brands.length === 1 ? brands[0] : null;
+      
+      return { 
+        brands, 
+        uniqueBrand, 
+        products 
+      };
+    }
+  } catch (error) {
+    console.error('Error in identifyBrandsByProductType:', error);
+    return { brands: [], uniqueBrand: null, products: [] };
+  }
+};
