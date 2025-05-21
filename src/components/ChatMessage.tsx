@@ -119,6 +119,18 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
     );
   };
 
+  // Improved message rendering - format content to handle special message formats
+  const renderFormattedContent = () => {
+    const content = message.content;
+    
+    // Check if this is our special formatted response (without the bold header)
+    if (!isUser) {
+      return renderTextWithLinks(content);
+    }
+    
+    return renderTextWithLinks(content);
+  };
+
   return (
     <div className={`flex items-start ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -153,7 +165,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
             </form>
           ) : (
             <div className="text-[15px] font-normal leading-relaxed break-words whitespace-pre-wrap">
-              {renderTextWithLinks(message.content)}
+              {renderFormattedContent()}
             </div>
           )}
         </div>

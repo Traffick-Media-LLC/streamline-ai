@@ -85,10 +85,12 @@ export const useChatSending = (
           content,
           messages: messages.map(msg => ({ role: msg.role, content: msg.content })),
           chatId,
-          requestId
+          requestId,
+          // Add a flag to use the new concise format
+          useSimpleFormat: true
         });
         
-        // Send to edge function
+        // Send to edge function with the new flag
         const { data, error } = await supabase.functions.invoke('chat', {
           body: { 
             content: content,
@@ -97,7 +99,8 @@ export const useChatSending = (
               content: msg.content
             })),
             chatId,
-            requestId
+            requestId,
+            useSimpleFormat: true
           },
         });
         

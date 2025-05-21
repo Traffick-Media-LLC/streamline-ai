@@ -218,3 +218,4 @@ export const identifyBrandsByProductType = async (productType: string): Promise<
     return { brands: [], uniqueBrand: null, products: [] };
   }
 };
+
