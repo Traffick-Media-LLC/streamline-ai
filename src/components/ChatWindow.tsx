@@ -31,15 +31,25 @@ const ChatWindow = () => {
   
   const currentChat = getCurrentChat();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll when new messages arrive
+  // Enhanced auto-scroll when new messages arrive or when loading response
   useEffect(() => {
-    if (scrollRef.current && currentChat?.messages.length) {
-      setTimeout(() => {
+    if (scrollRef.current) {
+      // Use requestAnimationFrame to ensure DOM is updated before scrolling
+      requestAnimationFrame(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-      }, 100);
+      });
     }
-  }, [currentChat?.messages.length]);
+  }, [currentChat?.messages.length, isLoadingResponse]);
+
+  // Also scroll when chat is initially loaded
+  useEffect(() => {
+    if (currentChat && currentChat.messages.length > 0 && scrollRef.current) {
+      // Immediate scroll on initial load
+      scrollRef.current.scrollIntoView({ block: "end" });
+    }
+  }, [currentChatId]);
 
   // Clear chat when component is mounted
   useEffect(() => {
@@ -147,7 +157,7 @@ const ChatWindow = () => {
   }
 
   return <div className="flex-1 h-full overflow-hidden flex flex-col">
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="p-4 min-h-full">
           {currentChat?.messages.length === 0 ? <Animated type="fade" className="flex flex-col items-center justify-center h-full text-center">
               <p className="text-lg text-muted-foreground font-medium">
@@ -157,7 +167,7 @@ const ChatWindow = () => {
               {optimizedMessages.map(message => <Animated key={message.id} type={message.role === 'user' ? 'slide-in' : 'fade'} delay={message.animationDelay || 0} threshold={0.01}>
                   <ChatMessage message={message} />
                 </Animated>)}
-              <div ref={scrollRef} />
+              <div ref={scrollRef} className="h-1" />
             </div>}
           {isLoadingResponse && <Animated type="fade">
               <TypingIndicator />

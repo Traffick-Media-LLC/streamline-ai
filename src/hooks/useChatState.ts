@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from "react";
-import { Chat } from "../types/chat";
+import { Chat, Message } from "../types/chat";
 import { logEvent } from "../utils/logging";
 
 export const useChatState = () => {
@@ -16,7 +16,7 @@ export const useChatState = () => {
   }, [currentChatId, chats]);
   
   // Add message to chat with proper state update
-  const addMessageToChat = useCallback((chatId: string, message: any) => {
+  const addMessageToChat = useCallback((chatId: string, message: Message) => {
     console.log("Adding message to chat:", chatId, message);
     
     setChats(prevChats => {
