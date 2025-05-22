@@ -1,3 +1,4 @@
+
 import { User } from "@supabase/supabase-js";
 
 export type SourceInfo = {
@@ -13,7 +14,8 @@ export type SourceInfo = {
   }>;
   message?: string;
   error?: string;
-  source: 'product_database' | 'brand_database' | 'no_match' | 'database_error';
+  ingredient?: string;
+  source: 'product_database' | 'brand_database' | 'internet_knowledge' | 'no_match' | 'database_error';
 };
 
 export type MessageMetadata = {
