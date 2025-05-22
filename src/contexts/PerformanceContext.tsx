@@ -30,10 +30,8 @@ export const PerformanceProvider = ({ children }: { children: React.ReactNode })
       // Dynamic import for route prefetching
       if (path.includes('map')) {
         await import('../pages/MapPage');
-      } else if (path.includes('chat')) {
-        await import('../pages/ChatPage');
       }
-      // Removed the reference to '../pages/ProfilePage' since it no longer exists
+      // Removed ChatPage import as the component no longer exists
     } catch (error) {
       console.error("Failed to prefetch route:", error);
     } finally {
