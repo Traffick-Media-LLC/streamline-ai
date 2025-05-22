@@ -125,7 +125,17 @@ serve(async (req) => {
 
       // Parse response from XAI
       const data = await response.json();
+      
+      // Safely access the response content with proper error handling
+      if (!data || !data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error("Invalid response format from XAI API: Missing choices or message");
+      }
+      
       const assistantResponse = data.choices[0].message.content;
+      
+      if (!assistantResponse) {
+        throw new Error("Empty response from XAI API");
+      }
       
       // Log completion time
       const endTime = Date.now();
