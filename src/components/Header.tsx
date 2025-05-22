@@ -103,20 +103,6 @@ const Header = () => {
                   State Map
                 </Link>
               </NavigationMenuItem>
-              
-              {isAuthenticated && (
-                <NavigationMenuItem>
-                  <Link 
-                    to="/chat" 
-                    className={cn(
-                      navigationMenuTriggerStyle(), 
-                      "text-black hover:text-black/80"
-                    )}
-                  >
-                    AI Chat
-                  </Link>
-                </NavigationMenuItem>
-              )}
 
               {isAuthenticated && (
                 <NavigationMenuItem>

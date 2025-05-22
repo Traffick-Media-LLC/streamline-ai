@@ -61,15 +61,6 @@ const HamburgerMenu = () => {
           </Link>
           {isAuthenticated && (
             <Link 
-              to="/chat" 
-              className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
-              onClick={handleLinkClick}
-            >
-              AI Chat
-            </Link>
-          )}
-          {isAuthenticated && (
-            <Link 
               to="/employees" 
               className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
               onClick={handleLinkClick}

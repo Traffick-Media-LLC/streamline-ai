@@ -15,7 +15,6 @@ import "./index.css";
 // Lazy load pages for code splitting and performance
 const HomePage = lazy(() => import("./pages/HomePage"));
 const MapPage = lazy(() => import("./pages/MapPage"));
-const ChatPage = lazy(() => import("./pages/ChatPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
@@ -110,14 +109,6 @@ const App = () => {
                                 element={
                                   <ProtectedRoute>
                                     <MapPage />
-                                  </ProtectedRoute>
-                                }
-                              />
-                              <Route 
-                                path="/chat" 
-                                element={
-                                  <ProtectedRoute>
-                                    <ChatPage />
                                   </ProtectedRoute>
                                 }
                               />
