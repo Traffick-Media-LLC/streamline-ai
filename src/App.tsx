@@ -20,6 +20,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const AuthPage = lazy(() => import("./pages/AuthPage"));
 const KnowledgeManager = lazy(() => import("./components/KnowledgeManager"));
 const EmployeeDirectory = lazy(() => import("./pages/EmployeeDirectory"));
+const ChatPage = lazy(() => import("./pages/ChatPage"));
 
 // Admin Pages
 const BrandsPage = lazy(() => import("./pages/admin/BrandsPage"));
@@ -109,6 +110,14 @@ const App = () => {
                                 element={
                                   <ProtectedRoute>
                                     <MapPage />
+                                  </ProtectedRoute>
+                                }
+                              />
+                              <Route 
+                                path="/chat" 
+                                element={
+                                  <ProtectedRoute>
+                                    <ChatPage />
                                   </ProtectedRoute>
                                 }
                               />

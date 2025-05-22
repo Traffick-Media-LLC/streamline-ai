@@ -60,13 +60,22 @@ const HamburgerMenu = () => {
             State Map
           </Link>
           {isAuthenticated && (
-            <Link 
-              to="/employees" 
-              className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
-              onClick={handleLinkClick}
-            >
-              Employee Directory
-            </Link>
+            <>
+              <Link 
+                to="/chat" 
+                className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
+                onClick={handleLinkClick}
+              >
+                Chat
+              </Link>
+              <Link 
+                to="/employees" 
+                className="text-base hover:text-primary transition-colors px-3 py-3 rounded-md hover:bg-accent"
+                onClick={handleLinkClick}
+              >
+                Employee Directory
+              </Link>
+            </>
           )}
           {isAdmin && (
             <Link 
