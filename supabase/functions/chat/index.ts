@@ -40,6 +40,16 @@ const PRODUCT_CATEGORIES = {
   KRATOM: ['kratom', 'mitragyna', 'speciosa', 'capsules', 'extract'],
 };
 
+// Known cannabinoid ingredients to search for
+const CANNABINOID_INGREDIENTS = [
+  'delta 8', 'delta-8', 'd8', 
+  'delta 9', 'delta-9', 'd9',
+  'delta 10', 'delta-10', 'd10',
+  'thca', 'thc-a', 'thc a',
+  'thcp', 'thc-p', 'thc p',
+  'hhc', 'phc', 'cbn', 'thcv'
+];
+
 // Function to identify the likely product category from a message
 function identifyProductCategory(message) {
   message = message?.toLowerCase() || '';
@@ -51,6 +61,23 @@ function identifyProductCategory(message) {
   }
   
   return null;
+}
+
+// Function to check if a message is asking about ingredient legality
+function isIngredientLegalityQuestion(message) {
+  if (!message) return false;
+  message = message.toLowerCase();
+  
+  // Check if message is asking about a specific cannabinoid ingredient
+  const hasIngredient = CANNABINOID_INGREDIENTS.some(ingredient => 
+    message.includes(ingredient.toLowerCase())
+  );
+  
+  // Check if it's a legality question
+  const legalityTerms = ['legal', 'allowed', 'banned', 'prohibited', 'permitted'];
+  const hasLegalityTerm = legalityTerms.some(term => message.includes(term));
+  
+  return hasIngredient && hasLegalityTerm;
 }
 
 // Improved function to check if a message is asking about product legality in a state
@@ -145,6 +172,34 @@ function extractProductVariant(message) {
   for (const [productType, patterns] of Object.entries(productTypes)) {
     if (patterns.some(pattern => pattern.test(messageLower))) {
       return productType;
+    }
+  }
+  
+  return null;
+}
+
+// NEW: Function to extract specific cannabinoid ingredient from message
+function extractCannabinoidIngredient(message) {
+  if (!message) return null;
+  
+  const messageLower = message.toLowerCase();
+  
+  // Define patterns for different cannabinoids
+  const cannabinoidPatterns = {
+    'delta-8': [/\bdelta[\s-]*8\b/i, /\bd8\b/i],
+    'delta-9': [/\bdelta[\s-]*9\b/i, /\bd9\b/i],
+    'delta-10': [/\bdelta[\s-]*10\b/i, /\bd10\b/i],
+    'thca': [/\bthc[\s-]*a\b/i],
+    'thcp': [/\bthc[\s-]*p\b/i],
+    'hhc': [/\bhhc\b/i],
+    'cbd': [/\bcbd\b/i],
+    'cbn': [/\bcbn\b/i],
+    'thcv': [/\bthcv\b/i]
+  };
+  
+  for (const [cannabinoid, patterns] of Object.entries(cannabinoidPatterns)) {
+    if (patterns.some(pattern => pattern.test(messageLower))) {
+      return cannabinoid;
     }
   }
   
@@ -263,6 +318,82 @@ async function identifyBrandsForProductType(supabase, productType, requestId) {
   }
 }
 
+// NEW: Function to search for products containing a specific ingredient
+async function findProductsWithIngredient(supabase, ingredient, requestId) {
+  try {
+    await logEvent(supabase, requestId, 'ingredient_search', 'find_products_with_ingredient', 
+      `Searching for products with ingredient: ${ingredient}`);
+    
+    // Search through product_ingredients table for this ingredient
+    const ingredientFields = ['ingredient1', 'ingredient2', 'ingredient3', 'ingredient4', 'ingredient5'];
+    let query = supabase.from('product_ingredients').select('product_id, product_type');
+    
+    // Build OR condition for all ingredient fields
+    let orConditions = [];
+    ingredientFields.forEach(field => {
+      orConditions.push(`${field}.ilike.%${ingredient}%`);
+    });
+    
+    // Apply the OR conditions
+    query = query.or(orConditions.join(','));
+    
+    const { data: ingredientMatches, error: ingredientError } = await query;
+    
+    if (ingredientError) {
+      console.error('Error searching for ingredient:', ingredientError);
+      await logEvent(supabase, requestId, 'ingredient_search_error', 'find_products_with_ingredient', 
+        'Failed to search for ingredient', { error: ingredientError.message, ingredient });
+      return { products: [], brands: [] };
+    }
+    
+    if (!ingredientMatches || ingredientMatches.length === 0) {
+      await logEvent(supabase, requestId, 'ingredient_search', 'find_products_with_ingredient', 
+        `No products found with ingredient: ${ingredient}`);
+      return { products: [], brands: [] };
+    }
+    
+    // Get product IDs that contain this ingredient
+    const productIds = ingredientMatches.map(match => match.product_id).filter(id => id !== null);
+    
+    if (productIds.length === 0) {
+      return { products: [], brands: [] };
+    }
+    
+    // Get full product details
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('id, name, brand_id, brands(id, name, logo_url)')
+      .in('id', productIds);
+      
+    if (productsError || !products || products.length === 0) {
+      await logEvent(supabase, requestId, 'ingredient_search', 'find_products_with_ingredient', 
+        `Error or no products found with ingredient: ${ingredient}`, 
+        { error: productsError?.message });
+      return { products: [], brands: [] };
+    }
+    
+    // Extract unique brands
+    const brandMap = new Map();
+    products.forEach(product => {
+      if (product.brands) {
+        brandMap.set(product.brands.id, product.brands.name);
+      }
+    });
+    
+    const brands = Array.from(brandMap.values());
+    
+    await logEvent(supabase, requestId, 'ingredient_search', 'find_products_with_ingredient', 
+      `Found ${products.length} products and ${brands.length} brands with ingredient: ${ingredient}`);
+    
+    return { products, brands };
+  } catch (error) {
+    console.error('Error in findProductsWithIngredient:', error);
+    await logEvent(supabase, requestId, 'ingredient_search_error', 'find_products_with_ingredient', 
+      'Exception in findProductsWithIngredient', { error: error.message, ingredient });
+    return { products: [], brands: [] };
+  }
+}
+
 // Enhanced function to extract product or brand from a message with special handling for hemp brands
 async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   // Safety check to prevent errors if message is undefined or null
@@ -270,6 +401,35 @@ async function extractProductOrBrandFromMessage(supabase, message, requestId) {
   
   const messageLower = message.toLowerCase();
   const productVariant = extractProductVariant(message);
+  
+  // Check for specific cannabinoid ingredient
+  const cannabinoidIngredient = extractCannabinoidIngredient(message);
+  if (cannabinoidIngredient) {
+    await logEvent(supabase, requestId, 'product_extraction', 'extract_product', 
+      `Identified cannabinoid ingredient: ${cannabinoidIngredient}`, 
+      { cannabinoid: cannabinoidIngredient });
+      
+    // Check if this is a legality question about an ingredient
+    if (isIngredientLegalityQuestion(message)) {
+      // Find products containing this ingredient
+      const { products, brands } = await findProductsWithIngredient(supabase, cannabinoidIngredient, requestId);
+      
+      if (products.length > 0) {
+        return {
+          ingredient: cannabinoidIngredient,
+          ingredientProducts: products,
+          ingredientBrands: brands,
+          isIngredientQuery: true
+        };
+      } else {
+        // Return ingredient info even if no products found
+        return {
+          ingredient: cannabinoidIngredient,
+          isIngredientQuery: true
+        };
+      }
+    }
+  }
   
   // NEW: Handle common product type queries like "pouches" or "disposables"
   if (productVariant && ['pouches', 'disposable', 'gummies'].includes(productVariant)) {
@@ -518,6 +678,74 @@ async function getIngredientRegulationsForState(supabase, ingredient, stateId, r
   }
 }
 
+// NEW: Function to search for internet knowledge when database information is insufficient
+async function getInternetKnowledge(supabase, query, requestId) {
+  try {
+    await logEvent(supabase, requestId, 'internet_knowledge_search', 'get_internet_knowledge', 
+      `Searching for internet knowledge: ${query}`);
+    
+    // Get OpenAI API key
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openAIApiKey) {
+      console.error('OpenAI API key is missing for internet knowledge search');
+      return null;
+    }
+    
+    // Call OpenAI API to get internet knowledge
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: `You are a knowledgeable assistant who provides accurate information about cannabinoid regulations in the United States. 
+                      When answering about hemp-derived products like Delta-8, Delta-9, THCA, etc., provide recent and factual information about legality by state.
+                      Focus on the specific state mentioned in the question.
+                      Your response should include:
+                      1. The legal status of the cannabinoid in the state
+                      2. Any specific regulations or restrictions
+                      3. Recent changes in legislation if relevant
+                      4. Be clear if information might be outdated or uncertain
+                      
+                      Format your response in a clear, concise manner without unnecessary text.`
+          },
+          { 
+            role: 'user', 
+            content: query 
+          }
+        ],
+        temperature: 0.3,  // Lower temperature for more factual responses
+        max_tokens: 800
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!data || !data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error('Invalid response from OpenAI for internet knowledge search:', data);
+      return null;
+    }
+    
+    await logEvent(supabase, requestId, 'internet_knowledge_received', 'get_internet_knowledge', 
+      'Received internet knowledge response');
+    
+    return {
+      knowledge: data.choices[0].message.content,
+      source: 'gpt-knowledge'
+    };
+  } catch (error) {
+    console.error('Error in getInternetKnowledge:', error);
+    await logEvent(supabase, requestId, 'internet_knowledge_error', 'get_internet_knowledge', 
+      'Exception in getInternetKnowledge', { error: error.message, query });
+    return null;
+  }
+}
+
 // Improved function to query the database for product legality in a state with enhanced ingredient analysis
 async function checkProductLegality(supabase, stateName, productNameOrBrand, requestId) {
   try {
@@ -540,6 +768,135 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
     }
     
     const stateId = stateData[0].id;
+    
+    // Handle ingredient queries (like THCA, Delta-8)
+    if (productNameOrBrand && typeof productNameOrBrand === 'object' && productNameOrBrand.isIngredientQuery) {
+      const ingredient = productNameOrBrand.ingredient;
+      
+      await logEvent(supabase, requestId, 'ingredient_legality_check', 'check_product_legality', 
+        `Checking legality for ingredient "${ingredient}" in ${stateName}`);
+      
+      // Check if we have products with this ingredient
+      if (productNameOrBrand.ingredientProducts && productNameOrBrand.ingredientProducts.length > 0) {
+        const products = productNameOrBrand.ingredientProducts;
+        const productIds = products.map(p => p.id);
+        
+        // Get list of state's allowed products with this ingredient
+        const { data: allowedProducts, error: allowedError } = await supabase
+          .from('state_allowed_products')
+          .select(`
+            product_id,
+            products (
+              id,
+              name, 
+              brands (
+                id,
+                name,
+                logo_url
+              )
+            )
+          `)
+          .eq('state_id', stateId)
+          .in('product_id', productIds);
+          
+        if (allowedError) {
+          console.error('Error fetching allowed products with ingredient:', allowedError);
+        }
+        
+        // Format products with this ingredient
+        const legalProducts = (allowedProducts || []).map(ap => ({
+          id: ap.products.id,
+          name: ap.products.name,
+          brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
+          brandLogo: ap.products.brands ? ap.products.brands.logo_url : null
+        }));
+        
+        // Get all products from the database for this ingredient
+        const allProductsWithIngredient = products.map(p => ({
+          id: p.id,
+          name: p.name,
+          brand: p.brands ? p.brands.name : 'Unknown',
+          brandLogo: p.brands ? p.brands.logo_url : null
+        }));
+        
+        // Find illegal products (in our database but not allowed in this state)
+        const illegalProducts = allProductsWithIngredient.filter(
+          p => !legalProducts.some(lp => lp.id === p.id)
+        );
+        
+        // Get brands that make products with this ingredient
+        const brandsWithIngredient = [...new Set(
+          allProductsWithIngredient.map(p => p.brand).filter(b => b !== 'Unknown')
+        )];
+        
+        // Get knowledge from internet if no products found or as supplementary information
+        let internetKnowledge = null;
+        if (legalProducts.length === 0 || illegalProducts.length === 0) {
+          internetKnowledge = await getInternetKnowledge(
+            supabase, 
+            `Is ${ingredient} legal in ${stateName}? Provide specific regulation information and recent updates.`, 
+            requestId
+          );
+        }
+        
+        // If we have data from either database or internet, return it
+        if (legalProducts.length > 0 || internetKnowledge) {
+          return {
+            found: true,
+            legal: legalProducts.length > 0,
+            state: stateName,
+            ingredient: ingredient,
+            legalProducts: legalProducts.length > 0 ? legalProducts : undefined,
+            illegalProducts: illegalProducts.length > 0 ? illegalProducts : undefined,
+            brandsWithIngredient: brandsWithIngredient,
+            message: legalProducts.length > 0 
+              ? `Products containing ${ingredient} are legal in ${stateName}.` 
+              : `No products containing ${ingredient} were found to be legal in ${stateName}.`,
+            internetKnowledge: internetKnowledge ? internetKnowledge.knowledge : undefined,
+            source: legalProducts.length > 0 ? 'product_database' : (internetKnowledge ? 'internet_knowledge' : 'no_match'),
+            date: new Date().toISOString().split('T')[0]
+          };
+        } else {
+          // If no data found, return not found
+          return {
+            found: false,
+            state: stateName,
+            ingredient: ingredient,
+            message: `No information found for ${ingredient} in ${stateName}.`,
+            source: 'no_match',
+            date: new Date().toISOString().split('T')[0]
+          };
+        }
+      } else {
+        // No products with this ingredient in our database, try internet knowledge
+        const internetKnowledge = await getInternetKnowledge(
+          supabase, 
+          `Is ${ingredient} legal in ${stateName}? Provide specific regulation information and recent updates.`, 
+          requestId
+        );
+        
+        if (internetKnowledge) {
+          return {
+            found: true,
+            state: stateName,
+            ingredient: ingredient,
+            message: `Information about ${ingredient} in ${stateName} based on general knowledge.`,
+            internetKnowledge: internetKnowledge.knowledge,
+            source: 'internet_knowledge',
+            date: new Date().toISOString().split('T')[0]
+          };
+        } else {
+          return {
+            found: false,
+            state: stateName,
+            ingredient: ingredient,
+            message: `No information found for ${ingredient} in ${stateName}.`,
+            source: 'no_match',
+            date: new Date().toISOString().split('T')[0]
+          };
+        }
+      }
+    }
     
     // NEW: Handle product type clarification cases
     if (productNameOrBrand && typeof productNameOrBrand === 'object' && productNameOrBrand.needsClarification) {
@@ -609,6 +966,29 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         .limit(5);
       
       if (brandError || !brandData || brandData.length === 0) {
+        // Try internet knowledge as fallback for known brands that might not be in our database
+        if (isHempBrand) {
+          const internetKnowledge = await getInternetKnowledge(
+            supabase, 
+            `Is ${brandName} ${productVariant || ''} legal in ${stateName}? Provide specific regulation information.`, 
+            requestId
+          );
+          
+          if (internetKnowledge) {
+            return {
+              found: true,
+              state: stateName,
+              brand: brandName,
+              variant: productVariant,
+              message: `Information about ${brandName} ${productVariant || ''} in ${stateName} based on general knowledge.`,
+              internetKnowledge: internetKnowledge.knowledge,
+              source: 'internet_knowledge',
+              category: 'HEMP',
+              date: new Date().toISOString().split('T')[0]
+            };
+          }
+        }
+        
         return {
           found: false,
           state: stateName,
@@ -640,6 +1020,32 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       const { data: brandProducts, error: bpError } = await productQuery.order('name');
       
       if (bpError || !brandProducts || brandProducts.length === 0) {
+        // Try internet knowledge as fallback for brand products
+        if (isHempBrand) {
+          const internetKnowledge = await getInternetKnowledge(
+            supabase, 
+            `Is ${brandName} ${productVariant || ''} legal in ${stateName}? Provide specific regulation information.`, 
+            requestId
+          );
+          
+          if (internetKnowledge) {
+            return {
+              found: true,
+              legal: false,
+              state: stateName,
+              brand: brandData[0].name,
+              brandLogo: brandData[0].logo_url || brandLogo,
+              message: `No products found in database for brand "${brandData[0].name}"${productVariant ? ` matching "${productVariant}"` : ''}.`,
+              internetKnowledge: internetKnowledge.knowledge,
+              source: 'internet_knowledge',
+              category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
+              date: new Date().toISOString().split('T')[0],
+              isHempBrand: isHempBrand,
+              fromProductType: fromProductType
+            };
+          }
+        }
+        
         return {
           found: true,
           legal: false,
@@ -735,6 +1141,16 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
         derivedFromContext = `\n\nNote: ${brandData[0].name} was identified as the primary manufacturer of ${productVariant} based on our database.`;
       }
       
+      // For hemp brands, try to get additional internet knowledge
+      let internetKnowledge = null;
+      if (isHempBrand) {
+        internetKnowledge = await getInternetKnowledge(
+          supabase, 
+          `Is ${brandData[0].name} ${productVariant || ''} legal in ${stateName}? Provide specific regulation information.`, 
+          requestId
+        );
+      }
+      
       // Process results based on what we found
       if (legalProducts.length > 0) {
         // Format the product names as a list
@@ -760,6 +1176,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           illegalProducts: illegalProducts.length > 0 ? illegalProducts : undefined,
           allIngredients: Array.from(allLegalIngredients),
           message: `The following products from ${brandData[0].name} are legal in ${stateName}: ${legalProductNames}.${derivedFromContext}`,
+          internetKnowledge: internetKnowledge ? internetKnowledge.knowledge : undefined,
           category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
           source: 'brand_database',
           date: new Date().toISOString().split('T')[0],
@@ -774,6 +1191,7 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
           brandLogo: brandData[0].logo_url || brandLogo,
           illegalProducts: illegalProducts,
           message: `No products from ${brandData[0].name}${productVariant ? ` matching "${productVariant}"` : ''} are legal in ${stateName}.${derivedFromContext}`,
+          internetKnowledge: internetKnowledge ? internetKnowledge.knowledge : undefined,
           category: isHempBrand ? 'HEMP' : identifyProductCategory(brandName) || 'Unknown',
           source: 'brand_database',
           date: new Date().toISOString().split('T')[0],
@@ -791,6 +1209,84 @@ async function checkProductLegality(supabase, stateName, productNameOrBrand, req
       .order('name');
     
     if (productError || !productData || productData.length === 0) {
+      // Try extracting a cannabinoid ingredient as fallback
+      const cannabinoidIngredient = extractCannabinoidIngredient(productNameOrBrand);
+      if (cannabinoidIngredient) {
+        // Find products containing this ingredient
+        const { products, brands } = await findProductsWithIngredient(supabase, cannabinoidIngredient, requestId);
+        
+        if (products.length > 0) {
+          // Handle same as ingredient query
+          const productIds = products.map(p => p.id);
+          
+          // Get list of state's allowed products with this ingredient
+          const { data: allowedProducts, error: allowedError } = await supabase
+            .from('state_allowed_products')
+            .select(`
+              product_id,
+              products (
+                id,
+                name, 
+                brands (
+                  id,
+                  name,
+                  logo_url
+                )
+              )
+            `)
+            .eq('state_id', stateId)
+            .in('product_id', productIds);
+            
+          // Format products with this ingredient
+          const legalProducts = (allowedProducts || []).map(ap => ({
+            id: ap.products.id,
+            name: ap.products.name,
+            brand: ap.products.brands ? ap.products.brands.name : 'Unknown',
+            brandLogo: ap.products.brands ? ap.products.brands.logo_url : null
+          }));
+          
+          // Get internet knowledge
+          const internetKnowledge = await getInternetKnowledge(
+            supabase, 
+            `Is ${cannabinoidIngredient} legal in ${stateName}? Provide specific regulation information.`, 
+            requestId
+          );
+          
+          return {
+            found: true,
+            legal: legalProducts.length > 0,
+            state: stateName,
+            ingredient: cannabinoidIngredient,
+            legalProducts: legalProducts.length > 0 ? legalProducts : undefined,
+            message: legalProducts.length > 0 
+              ? `Products containing ${cannabinoidIngredient} are legal in ${stateName}.` 
+              : `No products containing ${cannabinoidIngredient} were found to be legal in ${stateName}.`,
+            internetKnowledge: internetKnowledge ? internetKnowledge.knowledge : undefined,
+            source: legalProducts.length > 0 ? 'product_database' : 'internet_knowledge',
+            date: new Date().toISOString().split('T')[0]
+          };
+        } else {
+          // No products with this ingredient, try internet knowledge
+          const internetKnowledge = await getInternetKnowledge(
+            supabase, 
+            `Is ${cannabinoidIngredient} legal in ${stateName}? Provide specific regulation information.`, 
+            requestId
+          );
+          
+          if (internetKnowledge) {
+            return {
+              found: true,
+              state: stateName,
+              ingredient: cannabinoidIngredient,
+              message: `Information about ${cannabinoidIngredient} in ${stateName} based on general knowledge.`,
+              internetKnowledge: internetKnowledge.knowledge,
+              source: 'internet_knowledge',
+              date: new Date().toISOString().split('T')[0]
+            };
+          }
+        }
+      }
+      
       return {
         found: false,
         state: stateName,
@@ -913,7 +1409,7 @@ serve(async (req) => {
     
     // Handle both possible parameter names (message or content)
     const userMessage = reqJson.content || reqJson.message;
-    const { chatId, messages: chatHistory = [], requestId = crypto.randomUUID() } = reqJson;
+    const { chatId, messages: chatHistory = [], requestId = crypto.randomUUID(), useSimpleFormat = false } = reqJson;
     
     // Validate required parameters
     if (!userMessage) {
@@ -983,7 +1479,36 @@ serve(async (req) => {
     let productLegalityData = null;
     
     try {
-      if (isProductLegalityQuestion(userMessage)) {
+      // Check for ingredient legality question first (new feature)
+      const cannabinoidIngredient = extractCannabinoidIngredient(userMessage);
+      const stateName = extractStateFromMessage(userMessage);
+      
+      if (cannabinoidIngredient && stateName && isIngredientLegalityQuestion(userMessage)) {
+        await logEvent(supabase, requestId, 'ingredient_legality_check', 'chat_function', 
+          `Checking legality for ingredient "${cannabinoidIngredient}" in "${stateName}"`);
+        
+        // Create a query object with isIngredientQuery flag
+        const ingredientQuery = {
+          ingredient: cannabinoidIngredient,
+          isIngredientQuery: true
+        };
+        
+        // Find products with this ingredient
+        const { products, brands } = await findProductsWithIngredient(supabase, cannabinoidIngredient, requestId);
+        
+        if (products.length > 0) {
+          ingredientQuery.ingredientProducts = products;
+          ingredientQuery.ingredientBrands = brands;
+        }
+        
+        // Query the database for this ingredient-state combination
+        productLegalityData = await checkProductLegality(supabase, stateName, ingredientQuery, requestId);
+        
+        await logEvent(supabase, requestId, 'ingredient_legality_result', 'chat_function', 
+          'Ingredient legality check completed', productLegalityData);
+      }
+      // If not an ingredient query, check if it's a product legality question
+      else if (isProductLegalityQuestion(userMessage)) {
         const stateName = extractStateFromMessage(userMessage);
         const productOrBrand = await extractProductOrBrandFromMessage(supabase, userMessage, requestId);
         
@@ -1025,7 +1550,8 @@ Follow this strict source hierarchy based on the type of question:
 3. If the user asks general questions about company information (e.g., "What brands does Streamline sell?" or "Where can I find the marketing request form?"), reference the AI Knowledge Base.
 
 When answering product legality questions:
-- Begin with a clear "LEGAL STATUS: [LEGAL/NOT LEGAL] in [STATE]" heading
+- If useSimpleFormat is true, provide a simple, direct answer without a LEGAL STATUS header or structured format
+- Otherwise, begin with a clear "LEGAL STATUS: [LEGAL/NOT LEGAL] in [STATE]" heading
 - List the brand, products, and primary ingredients in a structured format
 - Be definitive when database information is available
 - ALWAYS list each specific legal product by exact name
@@ -1033,6 +1559,7 @@ When answering product legality questions:
 - Do not speculate on legal status when database information is missing
 - When ingredient information is available, use it to provide additional context about why certain products may or may not be legal in specific states
 - Always include the date of the information when available
+- If internet knowledge is available, clearly indicate that it's supplemental information by saying "Based on general regulatory information:" before presenting it
 
 When dealing with hemp products (especially Galaxy Treats and MCRO brands):
 - Distinguish clearly between different cannabinoid variants (Delta-8, Delta-9, Delta-10, etc.)
@@ -1058,7 +1585,15 @@ IMPORTANT ABOUT PRODUCT TYPES:
 - If the user asks about "disposables" without specifying a brand, ask for clarification since multiple brands make disposables.
 
 FORMAT FOR PRODUCT LEGALITY RESPONSES:
-Use this structure:
+
+If useSimpleFormat is TRUE:
+Use a simple, direct format without headers or structured sections:
+\`\`\`
+[Brand name] [product type] are [legal/not legal] in [state]. [Additional details in 1-2 sentences]
+\`\`\`
+
+If useSimpleFormat is FALSE or not specified:
+Use this structured format:
 \`\`\`
 **LEGAL STATUS: [LEGAL/NOT LEGAL] in [STATE]**
 
@@ -1094,16 +1629,24 @@ DO NOT provide specific legality information until the brand is clarified.`;
 ${JSON.stringify(productLegalityData, null, 2)}
 
 Use this information to answer the current question. This data comes directly from our regulatory database and should be considered the final authority on product legality by state. When responding:
-- If the query was about a brand, list EACH PRODUCT from this brand individually and their legal status in the specified state
+- If useSimpleFormat is true (${useSimpleFormat}), provide a simple, direct answer without the LEGAL STATUS header or structured format
 - If specific products were found, clearly state their legal status
-- Present the information using the format specified above, with the LEGAL STATUS header and ingredient information
+- Present the information using the format specified above
 - For hemp products (especially Galaxy Treats and MCRO), explain the specific variant mentioned (Delta-8, Delta-9, etc.) and its legal status in the specified state
 - Use the ingredient information to explain WHY certain products are regulated differently by state
-- Always include the date of the database information when available`;
+- Always include the date of the database information when available
+- If internetKnowledge is available, include it as supplementary information`;
 
         // If fromProductType is true, add special handling instructions
         if (productLegalityData.fromProductType) {
-          baseSystemPrompt += `\n\nNOTE: The user asked about a generic product type (${productLegalityData.brand} ${productLegalityData.variant || 'products'}), and our database identified ${productLegalityData.brand} as the primary manufacturer of this product type. Make sure to acknowledge this in your response, e.g., "I see you're asking about ${productLegalityData.variant || 'products'} in ${productLegalityData.state}. According to our database, ${productLegalityData.brand} is the primary brand that makes these products."`;
+          baseSystemPrompt += `\n\nNOTE: The user asked about a generic product type (${productLegalityData.brand} ${productLegalityData.variant || 'products'}), and our database identified ${productLegalityData.brand} as the primary manufacturer of this product type. If useSimpleFormat is false, make sure to acknowledge this in your response, e.g., "I see you're asking about ${productLegalityData.variant || 'products'} in ${productLegalityData.state}. According to our database, ${productLegalityData.brand} is the primary brand that makes these products."`;
+        }
+        
+        // If this is an ingredient query, add special handling
+        if (productLegalityData.ingredient) {
+          baseSystemPrompt += `\n\nNOTE: The user asked about the cannabinoid "${productLegalityData.ingredient}" which is an ingredient, not a specific product. Focus your response on the legality of products containing this ingredient.
+          
+If internetKnowledge is available, clearly separate database information from general knowledge by introducing it with "Based on general regulatory information:" and then presenting the internetKnowledge.`;
         }
       }
     }

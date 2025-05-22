@@ -219,3 +219,89 @@ export const identifyBrandsByProductType = async (productType: string): Promise<
   }
 };
 
+// NEW: Function to find products containing a specific ingredient
+export const findProductsWithIngredient = async (ingredient: string): Promise<{
+  products: any[],
+  brands: string[]
+}> => {
+  try {
+    // Search through product_ingredients table for this ingredient
+    const ingredientFields = ['ingredient1', 'ingredient2', 'ingredient3', 'ingredient4', 'ingredient5'];
+    let query = supabase.from('product_ingredients').select('product_id, product_type');
+    
+    // Build OR condition for all ingredient fields
+    let orConditions = [];
+    ingredientFields.forEach(field => {
+      orConditions.push(`${field}.ilike.%${ingredient}%`);
+    });
+    
+    // Apply the OR conditions
+    query = query.or(orConditions.join(','));
+    
+    const { data: ingredientMatches, error: ingredientError } = await query;
+    
+    if (ingredientError || !ingredientMatches || ingredientMatches.length === 0) {
+      return { products: [], brands: [] };
+    }
+    
+    // Get product IDs that contain this ingredient
+    const productIds = ingredientMatches.map(match => match.product_id).filter(id => id !== null);
+    
+    if (productIds.length === 0) {
+      return { products: [], brands: [] };
+    }
+    
+    // Get full product details
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('id, name, brand_id, brands(id, name, logo_url)')
+      .in('id', productIds);
+      
+    if (productsError || !products || products.length === 0) {
+      return { products: [], brands: [] };
+    }
+    
+    // Extract unique brands
+    const brandMap = new Map();
+    products.forEach(product => {
+      if (product.brands) {
+        brandMap.set(product.brands.id, product.brands.name);
+      }
+    });
+    
+    const brands = Array.from(brandMap.values());
+    
+    return { products, brands };
+  } catch (error) {
+    console.error('Error in findProductsWithIngredient:', error);
+    return { products: [], brands: [] };
+  }
+};
+
+// NEW: Function to extract cannabinoid ingredient from message
+export const extractCannabinoidIngredient = (message: string): string | null => {
+  if (!message) return null;
+  
+  const messageLower = message.toLowerCase();
+  
+  // Define patterns for different cannabinoids
+  const cannabinoidPatterns: Record<string, RegExp[]> = {
+    'delta-8': [/\bdelta[\s-]*8\b/i, /\bd8\b/i],
+    'delta-9': [/\bdelta[\s-]*9\b/i, /\bd9\b/i],
+    'delta-10': [/\bdelta[\s-]*10\b/i, /\bd10\b/i],
+    'thca': [/\bthc[\s-]*a\b/i],
+    'thcp': [/\bthc[\s-]*p\b/i],
+    'hhc': [/\bhhc\b/i],
+    'cbd': [/\bcbd\b/i],
+    'cbn': [/\bcbn\b/i],
+    'thcv': [/\bthcv\b/i]
+  };
+  
+  for (const [cannabinoid, patterns] of Object.entries(cannabinoidPatterns)) {
+    if (patterns.some(pattern => pattern.test(messageLower))) {
+      return cannabinoid;
+    }
+  }
+  
+  return null;
+};
