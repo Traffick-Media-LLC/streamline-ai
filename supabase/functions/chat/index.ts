@@ -102,7 +102,7 @@ serve(async (req) => {
     const startTime = Date.now();
     
     try {
-      // Call XAI API
+      // Call XAI API with the updated model name "grok-3-latest"
       const response = await fetch("https://api.xai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -110,7 +110,7 @@ serve(async (req) => {
           "Authorization": `Bearer ${xaiApiKey}`
         },
         body: JSON.stringify({
-          model: "xai-chat-model",
+          model: "grok-3-latest",  // Updated model name here
           messages: formattedMessages,
           temperature: 0.7,
           max_tokens: 800
@@ -138,7 +138,7 @@ serve(async (req) => {
         role: "assistant",
         createdAt: new Date().toISOString(),
         metadata: {
-          model: data.model || "xai-chat-model",
+          model: data.model || "grok-3-latest",  // Updated model name for metadata
           tokensUsed: data.usage?.total_tokens || 0,
           responseTimeMs,
           sourceInfo: {
