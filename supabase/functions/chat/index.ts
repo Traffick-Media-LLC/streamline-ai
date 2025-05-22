@@ -16,6 +16,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // XAI API key from environment variables
 const xaiApiKey = Deno.env.get('XAI_API_KEY');
+const XAI_API_ENDPOINT = "https://api.xai.com/v1/chat/completions";
+const MODEL_NAME = "grok-3-latest";
 
 // Helper function to log errors
 async function logError(error: any, requestId: string, stage: string) {
@@ -29,7 +31,9 @@ async function logError(error: any, requestId: string, stage: string) {
         request_id: requestId,
         event_type: 'error',
         message: JSON.stringify(error),
-        stage,
+        component: 'edge-function',
+        severity: 'error',
+        metadata: { stage, error_details: error }
       });
       
     if (dbError) {
@@ -38,6 +42,18 @@ async function logError(error: any, requestId: string, stage: string) {
   } catch (logError) {
     console.error("Error during error logging:", logError);
   }
+}
+
+// Helper function for enhanced API response validation
+function validateApiResponse(data: any): boolean {
+  // Check all required properties exist
+  if (!data) return false;
+  if (!Array.isArray(data.choices)) return false;
+  if (data.choices.length === 0) return false;
+  if (!data.choices[0].message) return false;
+  if (typeof data.choices[0].message.content !== 'string') return false;
+  
+  return true;
 }
 
 // Main function to handle requests
@@ -60,7 +76,8 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Raw request received: ${JSON.stringify(requestData)}\n`);
+    console.log(`Request received for chatId ${chatId}, requestId ${requestId}`);
+    console.log(`Message count: ${messages?.length || 0}, Latest content: ${content?.substring(0, 50) || 'none'}...`);
 
     // Basic validation
     if (!content || !messages || !chatId || !requestId) {
@@ -98,48 +115,64 @@ serve(async (req) => {
       content
     });
 
+    // Construct request payload
+    const requestPayload = {
+      model: MODEL_NAME,
+      messages: formattedMessages,
+      temperature: 0.7,
+      max_tokens: 800
+    };
+
+    console.log(`Calling XAI API with model: ${MODEL_NAME}`);
+    console.log(`Request payload: ${JSON.stringify(requestPayload)}`);
+
     // Log the start of XAI API call
     const startTime = Date.now();
     
     try {
-      // Call XAI API with the updated model name "grok-3-latest"
-      const response = await fetch("https://api.xai.com/v1/chat/completions", {
+      // Call XAI API
+      const response = await fetch(XAI_API_ENDPOINT, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${xaiApiKey}`
         },
-        body: JSON.stringify({
-          model: "grok-3-latest",  // Updated model name here
-          messages: formattedMessages,
-          temperature: 0.7,
-          max_tokens: 800
-        })
+        body: JSON.stringify(requestPayload)
       });
 
-      // Check for errors from XAI API
+      // Log raw response status
+      console.log(`XAI API response status: ${response.status}`);
+      
+      // Check for HTTP errors from XAI API
       if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`XAI API error: ${response.status} ${errorData}`);
+        const errorText = await response.text();
+        console.error(`XAI API HTTP error: ${response.status}, Body: ${errorText}`);
+        
+        throw new Error(`XAI API error: ${response.status} ${errorText}`);
       }
 
       // Parse response from XAI
       const data = await response.json();
       
-      // Safely access the response content with proper error handling
-      if (!data || !data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error("Invalid response format from XAI API: Missing choices or message");
+      console.log(`XAI API raw response: ${JSON.stringify(data)}`);
+      
+      // Validate response format
+      if (!validateApiResponse(data)) {
+        console.error(`Invalid XAI API response format:`, data);
+        throw new Error("Invalid response format from XAI API");
       }
       
       const assistantResponse = data.choices[0].message.content;
       
-      if (!assistantResponse) {
-        throw new Error("Empty response from XAI API");
+      if (!assistantResponse || assistantResponse.trim() === '') {
+        throw new Error("Empty response content from XAI API");
       }
       
       // Log completion time
       const endTime = Date.now();
       const responseTimeMs = endTime - startTime;
+
+      console.log(`XAI response generated successfully in ${responseTimeMs}ms`);
 
       // Create response object
       let result = {
@@ -148,7 +181,7 @@ serve(async (req) => {
         role: "assistant",
         createdAt: new Date().toISOString(),
         metadata: {
-          model: data.model || "grok-3-latest",  // Updated model name for metadata
+          model: data.model || MODEL_NAME,
           tokensUsed: data.usage?.total_tokens || 0,
           responseTimeMs,
           sourceInfo: {
@@ -159,7 +192,20 @@ serve(async (req) => {
       };
 
       // Log successful completion
-      console.log(`XAI response generated in ${responseTimeMs}ms`);
+      const logData = {
+        request_id: requestId,
+        chat_id: chatId,
+        event_type: 'api_response_success',
+        component: 'edge-function',
+        message: 'XAI API response successful',
+        metadata: {
+          model: MODEL_NAME,
+          response_time_ms: responseTimeMs,
+          tokens_used: data.usage?.total_tokens || 0
+        }
+      };
+      
+      await supabase.from('chat_logs').insert(logData);
 
       return new Response(
         JSON.stringify(result),
