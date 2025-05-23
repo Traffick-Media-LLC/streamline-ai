@@ -7,6 +7,7 @@ import Papa from "papaparse";
 import { supabase } from "@/integrations/supabase/client";
 import { FileUp } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { useAuth } from "@/contexts/AuthContext";
 
 type DriveFileCsvEntry = {
   Brand?: string;
@@ -27,6 +28,7 @@ const batchSize = 20; // Process in batches to avoid overwhelming the database
 export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const { user } = useAuth(); // Get the authenticated user
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -37,6 +39,11 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
   const handleUpload = async () => {
     if (!selectedFile) {
       toast.error("Please select a CSV file first");
+      return;
+    }
+    
+    if (!user) {
+      toast.error("You must be logged in to upload files");
       return;
     }
     
