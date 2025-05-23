@@ -6,9 +6,10 @@ import ChatMessage from './ChatMessage';
 interface ChatThreadProps {
   messages: Message[];
   isLoading?: boolean;
+  chatId?: string;
 }
 
-const ChatThread = ({ messages, isLoading }: ChatThreadProps) => {
+const ChatThread = ({ messages, isLoading, chatId }: ChatThreadProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -20,13 +21,20 @@ const ChatThread = ({ messages, isLoading }: ChatThreadProps) => {
     <div className="flex h-full flex-col overflow-y-auto p-4">
       <div className="mt-auto">
         {messages.map((message, index) => (
-          <ChatMessage key={message.id || index} message={message} />
+          <ChatMessage 
+            key={message.id || index} 
+            message={{
+              ...message,
+              chatId: chatId || ''
+            }} 
+          />
         ))}
         
         {isLoading && (
           <ChatMessage 
             message={{
               id: 'loading',
+              chatId: chatId || '',
               content: '',
               role: 'assistant',
               createdAt: new Date().toISOString(),

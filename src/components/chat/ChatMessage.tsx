@@ -1,5 +1,6 @@
 
 import { Message } from '@/types/chat';
+import ChatMessageFeedback from './ChatMessageFeedback';
 
 interface ChatMessageProps {
   message: Message & { isLoading?: boolean };
@@ -7,6 +8,9 @@ interface ChatMessageProps {
 
 const ChatMessage = ({ message }: ChatMessageProps) => {
   const isUser = message.role === 'user';
+  
+  // Get the source info for AI messages, if available
+  const sourceInfo = !isUser && message.metadata?.sourceInfo;
   
   return (
     <div className={`mb-4 flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -23,13 +27,33 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
             <div className="h-2 w-2 rounded-full bg-current animate-bounce [animation-delay:0.4s]" />
           </div>
         ) : (
-          <div className="whitespace-pre-wrap">{message.content}</div>
-        )}
-        
-        {message.metadata?.sourceInfo && (
-          <div className="mt-2 text-xs opacity-70">
-            Source: {message.metadata.sourceInfo.source}
-            {message.metadata.sourceInfo.brand && ` - ${message.metadata.sourceInfo.brand}`}
+          <div>
+            <div className="whitespace-pre-wrap">{message.content}</div>
+            
+            {sourceInfo && (
+              <div className="mt-2 text-xs opacity-70">
+                {sourceInfo.source === 'product_database' && (
+                  <span>Source: State Map Database {sourceInfo.brand && `- ${sourceInfo.brand}`} {sourceInfo.state && `- ${sourceInfo.state}`}</span>
+                )}
+                {sourceInfo.source === 'internet_knowledge' && (
+                  <span>Source: Knowledge Base</span>
+                )}
+                {sourceInfo.source === 'drive_files' && (
+                  <span>Source: Drive Files</span>
+                )}
+                {sourceInfo.source === 'no_match' && (
+                  <span>No specific source found</span>
+                )}
+              </div>
+            )}
+            
+            {!isUser && message.id && (
+              <ChatMessageFeedback 
+                messageId={message.id} 
+                chatId={message.chatId} 
+                sourceInfo={sourceInfo}
+              />
+            )}
           </div>
         )}
       </div>

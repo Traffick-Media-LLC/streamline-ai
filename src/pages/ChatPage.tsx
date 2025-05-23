@@ -25,6 +25,7 @@ const ChatPage = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const { 
     currentThread,
+    currentThreadId,
     threads, 
     isLoading, 
     sendMessage,
@@ -36,7 +37,7 @@ const ChatPage = () => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, [currentThread?.id]);
+  }, [currentThreadId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +70,7 @@ const ChatPage = () => {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Chat Header with History Button */}
         <div className="flex items-center justify-between border-b px-4 py-2">
-          <h2 className="text-xl font-semibold">Chat</h2>
+          <h2 className="text-xl font-semibold">Streamline Assistant</h2>
           <Button 
             variant="ghost" 
             size="icon" 
@@ -89,7 +90,7 @@ const ChatPage = () => {
                   Hello{user?.email ? `, ${user.email.split('@')[0]}` : ''}! How can I help you today?
                 </h1>
                 <p className="mb-8 text-muted-foreground">
-                  Ask me anything about your products, brands, and state regulations.
+                  Ask me anything about product legality, state regulations, company files, or ingredient information.
                 </p>
                 <TopicCards onSelectTopic={(topic) => setInput(topic)} />
               </div>
@@ -97,7 +98,8 @@ const ChatPage = () => {
           ) : (
             <ChatThread 
               messages={currentThread?.messages || []} 
-              isLoading={isLoading} 
+              isLoading={isLoading}
+              chatId={currentThreadId || undefined}
             />
           )}
         </div>
@@ -109,7 +111,7 @@ const ChatPage = () => {
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message here..."
+              placeholder="Ask about product legality, regulations, or request documents..."
               className="flex-1"
               disabled={isLoading}
             />

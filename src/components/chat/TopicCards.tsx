@@ -7,11 +7,11 @@ interface TopicCardsProps {
 
 const TopicCards = ({ onSelectTopic }: TopicCardsProps) => {
   const suggestedTopics = [
-    "Is Delta-8 legal in Texas?",
-    "Tell me about Brand X's products",
-    "Do you have information about CBD regulations?",
-    "Which states allow THC products?",
-    "What ingredients are in Product Y?"
+    "Are Juice Head pouches legal in Texas?",
+    "Where can I find our latest sales brochures?",
+    "What are the regulations for nicotine products in California?",
+    "Is Delta-8 legal in Florida for our distributors?",
+    "What ingredients are in our Streamline vape products?"
   ];
 
   return (

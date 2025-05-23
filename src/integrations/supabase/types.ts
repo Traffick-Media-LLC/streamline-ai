@@ -48,6 +48,51 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_feedback: {
+        Row: {
+          chat_id: string | null
+          created_at: string | null
+          feedback: string
+          id: string
+          message_id: string | null
+          source_used: string | null
+          user_id: string | null
+        }
+        Insert: {
+          chat_id?: string | null
+          created_at?: string | null
+          feedback: string
+          id?: string
+          message_id?: string | null
+          source_used?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          chat_id?: string | null
+          created_at?: string | null
+          feedback?: string
+          id?: string
+          message_id?: string | null
+          source_used?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_feedback_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_feedback_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_logs: {
         Row: {
           chat_id: string | null
@@ -107,6 +152,7 @@ export type Database = {
           content: string
           document_ids: string[] | null
           id: string
+          metadata: Json | null
           role: string
           timestamp: string | null
         }
@@ -115,6 +161,7 @@ export type Database = {
           content: string
           document_ids?: string[] | null
           id?: string
+          metadata?: Json | null
           role: string
           timestamp?: string | null
         }
@@ -123,6 +170,7 @@ export type Database = {
           content?: string
           document_ids?: string[] | null
           id?: string
+          metadata?: Json | null
           role?: string
           timestamp?: string | null
         }

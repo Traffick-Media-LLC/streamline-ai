@@ -3,7 +3,9 @@ import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, Message } from '@/types/chat';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { generateChatTitle } from '@/utils/chatUtils';
+import { toast } from '@/components/ui/sonner';
 
 export interface ChatState {
   threads: Chat[];
@@ -25,82 +27,101 @@ export const useChatState = (): ChatState => {
   // Find current thread
   const currentThread = threads.find(t => t.id === currentThreadId) || null;
 
-  // Load threads from localStorage on component mount
+  // Load threads from Supabase on component mount
   useEffect(() => {
     if (!user) return;
     
-    const savedThreads = localStorage.getItem(`chat_threads_${user.id}`);
-    if (savedThreads) {
+    const fetchChats = async () => {
       try {
-        const parsedThreads = JSON.parse(savedThreads);
-        setThreads(parsedThreads);
+        const { data: chats, error } = await supabase
+          .from('chats')
+          .select('*')
+          .order('updated_at', { ascending: false });
+          
+        if (error) throw error;
         
-        // Set most recent thread as current if there is one
-        if (parsedThreads.length > 0 && !currentThreadId) {
-          setCurrentThreadId(parsedThreads[0].id);
+        if (chats && chats.length > 0) {
+          // For each chat, fetch its messages
+          const threadsWithMessages = await Promise.all(
+            chats.map(async (chat) => {
+              const { data: messages, error: messagesError } = await supabase
+                .from('chat_messages')
+                .select('*')
+                .eq('chat_id', chat.id)
+                .order('timestamp', { ascending: true });
+                
+              if (messagesError) {
+                console.error("Error fetching messages:", messagesError);
+                return {
+                  ...chat,
+                  messages: []
+                };
+              }
+              
+              return {
+                ...chat,
+                messages: messages || []
+              };
+            })
+          );
+          
+          setThreads(threadsWithMessages);
+          
+          // Set most recent thread as current if there is one and no current thread is selected
+          if (threadsWithMessages.length > 0 && !currentThreadId) {
+            setCurrentThreadId(threadsWithMessages[0].id);
+          }
+        } else {
+          // No existing chats, create a new one
+          createNewThread();
         }
       } catch (e) {
-        console.error("Error parsing saved threads:", e);
+        console.error("Error fetching chats:", e);
+        toast.error("Failed to load chat history");
       }
-    }
+    };
+    
+    fetchChats();
   }, [user]);
 
-  // Save threads to localStorage whenever they change
-  useEffect(() => {
-    if (!user) return;
-    localStorage.setItem(`chat_threads_${user.id}`, JSON.stringify(threads));
-  }, [threads, user]);
-
   // Send a new message
-  const sendMessage = (content: string) => {
-    if (!content.trim()) return;
+  const sendMessage = async (content: string) => {
+    if (!content.trim() || !user) return;
     
     // Create a new thread if there isn't one
     let threadId = currentThreadId;
     if (!threadId) {
-      threadId = uuidv4();
+      threadId = await createNewChatInDb("New Conversation");
+      if (!threadId) return;
+      
       const newThread: Chat = {
         id: threadId,
         title: "New Conversation",
         messages: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        user_id: user?.id
+        user_id: user.id
       };
       
       setThreads(prev => [newThread, ...prev]);
       setCurrentThreadId(threadId);
     }
     
-    // Add user message
+    // Add user message to local state first for immediate feedback
+    const userMessageId = uuidv4();
     const userMessage: Message = {
-      id: uuidv4(),
+      id: userMessageId,
+      chatId: threadId,
       content,
       role: "user",
       createdAt: new Date().toISOString()
     };
     
+    // Update local state with the user message
     setThreads(prev => {
       return prev.map(thread => {
         if (thread.id === threadId) {
           const updatedMessages = [...thread.messages, userMessage];
-          
-          // If this is the first message, generate a title
-          if (thread.messages.length === 0) {
-            // This will be updated when the response comes back
-            setTimeout(() => {
-              generateChatTitle(content).then(title => {
-                setThreads(current => {
-                  return current.map(t => {
-                    if (t.id === threadId) {
-                      return { ...t, title };
-                    }
-                    return t;
-                  });
-                });
-              });
-            }, 500);
-          }
           
           return {
             ...thread,
@@ -112,13 +133,90 @@ export const useChatState = (): ChatState => {
       });
     });
     
-    // Simulate assistant response
+    // Store user message in database
+    try {
+      const { error: messageError } = await supabase
+        .from('chat_messages')
+        .insert({
+          id: userMessageId,
+          chat_id: threadId,
+          content,
+          role: 'user'
+        });
+        
+      if (messageError) throw messageError;
+    } catch (e) {
+      console.error("Error storing user message:", e);
+    }
+    
+    // If this is the first message, generate a title
+    if (currentThread && currentThread.messages.length === 0) {
+      generateChatTitle(content).then(title => {
+        updateChatTitle(threadId!, title);
+      });
+    }
+    
+    // Send to Streamline AI edge function
     setIsLoading(true);
     
-    setTimeout(() => {
-      const assistantMessage: Message = {
+    try {
+      // Get the conversation history (last few messages) for context
+      const conversationHistory = currentThread 
+        ? currentThread.messages.slice(-5) // Last 5 messages 
+        : [];
+        
+      // Add the new user message to the history
+      const messages = [
+        ...conversationHistory,
+        userMessage
+      ];
+      
+      // Call the edge function
+      const { data, error } = await supabase.functions.invoke('streamline-ai', {
+        body: {
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          chatId: threadId,
+          userId: user.id
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.response) {
+        // Create assistant message
+        const assistantMessageId = uuidv4();
+        const assistantMessage: Message = {
+          id: assistantMessageId,
+          chatId: threadId,
+          content: data.response,
+          role: "assistant",
+          createdAt: new Date().toISOString(),
+          metadata: { sourceInfo: data.sourceInfo }
+        };
+        
+        // Update local state with the assistant message
+        setThreads(prev => {
+          return prev.map(thread => {
+            if (thread.id === threadId) {
+              return {
+                ...thread,
+                messages: [...thread.messages, assistantMessage],
+                updatedAt: new Date().toISOString()
+              };
+            }
+            return thread;
+          });
+        });
+      }
+    } catch (e) {
+      console.error("Error calling Streamline AI:", e);
+      toast.error("Failed to get a response. Please try again.");
+      
+      // Add fallback error message
+      const errorMessage: Message = {
         id: uuidv4(),
-        content: generateMockResponse(content),
+        chatId: threadId,
+        content: "I'm sorry, I encountered an error while processing your request. Please try again or contact support.",
         role: "assistant",
         createdAt: new Date().toISOString()
       };
@@ -128,28 +226,83 @@ export const useChatState = (): ChatState => {
           if (thread.id === threadId) {
             return {
               ...thread,
-              messages: [...thread.messages, assistantMessage],
+              messages: [...thread.messages, errorMessage],
               updatedAt: new Date().toISOString()
             };
           }
           return thread;
         });
       });
-      
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
+  };
+
+  // Create a new chat in the database
+  const createNewChatInDb = async (title: string): Promise<string | null> => {
+    if (!user) return null;
+    
+    try {
+      const newChatId = uuidv4();
+      const { error } = await supabase
+        .from('chats')
+        .insert({
+          id: newChatId,
+          user_id: user.id,
+          title
+        });
+        
+      if (error) throw error;
+      
+      return newChatId;
+    } catch (e) {
+      console.error("Error creating new chat:", e);
+      toast.error("Failed to create new conversation");
+      return null;
+    }
+  };
+
+  // Update chat title in database
+  const updateChatTitle = async (chatId: string, title: string) => {
+    try {
+      const { error } = await supabase
+        .from('chats')
+        .update({ title })
+        .eq('id', chatId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setThreads(prev => {
+        return prev.map(thread => {
+          if (thread.id === chatId) {
+            return {
+              ...thread,
+              title
+            };
+          }
+          return thread;
+        });
+      });
+    } catch (e) {
+      console.error("Error updating chat title:", e);
+    }
   };
 
   // Create a new empty thread
-  const createNewThread = () => {
-    const newThreadId = uuidv4();
+  const createNewThread = async () => {
+    if (!user) return;
+    
+    const newThreadId = await createNewChatInDb("New Conversation");
+    if (!newThreadId) return;
+    
     const newThread: Chat = {
       id: newThreadId,
       title: "New Conversation",
       messages: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      user_id: user?.id
+      user_id: user.id
     };
     
     setThreads(prev => [newThread, ...prev]);
@@ -162,13 +315,29 @@ export const useChatState = (): ChatState => {
   };
 
   // Delete a thread
-  const deleteThread = (threadId: string) => {
-    setThreads(prev => prev.filter(thread => thread.id !== threadId));
+  const deleteThread = async (threadId: string) => {
+    if (!user) return;
     
-    // If we're deleting the current thread, select another one or none
-    if (threadId === currentThreadId) {
-      const remainingThreads = threads.filter(thread => thread.id !== threadId);
-      setCurrentThreadId(remainingThreads.length > 0 ? remainingThreads[0].id : null);
+    try {
+      // Delete from database
+      const { error } = await supabase
+        .from('chats')
+        .delete()
+        .eq('id', threadId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setThreads(prev => prev.filter(thread => thread.id !== threadId));
+      
+      // If we're deleting the current thread, select another one or none
+      if (threadId === currentThreadId) {
+        const remainingThreads = threads.filter(thread => thread.id !== threadId);
+        setCurrentThreadId(remainingThreads.length > 0 ? remainingThreads[0].id : null);
+      }
+    } catch (e) {
+      console.error("Error deleting thread:", e);
+      toast.error("Failed to delete conversation");
     }
   };
 
@@ -183,17 +352,3 @@ export const useChatState = (): ChatState => {
     deleteThread
   };
 };
-
-// Helper function to generate mock responses
-function generateMockResponse(query: string): string {
-  const responses = [
-    `Based on our information, ${query.includes('legal') ? 'the legal status varies by state. Some states have explicit restrictions while others allow it under certain conditions.' : 'we have relevant information about this in our database.'}`,
-    `According to our product database, ${query.includes('Brand') ? 'this brand offers several products that comply with regulations in most states.' : 'there are several options available that might meet your needs.'}`,
-    `I found some information about ${query.includes('CBD') ? 'CBD regulations which vary significantly between states. Federal law allows CBD derived from hemp with less than 0.3% THC.' : 'this topic in our knowledge base.'}`,
-    `The state regulations ${query.includes('THC') ? 'for THC products are complex. Some states allow recreational use, others only medical use, and some prohibit it entirely.' : 'related to this vary significantly across the country.'}`
-  ];
-  
-  // Return a semi-random response based on the query
-  const index = Math.floor(query.length % responses.length);
-  return responses[index];
-}
