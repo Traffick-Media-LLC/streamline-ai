@@ -32,6 +32,11 @@ const ChatPage = () => {
     createNewThread
   } = useChatState();
 
+  // Create a new chat on page load
+  useEffect(() => {
+    createNewThread();
+  }, []);
+
   // Focus input when thread changes
   useEffect(() => {
     if (inputRef.current) {
@@ -82,7 +87,7 @@ const ChatPage = () => {
         </div>
         
         {/* Chat Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden relative">
           {firstMessage ? (
             <div className="flex h-full flex-col items-center justify-center p-6">
               <div className="max-w-2xl text-center">
@@ -102,27 +107,27 @@ const ChatPage = () => {
               chatId={currentThreadId || undefined}
             />
           )}
-        </div>
-        
-        {/* Input Area */}
-        <div className="border-t bg-background p-4">
-          <form onSubmit={handleSubmit} className="flex items-center gap-2">
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about product legality, regulations, or request documents..."
-              className="flex-1"
-              disabled={isLoading}
-            />
-            <Button 
-              type="submit" 
-              size="icon"
-              disabled={!input.trim() || isLoading}
-            >
-              <SendHorizontal className="h-5 w-5" />
-            </Button>
-          </form>
+          
+          {/* Fixed Input Area */}
+          <div className="absolute bottom-0 left-0 right-0 border-t bg-background p-4">
+            <form onSubmit={handleSubmit} className="flex items-center gap-2">
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about product legality, regulations, or request documents..."
+                className="flex-1"
+                disabled={isLoading}
+              />
+              <Button 
+                type="submit" 
+                size="icon"
+                disabled={!input.trim() || isLoading}
+              >
+                <SendHorizontal className="h-5 w-5" />
+              </Button>
+            </form>
+          </div>
         </div>
       </div>
       

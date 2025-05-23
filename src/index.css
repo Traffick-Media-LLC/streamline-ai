@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -136,4 +137,9 @@
 
 .typing-indicator span:nth-child(3) {
   animation-delay: 0.4s;
+}
+
+/* Add padding at the bottom of chat threads to prevent content from being hidden behind the fixed input */
+.chat-thread-container {
+  padding-bottom: 4rem;
 }

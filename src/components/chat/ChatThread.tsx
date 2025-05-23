@@ -12,13 +12,20 @@ interface ChatThreadProps {
 const ChatThread = ({ messages, isLoading, chatId }: ChatThreadProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or when loading state changes
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  // Function to handle scrolling with an option for immediate scrolling
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth' });
+    }
+  };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
+    <div className="flex h-full flex-col overflow-y-auto p-4 pb-16">
       <div className="mt-auto">
         {messages.map((message, index) => (
           <ChatMessage 
