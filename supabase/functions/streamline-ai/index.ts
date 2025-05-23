@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -40,6 +39,7 @@ interface FileResult {
   brand?: string | null;
   category?: string | null;
   confidence?: number;
+  id?: string;
 }
 
 serve(async (req) => {
@@ -76,10 +76,12 @@ serve(async (req) => {
     const aiResponse = await generateAIResponse(messages, results, dataSources);
     
     // 4. Store the response in the database
-    const { error: storeError } = await storeResponse(supabase, chatId, userId, aiResponse, results.sourceInfo);
-    
-    if (storeError) {
-      console.error("Error storing response:", storeError);
+    if (chatId) {
+      const { error: storeError } = await storeResponse(supabase, chatId, userId, aiResponse, results.sourceInfo);
+      
+      if (storeError) {
+        console.error("Error storing response:", storeError);
+      }
     }
 
     return new Response(
@@ -100,6 +102,31 @@ serve(async (req) => {
 
 async function determineDataSource(query: string, messages: Message[]): Promise<{ dataSources: string[], searchParams: any }> {
   try {
+    // Direct file ID detection
+    const fileIdMatch = query.match(/([A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})/);
+    if (fileIdMatch) {
+      return {
+        dataSources: ['drive_files'],
+        searchParams: { fileId: fileIdMatch[0] }
+      };
+    }
+
+    // Direct logo detection for common requests
+    const logoMatch = query.toLowerCase().match(/(logo|image|icon|picture|photo|file) (?:for|of) ([a-z0-9\s]+)/i);
+    const fileMatch = query.toLowerCase().match(/find (?:the|a) ([a-z0-9\s]+) (logo|image|file|document)/i);
+    
+    if (logoMatch || fileMatch) {
+      const brand = logoMatch ? logoMatch[2] : (fileMatch ? fileMatch[1] : '');
+      const fileType = logoMatch ? logoMatch[1] : (fileMatch ? fileMatch[2] : '');
+      
+      if (brand && fileType) {
+        return {
+          dataSources: ['drive_files'],
+          searchParams: { brand, fileType }
+        };
+      }
+    }
+
     // Use OpenAI to determine the appropriate data source
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -112,24 +139,36 @@ async function determineDataSource(query: string, messages: Message[]): Promise<
         messages: [
           {
             role: 'system',
-            content: `You are a query router for Streamline Group's internal AI assistant. Your task is to analyze the user query and determine which data sources to query:
-            1. state_map - For questions about product legality by state
-            2. knowledge_base - For questions about product information, company policies, or general info
-            3. drive_files - For requests for specific documents or files
-            
-            Return a JSON object with the following fields:
-            - dataSources: Array of data source names to query (state_map, knowledge_base, drive_files)
-            - searchParams: Object with search parameters (state, brand, product, query, fileType)
-            
-            For state legality queries, identify the state, brand, and product mentioned.
-            For knowledge base queries, extract key search terms.
-            For file queries, identify file types or categories mentioned.`
+            content: `You are a query router for Streamline Group's internal AI assistant. Analyze the user query and determine which data sources to query.
+
+IMPORTANT! If the user is looking for a logo, image, document, or any file, ALWAYS include "drive_files" in your data sources.
+
+Return a valid JSON object containing ONLY these fields:
+{
+  "dataSources": ["state_map" and/or "knowledge_base" and/or "drive_files"],
+  "searchParams": {
+    "state": "State name if mentioned",
+    "brand": "Brand name if mentioned",
+    "product": "Product name if mentioned",
+    "query": "Search query for knowledge base",
+    "fileType": "File type if mentioned (logo, document, image, etc.)"
+  }
+}
+
+EXAMPLES:
+1. "Is Product X legal in California?" → dataSources: ["state_map"], searchParams: {state: "California", product: "Product X"}
+2. "What's our refund policy?" → dataSources: ["knowledge_base"], searchParams: {query: "refund policy"}
+3. "Show me the Galaxy Treats logo" → dataSources: ["drive_files"], searchParams: {brand: "Galaxy Treats", fileType: "logo"}
+4. "Find the marketing materials for Product X" → dataSources: ["drive_files"], searchParams: {product: "Product X", fileType: "marketing"}
+
+ALWAYS return properly formatted JSON.`
           },
           ...messages.slice(-3).map(msg => ({
             role: msg.role,
             content: msg.content
           }))
-        ]
+        ],
+        response_format: { type: "json_object" }
       })
     });
 
@@ -137,12 +176,14 @@ async function determineDataSource(query: string, messages: Message[]): Promise<
     const routerResponse = data.choices[0].message.content;
     
     try {
-      // Extract JSON from the response (handle if it's wrapped in code blocks)
-      const jsonMatch = routerResponse.match(/```json\s*([\s\S]*?)\s*```/) || 
-                        routerResponse.match(/{[\s\S]*}/);
+      // Parse the JSON response
+      const result = JSON.parse(routerResponse);
       
-      const jsonStr = jsonMatch ? jsonMatch[0].replace(/```json|```/g, '') : routerResponse;
-      const result = JSON.parse(jsonStr);
+      // Add a fallback to search drive_files for specific keywords
+      if (!result.dataSources.includes('drive_files') && 
+          /\b(logo|file|image|document|pdf|picture|photo)\b/i.test(query)) {
+        result.dataSources.push('drive_files');
+      }
       
       return {
         dataSources: result.dataSources || [],
@@ -152,21 +193,60 @@ async function determineDataSource(query: string, messages: Message[]): Promise<
       console.error("Error parsing router response:", parseError);
       console.log("Raw response:", routerResponse);
       
-      // Default to knowledge base if parsing fails
+      // Default to multiple data sources for better coverage
       return {
-        dataSources: ['knowledge_base'],
-        searchParams: { query }
+        dataSources: ['knowledge_base', 'drive_files'],
+        searchParams: { 
+          query,
+          // Extract potential brand and file type information
+          brand: extractBrandFromQuery(query),
+          fileType: extractFileTypeFromQuery(query)
+        }
       };
     }
   } catch (error) {
     console.error("Error determining data source:", error);
     
-    // Default to knowledge base on error
+    // Default to multiple data sources on error
     return {
-      dataSources: ['knowledge_base'],
+      dataSources: ['knowledge_base', 'drive_files'],
       searchParams: { query }
     };
   }
+}
+
+// Helper function to extract brand information from query
+function extractBrandFromQuery(query: string): string | undefined {
+  const brands = [
+    'Galaxy Treats', 'Kush Burst', 'Delta Extrax', 'Cake', 
+    'Moonwlkr', 'Dimo', 'Urb', '3Chi', 'TRĒ House', 'TRE House',
+    'Mellow Fellow', 'Looper', 'Torch'
+  ];
+  
+  // Find any brand mentioned in the query
+  const lowerQuery = query.toLowerCase();
+  const foundBrand = brands.find(brand => lowerQuery.includes(brand.toLowerCase()));
+  
+  return foundBrand;
+}
+
+// Helper function to extract file type information from query
+function extractFileTypeFromQuery(query: string): string | undefined {
+  const fileTypes = {
+    'logo': ['logo', 'brand image', 'company logo'],
+    'document': ['document', 'doc', 'pdf', 'file', 'form', 'agreement'],
+    'image': ['image', 'picture', 'photo', 'graphic', 'banner']
+  };
+  
+  const lowerQuery = query.toLowerCase();
+  
+  for (const [type, keywords] of Object.entries(fileTypes)) {
+    if (keywords.some(keyword => lowerQuery.includes(keyword))) {
+      return type;
+    }
+  }
+  
+  return undefined;
 }
 
 async function queryDataSources(dataSources: string[], params: any, supabase: any) {
@@ -178,8 +258,10 @@ async function queryDataSources(dataSources: string[], params: any, supabase: an
       source: string;
       found: boolean;
       brand?: string;
+      brandLogo?: string | null;
       state?: string;
       message?: string;
+      error?: string;
     }
   } = {
     sourceInfo: {
@@ -227,10 +309,17 @@ async function queryDataSources(dataSources: string[], params: any, supabase: an
       .then(fileResults => {
         results.fileResults = fileResults;
         if (fileResults && fileResults.length > 0 && !results.sourceInfo.found) {
+          // Try to find a logo for brand display
+          const brandLogo = fileResults.find(file => 
+            file.mime_type && file.mime_type.includes('image') && 
+            file.file_name.toLowerCase().includes('logo'));
+          
           results.sourceInfo = {
             source: 'drive_files',
             found: true,
-            message: 'Found relevant files'
+            message: 'Found relevant files',
+            brand: params.brand || (fileResults[0].brand || undefined),
+            brandLogo: brandLogo?.file_url || null
           };
         }
       }));
@@ -379,7 +468,30 @@ async function searchKnowledgeBase(query: string, supabase: any): Promise<Knowle
 
 async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[]> {
   try {
-    const { query, fileType, brand, category } = params;
+    const { query, fileType, brand, fileId, product, category } = params;
+    
+    // Direct file ID lookup if provided
+    if (fileId) {
+      const { data, error } = await supabase
+        .from('drive_files')
+        .select('*')
+        .eq('id', fileId)
+        .limit(1);
+        
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        return data.map(file => ({
+          file_name: file.file_name,
+          file_url: file.file_url,
+          mime_type: file.mime_type,
+          brand: file.brand,
+          category: file.category,
+          id: file.id,
+          confidence: 1.0  // Direct ID match gets maximum confidence
+        }));
+      }
+    }
     
     // Start with the base query
     let dbQuery = supabase
@@ -389,16 +501,54 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
     // Apply filters based on available parameters
     const searchTerms = [];
     
+    // Look for exact matches in filename first
     if (query) {
       searchTerms.push(`file_name.ilike.%${query}%`);
     }
     
-    if (fileType) {
-      dbQuery = dbQuery.ilike('mime_type', `%${fileType}%`);
+    // Add brand-specific search
+    if (brand) {
+      // Try exact brand name match first
+      const exactBrandMatch = await supabase
+        .from('drive_files')
+        .select('*')
+        .ilike('brand', brand)
+        .ilike('file_name', '%logo%');
+        
+      // If we found an exact match for a brand logo, return it immediately
+      if (exactBrandMatch.data && exactBrandMatch.data.length > 0) {
+        return exactBrandMatch.data.map(file => ({
+          file_name: file.file_name,
+          file_url: file.file_url,
+          mime_type: file.mime_type,
+          brand: file.brand,
+          category: file.category,
+          id: file.id,
+          confidence: 1.0  // Exact brand match for logo gets maximum confidence
+        }));
+      }
+      
+      // Otherwise, add brand as a filter to the main query
+      dbQuery = dbQuery.ilike('brand', `%${brand}%`);
+      
+      // Also search for brand name in filename
+      searchTerms.push(`file_name.ilike.%${brand}%`);
     }
     
-    if (brand) {
-      dbQuery = dbQuery.ilike('brand', `%${brand}%`);
+    // File type filter
+    if (fileType) {
+      if (fileType.toLowerCase() === 'logo') {
+        // Special handling for logo search
+        dbQuery = dbQuery.ilike('file_name', '%logo%');
+      } else {
+        dbQuery = dbQuery.ilike('mime_type', `%${fileType}%`);
+        // Also search filename for file type
+        searchTerms.push(`file_name.ilike.%${fileType}%`);
+      }
+    }
+    
+    if (product) {
+      searchTerms.push(`file_name.ilike.%${product}%`);
     }
     
     if (category) {
@@ -426,9 +576,10 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       mime_type: file.mime_type,
       brand: file.brand,
       category: file.category,
-      confidence: calculateFileRelevanceScore(query || '', file)
+      id: file.id,
+      confidence: calculateFileRelevanceScore(query || brand || fileType || '', file)
     }))
-    .filter(file => file.confidence > 0.3)  // Filter by minimum confidence
+    .filter(file => file.confidence > 0.2)  // Lowered threshold from 0.3 to 0.2
     .sort((a, b) => b.confidence - a.confidence)  // Sort by confidence
     .slice(0, 3);  // Return only top 3 results
   } catch (error) {
@@ -470,6 +621,16 @@ function calculateFileRelevanceScore(query: string, file: any): number {
   
   let score = 0;
   
+  // Boost scores for exact matches
+  if (fileNameLower.includes(query.toLowerCase())) {
+    score += 5;  // Significant boost for exact match
+  }
+  
+  // Extra boost for logo files when looking for logos
+  if (query.toLowerCase().includes('logo') && fileNameLower.includes('logo')) {
+    score += 3;
+  }
+  
   // Check for filename matches (highest weight)
   for (const term of queryTerms) {
     if (term.length < 3) continue; // Skip very short terms
@@ -485,6 +646,10 @@ function calculateFileRelevanceScore(query: string, file: any): number {
       if (term.length < 3) continue;
       if (brandLower.includes(term)) {
         score += 2;
+      }
+      // Also check if the query term is part of a brand name
+      if (term.length > 4 && term === brandLower) {
+        score += 3;  // Extra points for exact brand match
       }
     }
   }
@@ -550,6 +715,7 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
       context += "## File Results\n";
       results.fileResults.forEach((result: FileResult) => {
         context += `- ${result.file_name}`;
+        if (result.id) context += ` (ID: ${result.id})`;
         if (result.brand) context += ` (Brand: ${result.brand})`;
         if (result.category) context += ` (Category: ${result.category})`;
         if (result.file_url) context += ` [Download Link Available]`;
