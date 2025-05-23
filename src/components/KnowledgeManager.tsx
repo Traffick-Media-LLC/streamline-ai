@@ -33,6 +33,7 @@ import { Loader2, Plus, Trash2, Edit, Save, X } from "lucide-react";
 import KnowledgeJsonUploader from "./KnowledgeJsonUploader";
 import KnowledgeCsvUploader from "./KnowledgeCsvUploader";
 import ProductIngredientCsvUploader from "./ProductIngredientCsvUploader";
+import DriveFilesCsvUploader from "./DriveFilesCsvUploader";
 
 export default function KnowledgeManager() {
   const [entries, setEntries] = useState([]);
@@ -58,6 +59,13 @@ export default function KnowledgeManager() {
     // In a real implementation, you might want to show the ingredients table
     fetchEntries();
     toast.success("Ingredient data refreshed");
+  };
+
+  // Add refreshDriveFiles function
+  const refreshDriveFiles = async () => {
+    // This function is a placeholder for refreshing drive files data display
+    fetchEntries();
+    toast.success("Drive files data refreshed");
   };
 
   const fetchEntries = async () => {
@@ -200,6 +208,7 @@ export default function KnowledgeManager() {
         <TabsList>
           <TabsTrigger value="knowledge">Knowledge Entries</TabsTrigger>
           <TabsTrigger value="ingredients">Product Ingredients</TabsTrigger>
+          <TabsTrigger value="drivefiles">Drive Files</TabsTrigger>
         </TabsList>
         
         <TabsContent value="knowledge">
@@ -394,6 +403,30 @@ export default function KnowledgeManager() {
                   <li><span className="font-mono">Ingredient 2-5</span> - Additional ingredients (optional)</li>
                 </ul>
                 <p className="mt-2">Each row should contain one product with up to 5 ingredients. The first ingredient is required.</p>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="drivefiles">
+          <div className="space-y-4">
+            {/* Upload Controls */}
+            <div className="mb-4 border rounded-md p-4 bg-background">
+              <h3 className="text-lg font-medium mb-3">Drive Files Upload</h3>
+              <div className="grid gap-4">
+                <DriveFilesCsvUploader onComplete={refreshDriveFiles} />
+              </div>
+              <div className="mt-3 text-sm text-muted-foreground">
+                <p className="mb-2">The CSV file should contain the following columns:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><span className="font-mono">File Name</span> - The name of the file (required)</li>
+                  <li><span className="font-mono">Mime Type</span> - Type of the file (required)</li>
+                  <li><span className="font-mono">Brand</span> - Related brand (optional)</li>
+                  <li><span className="font-mono">Category</span> - File category (optional)</li>
+                  <li><span className="font-mono">File URL</span> - URL to the file if available (optional)</li>
+                  <li><span className="font-mono">Subcategory 1-6</span> - Additional categorization levels (optional)</li>
+                </ul>
+                <p className="mt-2">Each row should represent one file. The File Name and Mime Type columns are required.</p>
               </div>
             </div>
           </div>
