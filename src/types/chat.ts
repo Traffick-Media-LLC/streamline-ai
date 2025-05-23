@@ -1,3 +1,4 @@
+
 import { User } from "@supabase/supabase-js";
 
 export type SourceInfo = {
@@ -14,7 +15,7 @@ export type SourceInfo = {
   message?: string;
   error?: string;
   ingredient?: string;
-  source: 'product_database' | 'brand_database' | 'internet_knowledge' | 'no_match' | 'database_error';
+  source: 'product_database' | 'brand_database' | 'internet_knowledge' | 'drive_files' | 'no_match' | 'database_error';
 };
 
 export type MessageMetadata = {
@@ -28,6 +29,7 @@ export type MessageMetadata = {
 
 export type Message = {
   id: string;
+  chatId: string;
   createdAt: string;
   content: string;
   role: "system" | "assistant" | "user";

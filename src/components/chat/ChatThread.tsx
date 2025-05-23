@@ -23,18 +23,15 @@ const ChatThread = ({ messages, isLoading, chatId }: ChatThreadProps) => {
         {messages.map((message, index) => (
           <ChatMessage 
             key={message.id || index} 
-            message={{
-              ...message,
-              chatId: chatId || ''
-            }} 
+            message={message}
           />
         ))}
         
-        {isLoading && (
+        {isLoading && chatId && (
           <ChatMessage 
             message={{
               id: 'loading',
-              chatId: chatId || '',
+              chatId: chatId,
               content: '',
               role: 'assistant',
               createdAt: new Date().toISOString(),

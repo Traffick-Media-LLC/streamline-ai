@@ -53,14 +53,32 @@ export const useChatState = (): ChatState => {
               if (messagesError) {
                 console.error("Error fetching messages:", messagesError);
                 return {
-                  ...chat,
-                  messages: []
+                  id: chat.id,
+                  title: chat.title,
+                  messages: [],
+                  createdAt: chat.created_at,
+                  updatedAt: chat.updated_at,
+                  user_id: chat.user_id
                 };
               }
               
+              // Transform messages to match our Message type
+              const formattedMessages = messages?.map(msg => ({
+                id: msg.id,
+                chatId: msg.chat_id,
+                content: msg.content,
+                role: msg.role,
+                createdAt: msg.timestamp,
+                metadata: msg.metadata
+              })) || [];
+              
               return {
-                ...chat,
-                messages: messages || []
+                id: chat.id,
+                title: chat.title,
+                messages: formattedMessages,
+                createdAt: chat.created_at,
+                updatedAt: chat.updated_at,
+                user_id: chat.user_id
               };
             })
           );
