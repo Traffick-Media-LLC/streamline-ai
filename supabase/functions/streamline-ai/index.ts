@@ -503,8 +503,7 @@ async function searchKnowledgeBase(query: string, supabase: any): Promise<Knowle
 }
 
 /**
- * Enhanced drive files search function that searches across all columns
- * and handles variations in terms and brand names
+ * Enhanced drive files search function with fixed SQL syntax for PostgREST 
  */
 async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[]> {
   try {
@@ -533,138 +532,132 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       }
     }
 
-    // 1. Build a search query that checks all relevant columns
-    let plainTextSearchTerms: string[] = [];
-    
-    // Add search terms to array, normalize them
-    if (query) plainTextSearchTerms.push(query.toLowerCase());
-    if (product) plainTextSearchTerms.push(product.toLowerCase());
-    
-    // Add both singular and plural variations of terms for broader matching
-    const fileTypeTerms: string[] = [];
-    if (fileType) {
-      const ftLower = fileType.toLowerCase();
-      fileTypeTerms.push(ftLower);
+    // Special handling for logo searches
+    if ((fileType && fileType.toLowerCase().includes('logo')) || 
+        (query && query.toLowerCase().includes('logo'))) {
+      console.log("Logo search detected, using simplified search");
       
-      // Add singular/plural variations
-      if (ftLower.endsWith('s')) {
-        fileTypeTerms.push(ftLower.slice(0, -1)); // Remove trailing 's'
-      } else {
-        fileTypeTerms.push(ftLower + 's'); // Add trailing 's'
-      }
-    }
-    
-    // Handle brand variations
-    let brandVariations: string[] = [];
-    if (brand) {
-      const brandLower = brand.toLowerCase();
-      brandVariations.push(brandLower);
-      
-      // Check for known brand aliases
-      for (const [mainBrand, aliases] of Object.entries(BRAND_ALIASES)) {
-        if (mainBrand.toLowerCase() === brandLower || 
-            aliases.some(alias => alias.toLowerCase() === brandLower)) {
-          // Add all variations of this brand
-          brandVariations = [...brandVariations, mainBrand.toLowerCase(), ...aliases.map(a => a.toLowerCase())];
-          break;
-        }
-      }
-    }
-    
-    // Handle category / file type variations using the fileTypeTerms
-    let categoryTerms: string[] = [];
-    if (category) {
-      // Normalize category name and handle special characters
-      const normalizedCategory = category.replace(/:/g, ' ').toLowerCase();
-      categoryTerms.push(normalizedCategory);
-      
-      // Add variations with and without colons
-      if (normalizedCategory.includes(' ')) {
-        categoryTerms.push(normalizedCategory.replace(/\s+/g, ':'));
-      }
-      
-      // Add singular/plural variations
-      if (normalizedCategory.endsWith('s')) {
-        categoryTerms.push(normalizedCategory.slice(0, -1));
-      } else {
-        categoryTerms.push(normalizedCategory + 's');
-      }
-    }
-
-    // Start with the base query
-    let dbQuery = supabase.from('drive_files').select('*');
-    
-    // Build a comprehensive search filter using OR conditions across all columns
-    const searchConditions = [];
-    
-    // Search in file_name across all search terms
-    for (const term of [...plainTextSearchTerms, ...fileTypeTerms, ...brandVariations]) {
-      if (term && term.length > 2) { // Skip very short terms
-        searchConditions.push(`file_name.ilike.%${term}%`);
-      }
-    }
-    
-    // Search in brand field
-    if (brandVariations.length > 0) {
-      const brandConditions = brandVariations
-        .filter(b => b && b.length > 2)
-        .map(b => `brand.ilike.%${b}%`);
+      // For logo searches, prioritize matching by brand name and mime_type for images
+      let logoQuery = supabase.from('drive_files')
+        .select('*')
+        .ilike('file_name', '%logo%'); // Look for 'logo' in filename
         
-      if (brandConditions.length > 0) {
-        searchConditions.push(`(${brandConditions.join(' OR ')})`);
-      }
-    }
-    
-    // Search in category field
-    if (categoryTerms.length > 0) {
-      const categoryConditions = categoryTerms
-        .filter(c => c && c.length > 2)
-        .map(c => `category.ilike.%${c}%`);
+      // Add brand filter if specified
+      if (brand) {
+        // For brand matching in logo searches, we'll use a simpler approach
+        // Find the normalized brand name
+        const brandLower = brand.toLowerCase();
         
-      if (categoryConditions.length > 0) {
-        searchConditions.push(`(${categoryConditions.join(' OR ')})`);
-      }
-    }
-    
-    // Search in subcategory fields - include all subcategories 1-6
-    const allTerms = [...plainTextSearchTerms, ...fileTypeTerms, ...categoryTerms];
-    if (allTerms.length > 0) {
-      for (let i = 1; i <= 6; i++) {
-        for (const term of allTerms) {
-          if (term && term.length > 2) {
-            searchConditions.push(`subcategory_${i}.ilike.%${term}%`);
+        // Try to match the brand directly
+        logoQuery = logoQuery.or(`brand.ilike.%${brandLower}%,file_name.ilike.%${brandLower}%`);
+        
+        // Add variations if it's a known brand with aliases
+        for (const [mainBrand, aliases] of Object.entries(BRAND_ALIASES)) {
+          if (mainBrand.toLowerCase() === brandLower || 
+              aliases.some(alias => alias.toLowerCase().includes(brandLower))) {
+            
+            // Add main brand as another search term
+            if (mainBrand.toLowerCase() !== brandLower) {
+              logoQuery = logoQuery.or(`brand.ilike.%${mainBrand.toLowerCase()}%,file_name.ilike.%${mainBrand.toLowerCase()}%`);
+            }
+            
+            // Add each alias as a search term
+            for (const alias of aliases) {
+              if (alias.toLowerCase() !== brandLower) {
+                logoQuery = logoQuery.or(`brand.ilike.%${alias.toLowerCase()}%,file_name.ilike.%${alias.toLowerCase()}%`);
+              }
+            }
+            break;
           }
         }
       }
-    }
-    
-    // Special handling for "sales sheet" or "spec sheet" searches across any field
-    const isSearchingForSheet = plainTextSearchTerms.some(term => 
-      term.includes('sales') || 
-      term.includes('sheet') || 
-      term.includes('spec'));
       
-    if (isSearchingForSheet || fileType === 'sales sheet') {
-      const sheetSearchTerms = ['sales sheet', 'salessheet', 'spec sheet', 'specsheet', 'specs'];
+      // Prefer images for logo searches
+      logoQuery = logoQuery.contains('mime_type', 'image');
       
-      // Look for these terms in any text field
-      for (const term of sheetSearchTerms) {
-        searchConditions.push(`file_name.ilike.%${term}%`);
-        searchConditions.push(`category.ilike.%${term}%`);
+      // Execute query
+      const { data, error } = await logoQuery.limit(10);
+      
+      if (error) {
+        console.error("Logo search error:", error);
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        console.log(`Logo search found ${data.length} matches`);
         
-        for (let i = 1; i <= 6; i++) {
-          searchConditions.push(`subcategory_${i}.ilike.%${term}%`);
-        }
+        // Calculate confidence scores and return results
+        return data.map(file => ({
+          file_name: file.file_name,
+          file_url: file.file_url,
+          mime_type: file.mime_type,
+          brand: file.brand,
+          category: file.category,
+          id: file.id,
+          confidence: calculateEnhancedFileRelevanceScore(params, file)
+        }))
+        .filter(file => file.confidence > 0.2)
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 3);
+      } else {
+        console.log("No logo files found with direct search");
       }
     }
-
-    // Apply all the search conditions with OR logic
-    if (searchConditions.length > 0) {
-      dbQuery = dbQuery.or(searchConditions.join(','));
+    
+    // Normal search for other file types - using simplified filter approach
+    let dbQuery = supabase.from('drive_files').select('*');
+    let filterApplied = false;
+    
+    // Apply text search filters one by one instead of complex OR conditions
+    // File name search
+    if (query && query.length > 2) {
+      dbQuery = dbQuery.ilike('file_name', `%${query}%`);
+      filterApplied = true;
+    }
+    
+    // Type/category search
+    if (fileType && fileType.length > 2) {
+      if (filterApplied) {
+        dbQuery = dbQuery.or(`category.ilike.%${fileType}%,file_name.ilike.%${fileType}%`);
+      } else {
+        dbQuery = dbQuery.ilike('file_name', `%${fileType}%`).or(`category.ilike.%${fileType}%`);
+        filterApplied = true;
+      }
+    }
+    
+    // Brand search
+    if (brand && brand.length > 2) {
+      if (filterApplied) {
+        dbQuery = dbQuery.or(`brand.ilike.%${brand}%,file_name.ilike.%${brand}%`);
+      } else {
+        dbQuery = dbQuery.ilike('brand', `%${brand}%`).or(`file_name.ilike.%${brand}%`);
+        filterApplied = true;
+      }
+    }
+    
+    // Sales sheet special handling
+    if (category && category.toLowerCase().includes('sales')) {
+      if (filterApplied) {
+        dbQuery = dbQuery.or(`category.ilike.%sales%,category.ilike.%sheet%,file_name.ilike.%sales%,file_name.ilike.%sheet%`);
+      } else {
+        dbQuery = dbQuery.ilike('category', '%sales%').or(`category.ilike.%sheet%,file_name.ilike.%sales%,file_name.ilike.%sheet%`);
+        filterApplied = true;
+      }
+    }
+    
+    // If no filters were applied, add a basic filter to prevent returning all files
+    if (!filterApplied) {
+      if (product) {
+        dbQuery = dbQuery.ilike('file_name', `%${product}%`);
+      } else {
+        // Default to most recent files if no search criteria
+        dbQuery = dbQuery.order('created_at', { ascending: false });
+      }
     }
     
     // Execute the query
-    const { data, error } = await dbQuery.limit(10);
+    console.log("Executing general file search");
+    const { data, error } = await dbQuery.limit(20);
     
     if (error) {
       console.error("Database query error:", error);
@@ -688,18 +681,52 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       id: file.id,
       confidence: calculateEnhancedFileRelevanceScore(params, file)
     }))
-    .filter(file => file.confidence > 0.2)  // Lowered threshold from 0.3 to 0.2
-    .sort((a, b) => b.confidence - a.confidence)  // Sort by confidence
-    .slice(0, 3);  // Return only top 3 results
+    .filter(file => file.confidence > 0.2)
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 3);
   } catch (error) {
     console.error("Error searching drive files:", error);
+    
+    // Fall back to a simpler search method on error
+    try {
+      console.log("Attempting fallback search method");
+      
+      // Simple search with minimal filters to avoid syntax errors
+      const { query, fileType, brand } = params;
+      let fallbackQuery = supabase.from('drive_files').select('*');
+      
+      // Only add the most important filter
+      if (brand) {
+        fallbackQuery = fallbackQuery.ilike('brand', `%${brand}%`);
+      } else if (fileType) {
+        fallbackQuery = fallbackQuery.ilike('file_name', `%${fileType}%`);
+      } else if (query) {
+        fallbackQuery = fallbackQuery.ilike('file_name', `%${query}%`);
+      }
+      
+      const { data } = await fallbackQuery.limit(5);
+      
+      if (data && data.length > 0) {
+        console.log(`Fallback found ${data.length} matches`);
+        return data.map(file => ({
+          file_name: file.file_name,
+          file_url: file.file_url,
+          mime_type: file.mime_type,
+          brand: file.brand,
+          category: file.category,
+          id: file.id,
+          confidence: 0.5 // Default confidence for fallback results
+        }));
+      }
+    } catch (fallbackError) {
+      console.error("Fallback search also failed:", fallbackError);
+    }
+    
     return [];
   }
 }
 
-/**
- * Enhanced relevance scoring algorithm that considers multiple ways terms can match across different columns
- */
+// Helper function to calculate enhanced file relevance score
 function calculateEnhancedFileRelevanceScore(params: any, file: any): number {
   // Extract all search parameters
   const { query, fileType, brand, product, category } = params;
@@ -746,15 +773,10 @@ function calculateEnhancedFileRelevanceScore(params: any, file: any): number {
       for (const [mainBrand, aliases] of Object.entries(BRAND_ALIASES)) {
         // If our search is for this brand
         if (mainBrand.toLowerCase() === brandLower || 
-            aliases.some(alias => alias.toLowerCase() === brandLower)) {
-          
-          // Check if file has any variation of this brand
-          if (fileValues.brand === mainBrand.toLowerCase() || 
-              aliases.some(alias => fileValues.brand === alias.toLowerCase() || 
-                                   fileValues.file_name.includes(alias.toLowerCase()))) {
-            score += 3;
-            break;
-          }
+            aliases.some(alias => fileValues.brand === alias.toLowerCase() || 
+                                 fileValues.file_name.includes(alias.toLowerCase()))) {
+          score += 3;
+          break;
         }
       }
     }
