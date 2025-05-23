@@ -1,3 +1,4 @@
+
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
@@ -16,15 +17,14 @@ import PermissionsPage from "./pages/admin/PermissionsPage";
 import BrandsPage from "./pages/admin/BrandsPage";
 import ProductsPage from "./pages/admin/ProductsPage";
 import KnowledgePage from "./pages/admin/KnowledgePage";
-import DriveFilesPage from "./pages/admin/DriveFilesPage"; // Add this import
+import DriveFilesPage from "./pages/admin/DriveFilesPage";
 import EmployeeDirectory from "./pages/EmployeeDirectory";
 
 import AdminLayout from "./components/admin/AdminLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
-  const AuthComponent = lazy(() => import('./components/Auth'));
-
+  // Remove the lazy import for Auth component since it's not being used
   return (
     <div className="App">
       <Routes>

@@ -89,3 +89,6 @@ export const adminNavConfig: NavSection[] = [
     ],
   },
 ];
+
+// Export adminNavItems for use in other components
+export const adminNavItems = adminNavConfig.flatMap(section => section.items);
