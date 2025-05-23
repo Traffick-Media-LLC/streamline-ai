@@ -1,68 +1,91 @@
 
-import { LayoutDashboard, Package, Users, BookText, Briefcase, Map, FileBarChart } from 'lucide-react';
+import { 
+  Users, 
+  FileText, 
+  Box, 
+  ShoppingBag, 
+  Shield, 
+  Network, 
+  Building2,
+  Database,
+  FileBox
+} from "lucide-react";
 
-// Define the type for navigation items
-type AdminNavItem = {
+export interface NavItem {
   title: string;
-  path?: string;
-  icon: React.ComponentType<any>;
-  exact?: boolean;
-  children?: {
-    title: string;
-    path: string;
-    icon: React.ComponentType<any>;
-  }[];
-};
+  href: string;
+  icon: any;
+}
 
-// Configuration for admin navigation
-export const adminNavItems: AdminNavItem[] = [
+export interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+export const adminNavConfig: NavSection[] = [
   {
-    title: "Dashboard",
-    path: "/admin",
-    icon: LayoutDashboard,
-    exact: true
-  }, 
-  {
-    title: "Product Management",
-    icon: Package,
-    children: [
-      {
-        title: "Brands",
-        path: "/admin/brands",
-        icon: Briefcase
-      }, 
-      {
-        title: "Products",
-        path: "/admin/products",
-        icon: Package
-      }, 
-      {
-        title: "State Permissions",
-        path: "/admin/permissions",
-        icon: Map
-      }
-    ]
-  }, 
-  {
-    title: "Employee Management",
-    icon: Users,
-    children: [
+    title: "Organization",
+    items: [
       {
         title: "Employee Directory",
-        path: "/admin/employees",
-        icon: Users
-      }, 
+        href: "/admin/employees",
+        icon: Users,
+      },
       {
         title: "Organization Chart",
-        path: "/admin/organization",
-        icon: FileBarChart
-      }
-    ]
-  }, 
+        href: "/admin/organization",
+        icon: Network,
+      },
+    ],
+  },
   {
-    title: "Knowledge Base",
-    path: "/admin/knowledge",
-    icon: BookText,
-    exact: true
-  }
+    title: "Content",
+    items: [
+      {
+        title: "Knowledge Base",
+        href: "/admin/knowledge",
+        icon: FileText,
+      },
+      {
+        title: "Drive Files",
+        href: "/admin/drive-files",
+        icon: FileBox,
+      },
+    ],
+  },
+  {
+    title: "Products",
+    items: [
+      {
+        title: "Brands",
+        href: "/admin/brands",
+        icon: Building2,
+      },
+      {
+        title: "Products",
+        href: "/admin/products",
+        icon: Box,
+      },
+      {
+        title: "State Permissions",
+        href: "/admin/permissions",
+        icon: ShoppingBag,
+      },
+    ],
+  },
+  {
+    title: "System",
+    items: [
+      {
+        title: "Admin",
+        href: "/admin",
+        icon: Shield,
+      },
+      {
+        title: "Database",
+        href: "/admin/database",
+        icon: Database,
+      },
+    ],
+  },
 ];
