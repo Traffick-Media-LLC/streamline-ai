@@ -67,7 +67,7 @@ export const useChatState = (): ChatState => {
                 id: msg.id,
                 chatId: msg.chat_id,
                 content: msg.content,
-                role: msg.role,
+                role: msg.role as "system" | "assistant" | "user", // Type assertion here
                 createdAt: msg.timestamp,
                 metadata: msg.metadata
               })) || [];

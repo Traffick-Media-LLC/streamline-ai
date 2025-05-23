@@ -47,7 +47,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
               </div>
             )}
             
-            {!isUser && message.id && (
+            {!isUser && message.id && message.id !== 'loading' && (
               <ChatMessageFeedback 
                 messageId={message.id} 
                 chatId={message.chatId} 
