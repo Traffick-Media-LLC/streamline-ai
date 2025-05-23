@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, Package, Users, BookText, Briefcase, Map, FileBarChart } from 'lucide-react';
+import { LayoutDashboard, Package, Users, BookText, Briefcase, Map, FileBarChart, Database } from 'lucide-react';
 
 // Define the type for navigation items
 type AdminNavItem = {
@@ -40,6 +40,11 @@ export const adminNavItems: AdminNavItem[] = [
         title: "State Permissions",
         path: "/admin/permissions",
         icon: Map
+      },
+      {
+        title: "Product Ingredients",
+        path: "/admin/ingredients",
+        icon: Database
       }
     ]
   }, 

@@ -10,7 +10,8 @@ const TopicCards = ({ onSelectTopic }: TopicCardsProps) => {
     "Is Delta-8 legal in Texas?",
     "Tell me about Brand X's products",
     "Do you have information about CBD regulations?",
-    "Which states allow THC products?"
+    "Which states allow THC products?",
+    "What ingredients are in Product Y?"
   ];
 
   return (
