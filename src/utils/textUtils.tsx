@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 // Regular expressions for detecting different types of content
@@ -5,7 +6,7 @@ const urlRegex = /(https?:\/\/[^\s]+)/g;
 const boldTitleRegex = /\*\*(.*?)\*\*/g;
 const fileExtensionRegex = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|jpg|jpeg|png|gif)(?=\s|$|\)|\])/i;
 const logoUrlRegex = /logo|icon|brand.*\.(jpg|jpeg|png|gif|webp|svg)/i;
-const markdownImageRegex = /!\[(.*?)\]\((https?:\/\/[^\s]+)\)/g;
+const markdownLinkRegex = /\[(.*?)\]\((https?:\/\/[^\s]+)\)/g;
 
 // Function to check if a URL is likely a logo image
 const isLogoImageUrl = (url: string): boolean => {
@@ -13,18 +14,83 @@ const isLogoImageUrl = (url: string): boolean => {
 };
 
 export const renderTextWithLinks = (text: string) => {
-  // First, remove any markdown image syntax for logo URLs
-  text = text.replace(markdownImageRegex, (match, altText, url) => {
-    if (isLogoImageUrl(url)) {
-      return ''; // Remove the entire markdown image syntax
+  if (!text) return null;
+
+  // First, handle markdown links [text](url)
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  // Process all markdown-style links first
+  while ((match = markdownLinkRegex.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      // Process this segment for bold text and direct URLs
+      const beforeText = text.slice(lastIndex, match.index);
+      parts.push(processTextSegment(beforeText));
     }
-    return match; // Keep non-logo image markdown
-  });
+    
+    // Extract link text and URL from markdown syntax [text](url)
+    const [fullMatch, linkText, url] = match;
+    
+    // Check if this is a logo image to skip
+    if (isLogoImageUrl(url)) {
+      // Skip logo URLs
+      lastIndex = match.index + fullMatch.length;
+      continue;
+    }
+    
+    // Determine if this is likely a file link
+    const isFileLink = fileExtensionRegex.test(url);
+    
+    // Add the link with just the link text showing
+    parts.push(
+      <a 
+        key={`ml-${match.index}`}
+        href={url} 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className={`${isFileLink ? 'text-green-600' : 'text-blue-600'} hover:underline hover:text-blue-800 font-medium transition-colors flex items-center`}
+      >
+        {linkText}
+        <span className="inline-block ml-1">
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="12" 
+            height="12" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </span>
+      </a>
+    );
+    
+    lastIndex = match.index + fullMatch.length;
+  }
   
-  // Split by URLs but keep them
-  const parts = text.split(urlRegex);
+  // Add remaining text after all markdown links
+  if (lastIndex < text.length) {
+    const remainingText = text.slice(lastIndex);
+    parts.push(processTextSegment(remainingText));
+  }
   
-  return parts.map((part, index) => {
+  return parts;
+};
+
+// Helper function to process text segments for bold and direct URLs
+function processTextSegment(text: string) {
+  // Process this segment for direct URLs
+  const urlParts = text.split(urlRegex);
+  
+  return urlParts.map((part, index) => {
     // Handle URLs
     if (part.match(urlRegex)) {
       // Check if this appears to be a logo image URL
@@ -38,7 +104,7 @@ export const renderTextWithLinks = (text: string) => {
       
       return (
         <a 
-          key={index} 
+          key={`url-${index}`}
           href={part} 
           target="_blank" 
           rel="noopener noreferrer" 
@@ -69,7 +135,7 @@ export const renderTextWithLinks = (text: string) => {
     // For non-URL parts, handle bold text
     const boldParts = part.split(boldTitleRegex);
     return (
-      <React.Fragment key={index}>
+      <React.Fragment key={`bp-${index}`}>
         {boldParts.map((text, boldIndex) => {
           // Every even index in boldParts array is the content between ** **
           return boldIndex % 2 === 0 ? (
@@ -83,7 +149,7 @@ export const renderTextWithLinks = (text: string) => {
       </React.Fragment>
     );
   }).filter(Boolean); // Filter out null values (removed logo URLs)
-};
+}
 
 // Function to extract URLs from text
 export const extractUrls = (text: string): string[] => {
