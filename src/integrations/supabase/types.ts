@@ -162,33 +162,60 @@ export type Database = {
       }
       drive_files: {
         Row: {
+          brand: string | null
+          category: string | null
           created_at: string
           description: string | null
-          file_type: string
+          file_name: string
+          file_url: string | null
           id: string
           last_accessed: string
-          name: string
+          mime_type: string
           size_bytes: number | null
+          subcategory_1: string | null
+          subcategory_2: string | null
+          subcategory_3: string | null
+          subcategory_4: string | null
+          subcategory_5: string | null
+          subcategory_6: string | null
           updated_at: string
         }
         Insert: {
+          brand?: string | null
+          category?: string | null
           created_at?: string
           description?: string | null
-          file_type: string
+          file_name: string
+          file_url?: string | null
           id: string
           last_accessed?: string
-          name: string
+          mime_type: string
           size_bytes?: number | null
+          subcategory_1?: string | null
+          subcategory_2?: string | null
+          subcategory_3?: string | null
+          subcategory_4?: string | null
+          subcategory_5?: string | null
+          subcategory_6?: string | null
           updated_at?: string
         }
         Update: {
+          brand?: string | null
+          category?: string | null
           created_at?: string
           description?: string | null
-          file_type?: string
+          file_name?: string
+          file_url?: string | null
           id?: string
           last_accessed?: string
-          name?: string
+          mime_type?: string
           size_bytes?: number | null
+          subcategory_1?: string | null
+          subcategory_2?: string | null
+          subcategory_3?: string | null
+          subcategory_4?: string | null
+          subcategory_5?: string | null
+          subcategory_6?: string | null
           updated_at?: string
         }
         Relationships: []
