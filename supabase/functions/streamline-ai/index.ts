@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -42,6 +41,16 @@ interface FileResult {
   confidence?: number;
   id?: string;
 }
+
+// Brand name mapping to handle variations
+const BRAND_ALIASES: {[key: string]: string[]} = {
+  'Galaxy Treats': ['Orbital', 'Galaxy', 'Treats'],
+  'Kush Burst': ['Kush', 'Burst'],
+  'Delta Extrax': ['Delta', 'Extrax'],
+  'TRĒ House': ['TRE House', 'TRE', 'Tre'],
+  'Mellow Fellow': ['Mellow', 'Fellow'],
+  'Juice Head': ['Juice', 'Head'],
+};
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -493,6 +502,10 @@ async function searchKnowledgeBase(query: string, supabase: any): Promise<Knowle
   }
 }
 
+/**
+ * Enhanced drive files search function that searches across all columns
+ * and handles variations in terms and brand names
+ */
 async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[]> {
   try {
     const { query, fileType, brand, fileId, product, category } = params;
@@ -519,90 +532,153 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
         }));
       }
     }
+
+    // 1. Build a search query that checks all relevant columns
+    let plainTextSearchTerms: string[] = [];
     
-    // Start with the base query
-    let dbQuery = supabase
-      .from('drive_files')
-      .select('*');
+    // Add search terms to array, normalize them
+    if (query) plainTextSearchTerms.push(query.toLowerCase());
+    if (product) plainTextSearchTerms.push(product.toLowerCase());
     
-    // Apply filters based on available parameters
-    const searchTerms = [];
-    
-    // Look for exact matches in filename first
-    if (query) {
-      searchTerms.push(`file_name.ilike.%${query}%`);
-    }
-    
-    // Add brand-specific search
-    if (brand) {
-      // Try exact brand name match first
-      const exactBrandMatch = await supabase
-        .from('drive_files')
-        .select('*')
-        .ilike('brand', brand)
-        .ilike('file_name', '%logo%');
-        
-      // If we found an exact match for a brand logo, return it immediately
-      if (exactBrandMatch.data && exactBrandMatch.data.length > 0) {
-        return exactBrandMatch.data.map(file => ({
-          file_name: file.file_name,
-          file_url: file.file_url,
-          mime_type: file.mime_type,
-          brand: file.brand,
-          category: file.category,
-          id: file.id,
-          confidence: 1.0  // Exact brand match for logo gets maximum confidence
-        }));
-      }
-      
-      // Otherwise, add brand as a filter to the main query
-      dbQuery = dbQuery.ilike('brand', `%${brand}%`);
-      
-      // Also search for brand name in filename
-      searchTerms.push(`file_name.ilike.%${brand}%`);
-    }
-    
-    // File type filter
+    // Add both singular and plural variations of terms for broader matching
+    const fileTypeTerms: string[] = [];
     if (fileType) {
-      if (fileType.toLowerCase() === 'logo') {
-        // Special handling for logo search
-        dbQuery = dbQuery.ilike('file_name', '%logo%');
-      } else if (fileType.toLowerCase() === 'sales sheet') {
-        // Special handling for sales sheets
-        searchTerms.push(`(file_name.ilike.%sales%sheet% OR file_name.ilike.%spec%sheet%)`);
+      const ftLower = fileType.toLowerCase();
+      fileTypeTerms.push(ftLower);
+      
+      // Add singular/plural variations
+      if (ftLower.endsWith('s')) {
+        fileTypeTerms.push(ftLower.slice(0, -1)); // Remove trailing 's'
       } else {
-        dbQuery = dbQuery.ilike('mime_type', `%${fileType}%`);
-        // Also search filename for file type
-        searchTerms.push(`file_name.ilike.%${fileType}%`);
+        fileTypeTerms.push(ftLower + 's'); // Add trailing 's'
       }
     }
     
-    if (product) {
-      searchTerms.push(`file_name.ilike.%${product}%`);
+    // Handle brand variations
+    let brandVariations: string[] = [];
+    if (brand) {
+      const brandLower = brand.toLowerCase();
+      brandVariations.push(brandLower);
+      
+      // Check for known brand aliases
+      for (const [mainBrand, aliases] of Object.entries(BRAND_ALIASES)) {
+        if (mainBrand.toLowerCase() === brandLower || 
+            aliases.some(alias => alias.toLowerCase() === brandLower)) {
+          // Add all variations of this brand
+          brandVariations = [...brandVariations, mainBrand.toLowerCase(), ...aliases.map(a => a.toLowerCase())];
+          break;
+        }
+      }
     }
     
-    // Category filter - handling special characters like colons
+    // Handle category / file type variations using the fileTypeTerms
+    let categoryTerms: string[] = [];
     if (category) {
-      // Handle categories with special format like "Sales Sheets:Specs"
-      const normalizedCategory = category.replace(':', '%');
-      dbQuery = dbQuery.or(`category.ilike.%${normalizedCategory}%, category.ilike.%${category}%`);
+      // Normalize category name and handle special characters
+      const normalizedCategory = category.replace(/:/g, ' ').toLowerCase();
+      categoryTerms.push(normalizedCategory);
+      
+      // Add variations with and without colons
+      if (normalizedCategory.includes(' ')) {
+        categoryTerms.push(normalizedCategory.replace(/\s+/g, ':'));
+      }
+      
+      // Add singular/plural variations
+      if (normalizedCategory.endsWith('s')) {
+        categoryTerms.push(normalizedCategory.slice(0, -1));
+      } else {
+        categoryTerms.push(normalizedCategory + 's');
+      }
+    }
+
+    // Start with the base query
+    let dbQuery = supabase.from('drive_files').select('*');
+    
+    // Build a comprehensive search filter using OR conditions across all columns
+    const searchConditions = [];
+    
+    // Search in file_name across all search terms
+    for (const term of [...plainTextSearchTerms, ...fileTypeTerms, ...brandVariations]) {
+      if (term && term.length > 2) { // Skip very short terms
+        searchConditions.push(`file_name.ilike.%${term}%`);
+      }
     }
     
-    // If we have search terms, add them to the query
-    if (searchTerms.length > 0) {
-      dbQuery = dbQuery.or(searchTerms.join(','));
+    // Search in brand field
+    if (brandVariations.length > 0) {
+      const brandConditions = brandVariations
+        .filter(b => b && b.length > 2)
+        .map(b => `brand.ilike.%${b}%`);
+        
+      if (brandConditions.length > 0) {
+        searchConditions.push(`(${brandConditions.join(' OR ')})`);
+      }
+    }
+    
+    // Search in category field
+    if (categoryTerms.length > 0) {
+      const categoryConditions = categoryTerms
+        .filter(c => c && c.length > 2)
+        .map(c => `category.ilike.%${c}%`);
+        
+      if (categoryConditions.length > 0) {
+        searchConditions.push(`(${categoryConditions.join(' OR ')})`);
+      }
+    }
+    
+    // Search in subcategory fields - include all subcategories 1-6
+    const allTerms = [...plainTextSearchTerms, ...fileTypeTerms, ...categoryTerms];
+    if (allTerms.length > 0) {
+      for (let i = 1; i <= 6; i++) {
+        for (const term of allTerms) {
+          if (term && term.length > 2) {
+            searchConditions.push(`subcategory_${i}.ilike.%${term}%`);
+          }
+        }
+      }
+    }
+    
+    // Special handling for "sales sheet" or "spec sheet" searches across any field
+    const isSearchingForSheet = plainTextSearchTerms.some(term => 
+      term.includes('sales') || 
+      term.includes('sheet') || 
+      term.includes('spec'));
+      
+    if (isSearchingForSheet || fileType === 'sales sheet') {
+      const sheetSearchTerms = ['sales sheet', 'salessheet', 'spec sheet', 'specsheet', 'specs'];
+      
+      // Look for these terms in any text field
+      for (const term of sheetSearchTerms) {
+        searchConditions.push(`file_name.ilike.%${term}%`);
+        searchConditions.push(`category.ilike.%${term}%`);
+        
+        for (let i = 1; i <= 6; i++) {
+          searchConditions.push(`subcategory_${i}.ilike.%${term}%`);
+        }
+      }
+    }
+
+    // Apply all the search conditions with OR logic
+    if (searchConditions.length > 0) {
+      dbQuery = dbQuery.or(searchConditions.join(','));
     }
     
     // Execute the query
     const { data, error } = await dbQuery.limit(10);
     
-    if (error) throw error;
+    if (error) {
+      console.error("Database query error:", error);
+      throw error;
+    }
     
     if (!data || data.length === 0) {
+      console.log("No matching files found");
       return [];
     }
     
-    // Transform the results and calculate confidence scores
+    console.log(`Found ${data.length} potential file matches`);
+    
+    // Calculate relevance scores with enhanced algorithm
     return data.map(file => ({
       file_name: file.file_name,
       file_url: file.file_url,
@@ -610,7 +686,7 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       brand: file.brand,
       category: file.category,
       id: file.id,
-      confidence: calculateFileRelevanceScore(query || brand || fileType || product || '', file)
+      confidence: calculateEnhancedFileRelevanceScore(params, file)
     }))
     .filter(file => file.confidence > 0.2)  // Lowered threshold from 0.3 to 0.2
     .sort((a, b) => b.confidence - a.confidence)  // Sort by confidence
@@ -619,6 +695,169 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
     console.error("Error searching drive files:", error);
     return [];
   }
+}
+
+/**
+ * Enhanced relevance scoring algorithm that considers multiple ways terms can match across different columns
+ */
+function calculateEnhancedFileRelevanceScore(params: any, file: any): number {
+  // Extract all search parameters
+  const { query, fileType, brand, product, category } = params;
+  
+  // Get all text values from the file record
+  const fileValues = {
+    file_name: file.file_name?.toLowerCase() || '',
+    brand: file.brand?.toLowerCase() || '',
+    category: file.category?.toLowerCase() || '',
+    subcategory_1: file.subcategory_1?.toLowerCase() || '',
+    subcategory_2: file.subcategory_2?.toLowerCase() || '',
+    subcategory_3: file.subcategory_3?.toLowerCase() || '',
+    subcategory_4: file.subcategory_4?.toLowerCase() || '',
+    subcategory_5: file.subcategory_5?.toLowerCase() || '',
+    subcategory_6: file.subcategory_6?.toLowerCase() || '',
+  };
+  
+  // Extract all search terms
+  const searchTerms = [
+    ...(query ? query.toLowerCase().split(/\s+/) : []),
+    ...(product ? product.toLowerCase().split(/\s+/) : []),
+    ...(fileType ? fileType.toLowerCase().split(/\s+/) : []),
+  ].filter(term => term.length > 2); // Filter out very short terms
+  
+  // Initialize scoring
+  let score = 0;
+  const maxScore = 10; // Maximum possible score
+  
+  // BRAND MATCHING (worth up to 4 points)
+  if (brand) {
+    const brandLower = brand.toLowerCase();
+    
+    // Direct brand match (highest value)
+    if (fileValues.brand === brandLower) {
+      score += 4;
+    } 
+    // Brand is in the file name
+    else if (fileValues.file_name.includes(brandLower)) {
+      score += 3;
+    }
+    // Brand alias matches
+    else {
+      // Check for known brand aliases
+      for (const [mainBrand, aliases] of Object.entries(BRAND_ALIASES)) {
+        // If our search is for this brand
+        if (mainBrand.toLowerCase() === brandLower || 
+            aliases.some(alias => alias.toLowerCase() === brandLower)) {
+          
+          // Check if file has any variation of this brand
+          if (fileValues.brand === mainBrand.toLowerCase() || 
+              aliases.some(alias => fileValues.brand === alias.toLowerCase() || 
+                                   fileValues.file_name.includes(alias.toLowerCase()))) {
+            score += 3;
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  // FILE TYPE / CATEGORY MATCHING (worth up to 3 points)
+  if (fileType || category) {
+    const typeTerms = [
+      ...(fileType ? [fileType.toLowerCase()] : []), 
+      ...(category ? [category.toLowerCase().replace(/:/g, ' ')] : [])
+    ];
+    
+    for (const typeTerm of typeTerms) {
+      // Direct category match
+      if (fileValues.category === typeTerm || 
+          fileValues.category.includes(typeTerm)) {
+        score += 3;
+      }
+      // Match in subcategories
+      else if (
+        fileValues.subcategory_1.includes(typeTerm) ||
+        fileValues.subcategory_2.includes(typeTerm) ||
+        fileValues.subcategory_3.includes(typeTerm) ||
+        fileValues.subcategory_4.includes(typeTerm) ||
+        fileValues.subcategory_5.includes(typeTerm) ||
+        fileValues.subcategory_6.includes(typeTerm)
+      ) {
+        score += 2;
+      }
+      // Match in filename
+      else if (fileValues.file_name.includes(typeTerm)) {
+        score += 1;
+      }
+      
+      // Special handling for sales sheets and spec sheets
+      if (typeTerm.includes('sales') || typeTerm.includes('sheet') || typeTerm.includes('spec')) {
+        const sheetTerms = ['sales sheet', 'salessheet', 'spec sheet', 'specsheet', 'specs'];
+        
+        // Check if any sheet-related term appears in any field
+        let foundSheetTerm = false;
+        for (const sheetTerm of sheetTerms) {
+          if (
+            fileValues.file_name.includes(sheetTerm) ||
+            fileValues.category.includes(sheetTerm) ||
+            fileValues.subcategory_1.includes(sheetTerm) ||
+            fileValues.subcategory_2.includes(sheetTerm) ||
+            fileValues.subcategory_3.includes(sheetTerm) ||
+            fileValues.subcategory_4.includes(sheetTerm) ||
+            fileValues.subcategory_5.includes(sheetTerm) ||
+            fileValues.subcategory_6.includes(sheetTerm)
+          ) {
+            score += 2;
+            foundSheetTerm = true;
+            break;
+          }
+        }
+        
+        // Also check for partial matches with "sales" and "sheet" separately
+        if (!foundSheetTerm) {
+          const partialMatch = (
+            fileValues.file_name.includes('sales') || 
+            fileValues.category.includes('sales') ||
+            fileValues.file_name.includes('sheet') || 
+            fileValues.category.includes('sheet')
+          );
+          
+          if (partialMatch) score += 1;
+        }
+      }
+    }
+  }
+  
+  // GENERAL SEARCH TERM MATCHING (worth up to 3 points)
+  if (searchTerms.length > 0) {
+    let termMatches = 0;
+    
+    // Check each search term against all file fields
+    for (const term of searchTerms) {
+      let matched = false;
+      
+      // Check against all file values
+      for (const [field, value] of Object.entries(fileValues)) {
+        if (value.includes(term)) {
+          termMatches++;
+          matched = true;
+          break;
+        }
+      }
+      
+      // If the term was found, add points
+      if (matched) {
+        score += 0.5; // Add fractional points per term match
+      }
+    }
+    
+    // Bonus if all terms were matched
+    if (termMatches === searchTerms.length && searchTerms.length > 1) {
+      score += 1;
+    }
+  }
+  
+  // Normalize final score between 0 and 1
+  return Math.min(score / maxScore, 1.0);
 }
 
 function calculateRelevanceScore(query: string, title: string, content: string): number {
@@ -649,86 +888,8 @@ function calculateRelevanceScore(query: string, title: string, content: string):
 }
 
 function calculateFileRelevanceScore(query: string, file: any): number {
-  const queryTerms = query.toLowerCase().split(/\s+/);
-  const fileNameLower = file.file_name.toLowerCase();
-  const categoryLower = file.category ? file.category.toLowerCase() : '';
-  
-  let score = 0;
-  
-  // Special handling for sales sheets
-  if ((queryTerms.includes('sales') || queryTerms.includes('sheet') || queryTerms.includes('spec')) && 
-      (fileNameLower.includes('sales') || fileNameLower.includes('sheet') || fileNameLower.includes('spec') ||
-       categoryLower.includes('sales') || categoryLower.includes('sheet') || categoryLower.includes('spec'))) {
-    score += 5;  // Significant boost for sales sheet matches
-  }
-  
-  // Boost scores for exact matches
-  if (fileNameLower.includes(query.toLowerCase())) {
-    score += 5;  // Significant boost for exact match
-  }
-  
-  // Extra boost for logo files when looking for logos
-  if (query.toLowerCase().includes('logo') && fileNameLower.includes('logo')) {
-    score += 3;
-  }
-  
-  // Check for filename matches (highest weight)
-  for (const term of queryTerms) {
-    if (term.length < 3) continue; // Skip very short terms
-    if (fileNameLower.includes(term)) {
-      score += 3;
-    }
-  }
-  
-  // Check for brand matches
-  if (file.brand) {
-    const brandLower = file.brand.toLowerCase();
-    for (const term of queryTerms) {
-      if (term.length < 3) continue;
-      if (brandLower.includes(term)) {
-        score += 2;
-      }
-      // Also check if the query term is part of a brand name
-      if (term.length > 4 && term === brandLower) {
-        score += 3;  // Extra points for exact brand match
-      }
-    }
-  }
-  
-  // Check for category matches
-  if (file.category) {
-    const categoryParts = file.category.toLowerCase().split(/[:\s]+/);
-    for (const term of queryTerms) {
-      if (term.length < 3) continue;
-      if (categoryLower.includes(term)) {
-        score += 2;
-      }
-      
-      // Check each part of the category (handling colons, etc.)
-      for (const part of categoryParts) {
-        if (part === term) {
-          score += 2;  // Extra points for exact category part match
-        }
-      }
-    }
-  }
-  
-  // Check subcategories
-  for (let i = 1; i <= 6; i++) {
-    const subcat = file[`subcategory_${i}`];
-    if (subcat) {
-      const subcatLower = subcat.toLowerCase();
-      for (const term of queryTerms) {
-        if (term.length < 3) continue;
-        if (subcatLower.includes(term)) {
-          score += 1;
-        }
-      }
-    }
-  }
-  
-  // Normalize score between 0 and 1
-  return Math.min(score / (queryTerms.length * 5), 1);
+  // Keep this for backward compatibility, but use the new enhanced scoring
+  return calculateEnhancedFileRelevanceScore({ query }, file);
 }
 
 async function generateAIResponse(messages: Message[], results: any, dataSources: string[]): Promise<string> {
