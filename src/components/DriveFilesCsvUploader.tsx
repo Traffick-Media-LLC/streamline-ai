@@ -63,7 +63,14 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
               return;
             }
 
+            // Log the first entry to understand what fields are available
+            console.log("First CSV entry:", entries[0]);
+            
+            // Log the headers from the CSV for debugging
+            console.log("CSV Headers:", Object.keys(entries[0]));
+
             let successCount = 0;
+            let errorCount = 0;
             
             // Process in batches
             for (let i = 0; i < entries.length; i += batchSize) {
@@ -71,13 +78,17 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
               
               // Process each file entry in the batch
               const batchData = batch.map(entry => {
+                // Make sure these values are never null to satisfy the non-null constraints
+                const fileName = entry["File Name"] || `Unnamed File ${uuidv4().substring(0, 8)}`;
+                const mimeType = entry["Mime Type"] || "application/octet-stream";
+                
                 return {
                   id: uuidv4(), // Generate a unique ID for each entry
                   brand: entry.Brand || null,
                   category: entry.Category || null,
-                  file_name: entry["File Name"] || null,
+                  file_name: fileName,
                   file_url: entry["File URL"] || null,
-                  mime_type: entry["Mime Type"] || null,
+                  mime_type: mimeType,
                   subcategory_1: entry["Subcategory 1"] || null,
                   subcategory_2: entry["Subcategory 2"] || null,
                   subcategory_3: entry["Subcategory 3"] || null,
@@ -92,12 +103,17 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
                   .from("drive_files")
                   .insert(batchData);
                   
-                if (error) throw error;
-                
-                successCount += batchData.length;
+                if (error) {
+                  console.error(`Error processing batch ${i / batchSize + 1}:`, error);
+                  toast.error(`Error with batch ${i / batchSize + 1}: ${error.message || "Unknown error"}`);
+                  errorCount++;
+                } else {
+                  successCount += batchData.length;
+                }
               } catch (err: any) {
                 console.error(`Error processing batch ${i / batchSize + 1}:`, err);
                 toast.error(`Error with batch ${i / batchSize + 1}: ${err.message || "Unknown error"}`);
+                errorCount++;
               }
             }
             
@@ -106,6 +122,10 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
               onComplete();
             } else {
               toast.error("Failed to process any files. Please check the console for details.");
+            }
+            
+            if (errorCount > 0) {
+              toast.error(`Failed to process ${errorCount} batches. Check CSV format and console for details.`);
             }
           } catch (err: any) {
             console.error("Error processing CSV data:", err);
@@ -151,8 +171,8 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
           </Button>
         </div>
         <p className="text-xs mt-1 text-muted-foreground">
-          Optional columns: <span className="font-mono">File Name</span>, <span className="font-mono">Mime Type</span>, 
-          <span className="font-mono">Brand</span>, <span className="font-mono">Category</span>, 
+          Required columns: <span className="font-mono">File Name</span>, <span className="font-mono">Mime Type</span>, 
+          Optional columns: <span className="font-mono">Brand</span>, <span className="font-mono">Category</span>, 
           <span className="font-mono">File URL</span>, <span className="font-mono">Subcategory 1-6</span>
         </p>
       </div>
