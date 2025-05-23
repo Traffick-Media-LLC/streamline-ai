@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -113,7 +114,7 @@ async function determineDataSource(query: string, messages: Message[]): Promise<
 
     // Direct logo detection for common requests
     const logoMatch = query.toLowerCase().match(/(logo|image|icon|picture|photo|file) (?:for|of) ([a-z0-9\s]+)/i);
-    const fileMatch = query.toLowerCase().match(/find (?:the|a) ([a-z0-9\s]+) (logo|image|file|document)/i);
+    const fileMatch = query.toLowerCase().match(/find (?:the|a) ([a-z0-9\s]+) (logo|image|file|document|sheet|sales sheet|spec)/i);
     
     if (logoMatch || fileMatch) {
       const brand = logoMatch ? logoMatch[2] : (fileMatch ? fileMatch[1] : '');
@@ -125,6 +126,23 @@ async function determineDataSource(query: string, messages: Message[]): Promise<
           searchParams: { brand, fileType }
         };
       }
+    }
+
+    // Check for sales sheet queries specifically
+    const salesSheetMatch = query.toLowerCase().match(/(sales\s*sheet|spec\s*sheet|sales\s*spec)/i);
+    if (salesSheetMatch) {
+      // Extract brand if available, otherwise just search for sales sheets
+      const brandMatch = query.match(/(?:for|from|by|of)\s+([A-Za-z0-9\s&]+?)(?:\s|$)/i);
+      const brand = brandMatch ? brandMatch[1].trim() : undefined;
+      
+      return {
+        dataSources: ['drive_files'],
+        searchParams: { 
+          fileType: 'sales sheet',
+          category: 'Sales Sheets:Specs',
+          brand
+        }
+      };
     }
 
     // Use OpenAI to determine the appropriate data source
@@ -141,7 +159,7 @@ async function determineDataSource(query: string, messages: Message[]): Promise<
             role: 'system',
             content: `You are a query router for Streamline Group's internal AI assistant. Analyze the user query and determine which data sources to query.
 
-IMPORTANT! If the user is looking for a logo, image, document, or any file, ALWAYS include "drive_files" in your data sources.
+IMPORTANT! If the user is looking for a logo, image, document, sales sheet, spec, or any file, ALWAYS include "drive_files" in your data sources.
 
 Return a valid JSON object containing ONLY these fields:
 {
@@ -151,7 +169,8 @@ Return a valid JSON object containing ONLY these fields:
     "brand": "Brand name if mentioned",
     "product": "Product name if mentioned",
     "query": "Search query for knowledge base",
-    "fileType": "File type if mentioned (logo, document, image, etc.)"
+    "fileType": "File type if mentioned (logo, document, image, sales sheet, spec, etc.)",
+    "category": "File category if mentioned (like 'Sales Sheets:Specs')"
   }
 }
 
@@ -159,7 +178,7 @@ EXAMPLES:
 1. "Is Product X legal in California?" → dataSources: ["state_map"], searchParams: {state: "California", product: "Product X"}
 2. "What's our refund policy?" → dataSources: ["knowledge_base"], searchParams: {query: "refund policy"}
 3. "Show me the Galaxy Treats logo" → dataSources: ["drive_files"], searchParams: {brand: "Galaxy Treats", fileType: "logo"}
-4. "Find the marketing materials for Product X" → dataSources: ["drive_files"], searchParams: {product: "Product X", fileType: "marketing"}
+4. "Find the sales sheets for Galaxy Treats" → dataSources: ["drive_files"], searchParams: {brand: "Galaxy Treats", fileType: "sales sheet", category: "Sales Sheets:Specs"}
 
 ALWAYS return properly formatted JSON.`
           },
@@ -181,8 +200,15 @@ ALWAYS return properly formatted JSON.`
       
       // Add a fallback to search drive_files for specific keywords
       if (!result.dataSources.includes('drive_files') && 
-          /\b(logo|file|image|document|pdf|picture|photo)\b/i.test(query)) {
+          /\b(logo|file|image|document|pdf|picture|photo|sheet|sales|spec)\b/i.test(query)) {
         result.dataSources.push('drive_files');
+      }
+      
+      // Set category for Sales Sheets if applicable
+      if (result.searchParams.fileType && 
+          /\b(sales\s*sheet|spec)/i.test(result.searchParams.fileType) && 
+          !result.searchParams.category) {
+        result.searchParams.category = 'Sales Sheets:Specs';
       }
       
       return {
@@ -220,7 +246,7 @@ function extractBrandFromQuery(query: string): string | undefined {
   const brands = [
     'Galaxy Treats', 'Kush Burst', 'Delta Extrax', 'Cake', 
     'Moonwlkr', 'Dimo', 'Urb', '3Chi', 'TRĒ House', 'TRE House',
-    'Mellow Fellow', 'Looper', 'Torch'
+    'Mellow Fellow', 'Looper', 'Torch', 'Juice Head'
   ];
   
   // Find any brand mentioned in the query
@@ -235,7 +261,8 @@ function extractFileTypeFromQuery(query: string): string | undefined {
   const fileTypes = {
     'logo': ['logo', 'brand image', 'company logo'],
     'document': ['document', 'doc', 'pdf', 'file', 'form', 'agreement'],
-    'image': ['image', 'picture', 'photo', 'graphic', 'banner']
+    'image': ['image', 'picture', 'photo', 'graphic', 'banner'],
+    'sales sheet': ['sales sheet', 'spec sheet', 'specs', 'sales spec', 'product sheet', 'product spec']
   };
   
   const lowerQuery = query.toLowerCase();
@@ -540,6 +567,9 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       if (fileType.toLowerCase() === 'logo') {
         // Special handling for logo search
         dbQuery = dbQuery.ilike('file_name', '%logo%');
+      } else if (fileType.toLowerCase() === 'sales sheet') {
+        // Special handling for sales sheets
+        searchTerms.push(`(file_name.ilike.%sales%sheet% OR file_name.ilike.%spec%sheet%)`);
       } else {
         dbQuery = dbQuery.ilike('mime_type', `%${fileType}%`);
         // Also search filename for file type
@@ -551,8 +581,11 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       searchTerms.push(`file_name.ilike.%${product}%`);
     }
     
+    // Category filter - handling special characters like colons
     if (category) {
-      dbQuery = dbQuery.ilike('category', `%${category}%`);
+      // Handle categories with special format like "Sales Sheets:Specs"
+      const normalizedCategory = category.replace(':', '%');
+      dbQuery = dbQuery.or(`category.ilike.%${normalizedCategory}%, category.ilike.%${category}%`);
     }
     
     // If we have search terms, add them to the query
@@ -577,7 +610,7 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       brand: file.brand,
       category: file.category,
       id: file.id,
-      confidence: calculateFileRelevanceScore(query || brand || fileType || '', file)
+      confidence: calculateFileRelevanceScore(query || brand || fileType || product || '', file)
     }))
     .filter(file => file.confidence > 0.2)  // Lowered threshold from 0.3 to 0.2
     .sort((a, b) => b.confidence - a.confidence)  // Sort by confidence
@@ -618,8 +651,16 @@ function calculateRelevanceScore(query: string, title: string, content: string):
 function calculateFileRelevanceScore(query: string, file: any): number {
   const queryTerms = query.toLowerCase().split(/\s+/);
   const fileNameLower = file.file_name.toLowerCase();
+  const categoryLower = file.category ? file.category.toLowerCase() : '';
   
   let score = 0;
+  
+  // Special handling for sales sheets
+  if ((queryTerms.includes('sales') || queryTerms.includes('sheet') || queryTerms.includes('spec')) && 
+      (fileNameLower.includes('sales') || fileNameLower.includes('sheet') || fileNameLower.includes('spec') ||
+       categoryLower.includes('sales') || categoryLower.includes('sheet') || categoryLower.includes('spec'))) {
+    score += 5;  // Significant boost for sales sheet matches
+  }
   
   // Boost scores for exact matches
   if (fileNameLower.includes(query.toLowerCase())) {
@@ -656,11 +697,18 @@ function calculateFileRelevanceScore(query: string, file: any): number {
   
   // Check for category matches
   if (file.category) {
-    const categoryLower = file.category.toLowerCase();
+    const categoryParts = file.category.toLowerCase().split(/[:\s]+/);
     for (const term of queryTerms) {
       if (term.length < 3) continue;
       if (categoryLower.includes(term)) {
         score += 2;
+      }
+      
+      // Check each part of the category (handling colons, etc.)
+      for (const part of categoryParts) {
+        if (part === term) {
+          score += 2;  // Extra points for exact category part match
+        }
       }
     }
   }
