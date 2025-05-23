@@ -11,9 +11,9 @@ import { v4 as uuidv4 } from "uuid";
 type DriveFileCsvEntry = {
   Brand?: string;
   Category?: string;
-  "File Name": string;
+  "File Name"?: string;
   "File URL"?: string;
-  "Mime Type": string;
+  "Mime Type"?: string;
   "Subcategory 1"?: string;
   "Subcategory 2"?: string;
   "Subcategory 3"?: string;
@@ -48,12 +48,10 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
         skipEmptyLines: true,
         complete: async (results) => {
           try {
-            const entries = results.data.filter(row => 
-              row["File Name"] && row["Mime Type"]
-            );
+            const entries = results.data;
             
             if (!entries.length) {
-              toast.error("No valid entries found in the CSV. Ensure it has 'File Name' and 'Mime Type' columns.");
+              toast.error("No entries found in the CSV.");
               setUploading(false);
               return;
             }
@@ -70,9 +68,9 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
                   id: uuidv4(), // Generate a unique ID for each entry
                   brand: entry.Brand || null,
                   category: entry.Category || null,
-                  file_name: entry["File Name"],
+                  file_name: entry["File Name"] || null,
                   file_url: entry["File URL"] || null,
-                  mime_type: entry["Mime Type"],
+                  mime_type: entry["Mime Type"] || null,
                   subcategory_1: entry["Subcategory 1"] || null,
                   subcategory_2: entry["Subcategory 2"] || null,
                   subcategory_3: entry["Subcategory 3"] || null,
@@ -146,9 +144,9 @@ export default function DriveFilesCsvUploader({ onComplete }: { onComplete: () =
           </Button>
         </div>
         <p className="text-xs mt-1 text-muted-foreground">
-          Required columns: <span className="font-mono">File Name</span>, <span className="font-mono">Mime Type</span> 
-          (optional: <span className="font-mono">Brand</span>, <span className="font-mono">Category</span>, 
-          <span className="font-mono">File URL</span>, <span className="font-mono">Subcategory 1-6</span>)
+          Optional columns: <span className="font-mono">File Name</span>, <span className="font-mono">Mime Type</span>, 
+          <span className="font-mono">Brand</span>, <span className="font-mono">Category</span>, 
+          <span className="font-mono">File URL</span>, <span className="font-mono">Subcategory 1-6</span>
         </p>
       </div>
     </div>

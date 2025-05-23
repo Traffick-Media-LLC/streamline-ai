@@ -417,16 +417,16 @@ export default function KnowledgeManager() {
                 <DriveFilesCsvUploader onComplete={refreshDriveFiles} />
               </div>
               <div className="mt-3 text-sm text-muted-foreground">
-                <p className="mb-2">The CSV file should contain the following columns:</p>
+                <p className="mb-2">The CSV file can contain the following columns:</p>
                 <ul className="list-disc list-inside space-y-1">
-                  <li><span className="font-mono">File Name</span> - The name of the file (required)</li>
-                  <li><span className="font-mono">Mime Type</span> - Type of the file (required)</li>
-                  <li><span className="font-mono">Brand</span> - Related brand (optional)</li>
-                  <li><span className="font-mono">Category</span> - File category (optional)</li>
-                  <li><span className="font-mono">File URL</span> - URL to the file if available (optional)</li>
-                  <li><span className="font-mono">Subcategory 1-6</span> - Additional categorization levels (optional)</li>
+                  <li><span className="font-mono">File Name</span> - The name of the file</li>
+                  <li><span className="font-mono">Mime Type</span> - Type of the file</li>
+                  <li><span className="font-mono">Brand</span> - Related brand</li>
+                  <li><span className="font-mono">Category</span> - File category</li>
+                  <li><span className="font-mono">File URL</span> - URL to the file if available</li>
+                  <li><span className="font-mono">Subcategory 1-6</span> - Additional categorization levels</li>
                 </ul>
-                <p className="mt-2">Each row should represent one file. The File Name and Mime Type columns are required.</p>
+                <p className="mt-2">Each row represents one file. All columns are optional.</p>
               </div>
             </div>
           </div>
