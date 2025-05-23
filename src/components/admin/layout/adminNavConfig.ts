@@ -1,94 +1,68 @@
 
-import { 
-  Users, 
-  FileText, 
-  Box, 
-  ShoppingBag, 
-  Shield, 
-  Network, 
-  Building2,
-  Database,
-  FileBox
-} from "lucide-react";
+import { LayoutDashboard, Package, Users, BookText, Briefcase, Map, FileBarChart } from 'lucide-react';
 
-export interface NavItem {
+// Define the type for navigation items
+type AdminNavItem = {
   title: string;
-  href: string;
-  icon: any;
-}
+  path?: string;
+  icon: React.ComponentType<any>;
+  exact?: boolean;
+  children?: {
+    title: string;
+    path: string;
+    icon: React.ComponentType<any>;
+  }[];
+};
 
-export interface NavSection {
-  title: string;
-  items: NavItem[];
-}
-
-export const adminNavConfig: NavSection[] = [
+// Configuration for admin navigation
+export const adminNavItems: AdminNavItem[] = [
   {
-    title: "Organization",
-    items: [
-      {
-        title: "Employee Directory",
-        href: "/admin/employees",
-        icon: Users,
-      },
-      {
-        title: "Organization Chart",
-        href: "/admin/organization",
-        icon: Network,
-      },
-    ],
-  },
+    title: "Dashboard",
+    path: "/admin",
+    icon: LayoutDashboard,
+    exact: true
+  }, 
   {
-    title: "Content",
-    items: [
-      {
-        title: "Knowledge Base",
-        href: "/admin/knowledge",
-        icon: FileText,
-      },
-      {
-        title: "Drive Files",
-        href: "/admin/drive-files",
-        icon: FileBox,
-      },
-    ],
-  },
-  {
-    title: "Products",
-    items: [
+    title: "Product Management",
+    icon: Package,
+    children: [
       {
         title: "Brands",
-        href: "/admin/brands",
-        icon: Building2,
-      },
+        path: "/admin/brands",
+        icon: Briefcase
+      }, 
       {
         title: "Products",
-        href: "/admin/products",
-        icon: Box,
-      },
+        path: "/admin/products",
+        icon: Package
+      }, 
       {
         title: "State Permissions",
-        href: "/admin/permissions",
-        icon: ShoppingBag,
-      },
-    ],
-  },
+        path: "/admin/permissions",
+        icon: Map
+      }
+    ]
+  }, 
   {
-    title: "System",
-    items: [
+    title: "Employee Management",
+    icon: Users,
+    children: [
       {
-        title: "Admin",
-        href: "/admin",
-        icon: Shield,
-      },
+        title: "Employee Directory",
+        path: "/admin/employees",
+        icon: Users
+      }, 
       {
-        title: "Database",
-        href: "/admin/database",
-        icon: Database,
-      },
-    ],
-  },
+        title: "Organization Chart",
+        path: "/admin/organization",
+        icon: FileBarChart
+      }
+    ]
+  }, 
+  {
+    title: "Knowledge Base",
+    path: "/admin/knowledge",
+    icon: BookText,
+    exact: true
+  }
 ];
-
-// Export adminNavItems for use in other components
-export const adminNavItems = adminNavConfig.flatMap(section => section.items);

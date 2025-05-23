@@ -7,10 +7,10 @@ interface TopicCardsProps {
 
 const TopicCards = ({ onSelectTopic }: TopicCardsProps) => {
   const suggestedTopics = [
-    "Are Juice Head pouches legal in New York?",
-    "Why were disposables banned in California?",
-    "Can you send me the Galaxy Treats sales sheet?",
-    "What's our stance on synthetic nicotine in Minnesota?"
+    "Is Delta-8 legal in Texas?",
+    "Tell me about Brand X's products",
+    "Do you have information about CBD regulations?",
+    "Which states allow THC products?"
   ];
 
   return (
