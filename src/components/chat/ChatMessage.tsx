@@ -1,6 +1,7 @@
 
 import { Message } from '@/types/chat';
 import ChatMessageFeedback from './ChatMessageFeedback';
+import { renderTextWithLinks } from '@/utils/textUtils';
 
 interface ChatMessageProps {
   message: Message & { isLoading?: boolean };
@@ -28,7 +29,8 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
           </div>
         ) : (
           <div>
-            <div className="whitespace-pre-wrap">{message.content}</div>
+            {/* Render message content using the renderTextWithLinks function */}
+            <div className="whitespace-pre-wrap">{renderTextWithLinks(message.content)}</div>
             
             {sourceInfo && (
               <div className="mt-2 text-xs opacity-70">
