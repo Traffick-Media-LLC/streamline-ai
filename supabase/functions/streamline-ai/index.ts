@@ -710,15 +710,23 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
       context += "\n";
     }
     
-    // Add file results to context
+    // Add file results to context with improved Markdown formatting
     if (results.fileResults && results.fileResults.length > 0) {
       context += "## File Results\n";
       results.fileResults.forEach((result: FileResult) => {
-        context += `- ${result.file_name}`;
+        // Format file name with bold markdown syntax
+        context += `- **${result.file_name}**`;
+        
+        // Add file metadata
         if (result.id) context += ` (ID: ${result.id})`;
         if (result.brand) context += ` (Brand: ${result.brand})`;
         if (result.category) context += ` (Category: ${result.category})`;
-        if (result.file_url) context += ` [Download Link Available]`;
+        
+        // Add a proper markdown link if URL is available
+        if (result.file_url) {
+          context += `\n  [Download Link](${result.file_url})`;
+        }
+        
         context += "\n";
       });
       context += "\n";
@@ -750,8 +758,9 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
             - Mention ingredients like nicotine or cannabinoids if relevant
             
             When providing file information:
-            - Only refer to files by name, never include raw URLs
-            - If a file has a download link, tell the user it's available
+            - Format file names using bold markdown: **filename.ext**
+            - If a file has a download link, use markdown link syntax: [Download Link](URL)
+            - Never include raw URLs directly in your response text
             - If no match is found, recommend the Marketing Request Form
             
             Format your responses as follows:
