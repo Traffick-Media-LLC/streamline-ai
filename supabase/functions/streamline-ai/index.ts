@@ -725,6 +725,9 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
         // Add a proper markdown link if URL is available
         if (result.file_url) {
           context += `\n  [Download Link](${result.file_url})`;
+        } else {
+          // Even if no URL is available, include this instruction to format properly in response
+          context += `\n  (No download link available)`;
         }
         
         context += "\n";
@@ -752,16 +755,21 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
             content: `You are Streamline AI, the internal assistant for Streamline Group. 
             Use the following context from our databases to answer the user's question.
             
+            MARKDOWN FORMATTING RULES (CRITICAL):
+            - When mentioning file names, ALWAYS use bold markdown: **filename.ext**
+            - When providing download links, ALWAYS use markdown link syntax: [Download Link](URL)
+            - NEVER display raw URLs in your response text
+            - If no URL is available, show "[Download Link Unavailable]" in plain text
+            
             When answering about product legality:
             - State clearly if a product is legal, not legal, or restricted
             - Include brand and product specifics when available
             - Mention ingredients like nicotine or cannabinoids if relevant
             
             When providing file information:
-            - Format file names using bold markdown: **filename.ext**
-            - If a file has a download link, use markdown link syntax: [Download Link](URL)
-            - Never include raw URLs directly in your response text
-            - If no match is found, recommend the Marketing Request Form
+            - Each file must be listed as: "- **filename.ext**"
+            - For file download links, use EXACTLY this format: "[Download Link](URL)"
+            - If writing a link without URL, use EXACTLY: "[Download Link Available]" 
             
             Format your responses as follows:
             1. Short summary (1-2 sentences)
