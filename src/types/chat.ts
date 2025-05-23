@@ -24,7 +24,7 @@ export type MessageMetadata = {
   responseTimeMs?: number;
   sourceInfo?: SourceInfo;
   isEdited?: boolean;
-  [key: string]: any;
+  [key: string]: any; // Allow for additional properties
 };
 
 export type Message = {

@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Chat, Message } from '@/types/chat';
+import { Chat, Message, MessageMetadata } from '@/types/chat';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { generateChatTitle } from '@/utils/chatUtils';
@@ -69,7 +69,7 @@ export const useChatState = (): ChatState => {
                 content: msg.content,
                 role: msg.role as "system" | "assistant" | "user", // Type assertion here
                 createdAt: msg.timestamp,
-                metadata: msg.metadata
+                metadata: msg.metadata as unknown as MessageMetadata // Type casting here
               })) || [];
               
               return {
@@ -83,7 +83,7 @@ export const useChatState = (): ChatState => {
             })
           );
           
-          setThreads(threadsWithMessages);
+          setThreads(threadsWithMessages as Chat[]);
           
           // Set most recent thread as current if there is one and no current thread is selected
           if (threadsWithMessages.length > 0 && !currentThreadId) {
