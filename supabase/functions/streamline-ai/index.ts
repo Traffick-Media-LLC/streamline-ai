@@ -503,11 +503,13 @@ async function searchKnowledgeBase(query: string, supabase: any): Promise<Knowle
 }
 
 /**
- * Enhanced drive files search function with fixed SQL syntax for PostgREST 
+ * Fixed drive files search function with proper PostgREST syntax
  */
 async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[]> {
   try {
     const { query, fileType, brand, fileId, product, category } = params;
+    
+    console.log("searchDriveFiles called with params:", params);
     
     // Direct file ID lookup if provided
     if (fileId) {
@@ -532,127 +534,146 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
       }
     }
 
-    // Special handling for logo searches
+    // Special handling for logo searches with simplified queries
     if ((fileType && fileType.toLowerCase().includes('logo')) || 
         (query && query.toLowerCase().includes('logo'))) {
       console.log("Logo search detected, using simplified search");
       
-      // For logo searches, prioritize matching by brand name and mime_type for images
+      // Start with basic logo search
       let logoQuery = supabase.from('drive_files')
         .select('*')
-        .ilike('file_name', '%logo%'); // Look for 'logo' in filename
+        .ilike('file_name', '%logo%');
         
       // Add brand filter if specified
       if (brand) {
-        // For brand matching in logo searches, we'll use a simpler approach
-        // Find the normalized brand name
         const brandLower = brand.toLowerCase();
+        console.log("Adding brand filter for:", brandLower);
         
-        // Try to match the brand directly
-        logoQuery = logoQuery.or(`brand.ilike.%${brandLower}%,file_name.ilike.%${brandLower}%`);
+        // Use separate queries and combine results to avoid OR syntax issues
+        const brandQueries = [];
         
-        // Add variations if it's a known brand with aliases
+        // Query 1: Brand field matches
+        brandQueries.push(
+          supabase.from('drive_files')
+            .select('*')
+            .ilike('file_name', '%logo%')
+            .ilike('brand', `%${brandLower}%`)
+            .limit(5)
+        );
+        
+        // Query 2: File name contains brand
+        brandQueries.push(
+          supabase.from('drive_files')
+            .select('*')
+            .ilike('file_name', '%logo%')
+            .ilike('file_name', `%${brandLower}%`)
+            .limit(5)
+        );
+        
+        // Check brand aliases
         for (const [mainBrand, aliases] of Object.entries(BRAND_ALIASES)) {
-          if (mainBrand.toLowerCase() === brandLower || 
+          if (mainBrand.toLowerCase().includes(brandLower) || 
               aliases.some(alias => alias.toLowerCase().includes(brandLower))) {
             
-            // Add main brand as another search term
-            if (mainBrand.toLowerCase() !== brandLower) {
-              logoQuery = logoQuery.or(`brand.ilike.%${mainBrand.toLowerCase()}%,file_name.ilike.%${mainBrand.toLowerCase()}%`);
-            }
+            // Add queries for main brand and aliases
+            brandQueries.push(
+              supabase.from('drive_files')
+                .select('*')
+                .ilike('file_name', '%logo%')
+                .ilike('brand', `%${mainBrand.toLowerCase()}%`)
+                .limit(3)
+            );
             
-            // Add each alias as a search term
             for (const alias of aliases) {
-              if (alias.toLowerCase() !== brandLower) {
-                logoQuery = logoQuery.or(`brand.ilike.%${alias.toLowerCase()}%,file_name.ilike.%${alias.toLowerCase()}%`);
-              }
+              brandQueries.push(
+                supabase.from('drive_files')
+                  .select('*')
+                  .ilike('file_name', '%logo%')
+                  .ilike('file_name', `%${alias.toLowerCase()}%`)
+                  .limit(3)
+              );
             }
             break;
           }
         }
-      }
-      
-      // Prefer images for logo searches
-      logoQuery = logoQuery.contains('mime_type', 'image');
-      
-      // Execute query
-      const { data, error } = await logoQuery.limit(10);
-      
-      if (error) {
-        console.error("Logo search error:", error);
-        throw error;
-      }
-      
-      if (data && data.length > 0) {
-        console.log(`Logo search found ${data.length} matches`);
         
-        // Calculate confidence scores and return results
-        return data.map(file => ({
-          file_name: file.file_name,
-          file_url: file.file_url,
-          mime_type: file.mime_type,
-          brand: file.brand,
-          category: file.category,
-          id: file.id,
-          confidence: calculateEnhancedFileRelevanceScore(params, file)
-        }))
-        .filter(file => file.confidence > 0.2)
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, 3);
+        // Execute all brand queries
+        const brandResults = await Promise.all(brandQueries.map(q => q));
+        const allBrandData = [];
+        
+        for (const result of brandResults) {
+          if (result.data && !result.error) {
+            allBrandData.push(...result.data);
+          }
+        }
+        
+        if (allBrandData.length > 0) {
+          console.log(`Logo search found ${allBrandData.length} matches`);
+          
+          // Remove duplicates based on file_name
+          const uniqueFiles = allBrandData.filter((file, index, arr) => 
+            index === arr.findIndex(f => f.file_name === file.file_name)
+          );
+          
+          // Calculate confidence scores and return results
+          return uniqueFiles.map(file => ({
+            file_name: file.file_name,
+            file_url: file.file_url,
+            mime_type: file.mime_type,
+            brand: file.brand,
+            category: file.category,
+            id: file.id,
+            confidence: calculateEnhancedFileRelevanceScore(params, file)
+          }))
+          .filter(file => file.confidence > 0.2)
+          .sort((a, b) => b.confidence - a.confidence)
+          .slice(0, 3);
+        }
       } else {
-        console.log("No logo files found with direct search");
+        // No brand specified, just search for logo files
+        const { data, error } = await logoQuery.limit(10);
+        
+        if (error) {
+          console.error("Logo search error:", error);
+          throw error;
+        }
+        
+        if (data && data.length > 0) {
+          console.log(`Logo search found ${data.length} matches`);
+          return data.map(file => ({
+            file_name: file.file_name,
+            file_url: file.file_url,
+            mime_type: file.mime_type,
+            brand: file.brand,
+            category: file.category,
+            id: file.id,
+            confidence: calculateEnhancedFileRelevanceScore(params, file)
+          }))
+          .filter(file => file.confidence > 0.2)
+          .sort((a, b) => b.confidence - a.confidence)
+          .slice(0, 3);
+        }
       }
     }
     
-    // Normal search for other file types - using simplified filter approach
+    // Normal search for other file types
     let dbQuery = supabase.from('drive_files').select('*');
-    let filterApplied = false;
     
-    // Apply text search filters one by one instead of complex OR conditions
-    // File name search
+    // Apply filters based on search parameters
     if (query && query.length > 2) {
       dbQuery = dbQuery.ilike('file_name', `%${query}%`);
-      filterApplied = true;
     }
     
-    // Type/category search
     if (fileType && fileType.length > 2) {
-      if (filterApplied) {
-        dbQuery = dbQuery.or(`category.ilike.%${fileType}%,file_name.ilike.%${fileType}%`);
-      } else {
-        dbQuery = dbQuery.ilike('file_name', `%${fileType}%`).or(`category.ilike.%${fileType}%`);
-        filterApplied = true;
-      }
+      dbQuery = dbQuery.ilike('file_name', `%${fileType}%`);
     }
     
-    // Brand search
     if (brand && brand.length > 2) {
-      if (filterApplied) {
-        dbQuery = dbQuery.or(`brand.ilike.%${brand}%,file_name.ilike.%${brand}%`);
-      } else {
-        dbQuery = dbQuery.ilike('brand', `%${brand}%`).or(`file_name.ilike.%${brand}%`);
-        filterApplied = true;
-      }
+      dbQuery = dbQuery.ilike('brand', `%${brand}%`);
     }
     
-    // Sales sheet special handling
     if (category && category.toLowerCase().includes('sales')) {
-      if (filterApplied) {
-        dbQuery = dbQuery.or(`category.ilike.%sales%,category.ilike.%sheet%,file_name.ilike.%sales%,file_name.ilike.%sheet%`);
-      } else {
-        dbQuery = dbQuery.ilike('category', '%sales%').or(`category.ilike.%sheet%,file_name.ilike.%sales%,file_name.ilike.%sheet%`);
-        filterApplied = true;
-      }
-    }
-    
-    // If no filters were applied, add a basic filter to prevent returning all files
-    if (!filterApplied) {
-      if (product) {
-        dbQuery = dbQuery.ilike('file_name', `%${product}%`);
-      } else {
-        // Default to most recent files if no search criteria
-        dbQuery = dbQuery.order('created_at', { ascending: false });
-      }
+      dbQuery = dbQuery.ilike('category', '%sales%');
     }
     
     // Execute the query
@@ -671,7 +692,7 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
     
     console.log(`Found ${data.length} potential file matches`);
     
-    // Calculate relevance scores with enhanced algorithm
+    // Calculate relevance scores
     return data.map(file => ({
       file_name: file.file_name,
       file_url: file.file_url,
@@ -687,21 +708,17 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
   } catch (error) {
     console.error("Error searching drive files:", error);
     
-    // Fall back to a simpler search method on error
+    // Simple fallback search
     try {
       console.log("Attempting fallback search method");
       
-      // Simple search with minimal filters to avoid syntax errors
-      const { query, fileType, brand } = params;
+      const { brand, fileType } = params;
       let fallbackQuery = supabase.from('drive_files').select('*');
       
-      // Only add the most important filter
       if (brand) {
         fallbackQuery = fallbackQuery.ilike('brand', `%${brand}%`);
       } else if (fileType) {
         fallbackQuery = fallbackQuery.ilike('file_name', `%${fileType}%`);
-      } else if (query) {
-        fallbackQuery = fallbackQuery.ilike('file_name', `%${query}%`);
       }
       
       const { data } = await fallbackQuery.limit(5);
@@ -715,7 +732,7 @@ async function searchDriveFiles(params: any, supabase: any): Promise<FileResult[
           brand: file.brand,
           category: file.category,
           id: file.id,
-          confidence: 0.5 // Default confidence for fallback results
+          confidence: 0.5
         }));
       }
     } catch (fallbackError) {
@@ -880,38 +897,6 @@ function calculateEnhancedFileRelevanceScore(params: any, file: any): number {
   
   // Normalize final score between 0 and 1
   return Math.min(score / maxScore, 1.0);
-}
-
-function calculateRelevanceScore(query: string, title: string, content: string): number {
-  const queryTerms = query.toLowerCase().split(/\s+/);
-  const titleLower = title.toLowerCase();
-  const contentLower = content.toLowerCase();
-  
-  let score = 0;
-  
-  // Check for title matches (higher weight)
-  for (const term of queryTerms) {
-    if (term.length < 3) continue; // Skip very short terms
-    if (titleLower.includes(term)) {
-      score += 3;
-    }
-  }
-  
-  // Check for content matches
-  for (const term of queryTerms) {
-    if (term.length < 3) continue;
-    if (contentLower.includes(term)) {
-      score += 1;
-    }
-  }
-  
-  // Normalize score between 0 and 1
-  return Math.min(score / (queryTerms.length * 4), 1);
-}
-
-function calculateFileRelevanceScore(query: string, file: any): number {
-  // Keep this for backward compatibility, but use the new enhanced scoring
-  return calculateEnhancedFileRelevanceScore({ query }, file);
 }
 
 async function generateAIResponse(messages: Message[], results: any, dataSources: string[]): Promise<string> {
