@@ -29,13 +29,9 @@ const ChatPage = () => {
     threads, 
     isLoading, 
     sendMessage,
-    createNewThread
+    createNewThread,
+    selectThread
   } = useChatState();
-
-  // Create a new chat on page load
-  useEffect(() => {
-    createNewThread();
-  }, []);
 
   // Focus input when thread changes
   useEffect(() => {
@@ -56,7 +52,18 @@ const ChatPage = () => {
     setIsHistoryOpen(!isHistoryOpen);
   };
 
-  const firstMessage = !currentThread || currentThread.messages.length === 0;
+  const handleSelectThread = (threadId: string) => {
+    selectThread(threadId);
+    setIsHistoryOpen(false);
+  };
+
+  const handleNewChat = () => {
+    createNewThread();
+    setIsHistoryOpen(false);
+  };
+
+  const hasActiveChat = currentThread && currentThread.messages.length > 0;
+  const showWelcome = !hasActiveChat;
 
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-background">
@@ -67,7 +74,13 @@ const ChatPage = () => {
             isHistoryOpen ? "w-80" : "w-0"
           }`}
         >
-          {isHistoryOpen && <ChatHistoryPanel onClose={handleHistoryToggle} />}
+          {isHistoryOpen && (
+            <ChatHistoryPanel 
+              onClose={handleHistoryToggle}
+              onSelectThread={handleSelectThread}
+              onNewChat={handleNewChat}
+            />
+          )}
         </div>
       )}
       
@@ -88,7 +101,7 @@ const ChatPage = () => {
         
         {/* Chat Content */}
         <div className="flex-1 overflow-hidden relative">
-          {firstMessage ? (
+          {showWelcome ? (
             <div className="flex h-full flex-col items-center justify-center p-6">
               <div className="max-w-2xl text-center">
                 <h1 className="mb-4 text-2xl font-bold tracking-tight md:text-3xl">
@@ -138,7 +151,11 @@ const ChatPage = () => {
         <Drawer open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           <DrawerTrigger asChild className="hidden" />
           <DrawerContent className="max-h-[85vh]">
-            <ChatHistoryPanel onClose={() => setIsHistoryOpen(false)} />
+            <ChatHistoryPanel 
+              onClose={() => setIsHistoryOpen(false)}
+              onSelectThread={handleSelectThread}
+              onNewChat={handleNewChat}
+            />
           </DrawerContent>
         </Drawer>
       )}

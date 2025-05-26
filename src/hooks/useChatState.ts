@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, Message, MessageMetadata } from '@/types/chat';
@@ -67,9 +66,9 @@ export const useChatState = (): ChatState => {
                 id: msg.id,
                 chatId: msg.chat_id,
                 content: msg.content,
-                role: msg.role as "system" | "assistant" | "user", // Type assertion here
+                role: msg.role as "system" | "assistant" | "user",
                 createdAt: msg.timestamp,
-                metadata: msg.metadata as unknown as MessageMetadata // Type casting here
+                metadata: msg.metadata as unknown as MessageMetadata
               })) || [];
               
               return {
@@ -85,13 +84,14 @@ export const useChatState = (): ChatState => {
           
           setThreads(threadsWithMessages as Chat[]);
           
-          // Set most recent thread as current if there is one and no current thread is selected
-          if (threadsWithMessages.length > 0 && !currentThreadId) {
-            setCurrentThreadId(threadsWithMessages[0].id);
+          // Only auto-select the most recent thread if it has messages
+          const mostRecentWithMessages = threadsWithMessages.find(thread => thread.messages.length > 0);
+          if (mostRecentWithMessages && !currentThreadId) {
+            setCurrentThreadId(mostRecentWithMessages.id);
           }
-        } else {
-          // No existing chats, create a new one
-          createNewThread();
+          
+          // Clean up empty conversations older than 5 minutes
+          cleanupEmptyConversations(threadsWithMessages as Chat[]);
         }
       } catch (e) {
         console.error("Error fetching chats:", e);
@@ -102,27 +102,62 @@ export const useChatState = (): ChatState => {
     fetchChats();
   }, [user]);
 
+  // Clean up empty conversations
+  const cleanupEmptyConversations = async (allThreads: Chat[]) => {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const emptyOldThreads = allThreads.filter(thread => 
+      thread.messages.length === 0 && 
+      thread.title === "New Conversation" &&
+      new Date(thread.createdAt) < fiveMinutesAgo
+    );
+
+    for (const thread of emptyOldThreads) {
+      try {
+        await supabase
+          .from('chats')
+          .delete()
+          .eq('id', thread.id);
+      } catch (e) {
+        console.error("Error cleaning up empty conversation:", e);
+      }
+    }
+
+    if (emptyOldThreads.length > 0) {
+      setThreads(prev => prev.filter(thread => !emptyOldThreads.includes(thread)));
+    }
+  };
+
   // Send a new message
   const sendMessage = async (content: string) => {
     if (!content.trim() || !user) return;
     
-    // Create a new thread if there isn't one
+    // Create a new thread if there isn't one or reuse an empty one
     let threadId = currentThreadId;
     if (!threadId) {
-      threadId = await createNewChatInDb("New Conversation");
-      if (!threadId) return;
+      // Look for an existing empty conversation to reuse
+      const emptyThread = threads.find(thread => 
+        thread.messages.length === 0 && thread.title === "New Conversation"
+      );
       
-      const newThread: Chat = {
-        id: threadId,
-        title: "New Conversation",
-        messages: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        user_id: user.id
-      };
-      
-      setThreads(prev => [newThread, ...prev]);
-      setCurrentThreadId(threadId);
+      if (emptyThread) {
+        threadId = emptyThread.id;
+        setCurrentThreadId(threadId);
+      } else {
+        threadId = await createNewChatInDb("New Conversation");
+        if (!threadId) return;
+        
+        const newThread: Chat = {
+          id: threadId,
+          title: "New Conversation",
+          messages: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          user_id: user.id
+        };
+        
+        setThreads(prev => [newThread, ...prev]);
+        setCurrentThreadId(threadId);
+      }
     }
     
     // Add user message to local state first for immediate feedback

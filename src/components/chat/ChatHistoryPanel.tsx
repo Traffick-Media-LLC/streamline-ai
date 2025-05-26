@@ -8,14 +8,20 @@ import { formatDate } from "@/utils/chatUtils";
 
 interface ChatHistoryPanelProps {
   onClose: () => void;
+  onSelectThread: (threadId: string) => void;
+  onNewChat: () => void;
 }
 
-const ChatHistoryPanel = ({ onClose }: ChatHistoryPanelProps) => {
+const ChatHistoryPanel = ({ onClose, onSelectThread, onNewChat }: ChatHistoryPanelProps) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const { threads, selectThread, createNewThread } = useChatState();
+  const { threads, currentThreadId } = useChatState();
   
-  // Group threads by date
-  const groupedThreads = threads.reduce<Record<string, typeof threads>>((acc, thread) => {
+  // Filter out empty conversations and group by date
+  const nonEmptyThreads = threads.filter(thread => 
+    thread.messages.length > 0 || thread.title !== "New Conversation"
+  );
+  
+  const groupedThreads = nonEmptyThreads.reduce<Record<string, typeof nonEmptyThreads>>((acc, thread) => {
     const date = formatDate(new Date(thread.updatedAt).getTime());
     if (!acc[date]) acc[date] = [];
     acc[date].push(thread);
@@ -30,14 +36,8 @@ const ChatHistoryPanel = ({ onClose }: ChatHistoryPanelProps) => {
     );
   });
 
-  const handleNewChat = () => {
-    createNewThread();
-    onClose();
-  };
-
   const handleSelectThread = (threadId: string) => {
-    selectThread(threadId);
-    onClose();
+    onSelectThread(threadId);
   };
 
   return (
@@ -53,7 +53,7 @@ const ChatHistoryPanel = ({ onClose }: ChatHistoryPanelProps) => {
         <Button 
           variant="outline" 
           className="w-full justify-start" 
-          onClick={handleNewChat}
+          onClick={onNewChat}
         >
           + New Chat
         </Button>
@@ -81,7 +81,7 @@ const ChatHistoryPanel = ({ onClose }: ChatHistoryPanelProps) => {
                 {dateThreads.map(thread => (
                   <Button
                     key={thread.id}
-                    variant="ghost"
+                    variant={currentThreadId === thread.id ? "secondary" : "ghost"}
                     className="w-full justify-start truncate py-2 text-left"
                     onClick={() => handleSelectThread(thread.id)}
                   >
