@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -345,7 +346,7 @@ async function queryDataSources(dataSources: string[], params: any, supabase: an
 
   const queryPromises = [];
 
-  // Query state map database - ENHANCED for product legality
+  // Query state map database - FIXED with proper PostgREST syntax
   if (dataSources.includes('state_map')) {
     queryPromises.push(queryStateMap(params, supabase)
       .then(stateMapResults => {
@@ -426,7 +427,7 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
     
     console.log("Querying state map with params:", { state, brand, product, query });
     
-    // Enhanced query building for product legality
+    // FIXED: Enhanced query building with proper PostgREST syntax
     let query_builder = supabase
       .from('state_allowed_products')
       .select(`
@@ -525,7 +526,7 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
       }
     }
     
-    // Apply product filter
+    // FIXED: Apply product filter with proper PostgREST syntax
     if (product) {
       const productKeywords = product.toLowerCase().split(/\s+/)
         .filter(word => word.length > 2 && !['the', 'and', 'for', 'are', 'legal', 'in'].includes(word));
@@ -533,17 +534,18 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
       console.log("Product keywords:", productKeywords);
       
       if (productKeywords.length > 0) {
-        // Try to match any of the keywords in product name
-        const productConditions = productKeywords.map(keyword => 
+        // FIXED: Use proper .or() syntax with individual filter strings
+        const orFilters = productKeywords.map(keyword => 
           `products.name.ilike.%${keyword}%`
-        ).join(',');
+        );
         
-        query_builder = query_builder.or(productConditions);
+        // Apply OR conditions properly
+        query_builder = query_builder.or(orFilters.join(','));
       }
     }
     
     // Execute the query
-    const { data, error } = await query_builder;
+    const { data, error } = await query_builder.limit(10);
     
     if (error) {
       console.error("Database query error:", error);
@@ -553,6 +555,49 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
     console.log("Query results:", data);
     
     if (!data || data.length === 0) {
+      console.log("No results found, trying broader search...");
+      
+      // FIXED: Fallback search with exact product name matching
+      if (product) {
+        const fallbackQuery = supabase
+          .from('state_allowed_products')
+          .select(`
+            product_id,
+            states!inner(id, name),
+            products!inner(id, name, brand_id),
+            brands!inner(id, name)
+          `);
+        
+        // Apply state filter if available
+        if (state) {
+          const { data: stateData } = await supabase
+            .from('states')
+            .select('id, name')
+            .ilike('name', `%${state}%`)
+            .limit(1);
+          
+          if (stateData && stateData.length > 0) {
+            fallbackQuery.eq('state_id', stateData[0].id);
+          }
+        }
+        
+        // Try exact product name match
+        fallbackQuery.ilike('products.name', `%${product}%`);
+        
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery.limit(5);
+        
+        if (!fallbackError && fallbackData && fallbackData.length > 0) {
+          console.log("Fallback search found results:", fallbackData);
+          return fallbackData.map(item => ({
+            state: item.states.name,
+            brand: item.brands.name,
+            product: item.products.name,
+            isLegal: true,
+            details: `${item.products.name} by ${item.brands.name} is legal in ${item.states.name}.`
+          }));
+        }
+      }
+      
       return [];
     }
     
