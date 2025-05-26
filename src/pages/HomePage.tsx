@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -26,10 +25,9 @@ const HomePage = () => {
     return () => clearTimeout(timer);
   }, [measurePerformance]);
 
-  // Prefetch other primary routes when HomePage is mounted
+  // Prefetch map route when HomePage is mounted
   useEffect(() => {
     prefetchRoute('/map');
-    prefetchRoute('/chat');
   }, [prefetchRoute]);
 
   return (
@@ -52,13 +50,6 @@ const HomePage = () => {
               >
                 <Button size="lg" className="bg-red-500 hover:bg-red-600 transition-all duration-300">
                   Explore Map
-                </Button>
-              </Link>
-              <Link to="/chat" 
-                onMouseEnter={() => prefetchRoute('/chat')}
-              >
-                <Button size="lg" variant="outline" className="border-red-500 text-red-500 hover:bg-red-50 transition-all duration-300">
-                  Start Chat
                 </Button>
               </Link>
             </div>
