@@ -171,16 +171,18 @@ function analyzeQuery(query: string) {
     }
   }
   
-  // Extract product name - enhanced extraction
+  // Enhanced product name extraction - more specific for correct matching
   let detectedProduct = null;
   const productMatches = [
-    { pattern: /juice head pouches?/i, name: 'Juice Head Pouches' },
-    { pattern: /juice head/i, name: 'Juice Head' },
+    // Most specific patterns first for better matching
+    { pattern: /juice head pouches?/i, name: 'Pouches' }, // Extract just "Pouches" for database matching
+    { pattern: /5k disposable/i, name: '5K Disposable' },
+    { pattern: /disposable/i, name: 'Disposable' },
     { pattern: /pouches?/i, name: 'Pouches' },
     { pattern: /gummies/i, name: 'Gummies' },
     { pattern: /vape/i, name: 'Vape' },
     { pattern: /cart/i, name: 'Cart' },
-    { pattern: /disposable/i, name: 'Disposable' }
+    { pattern: /juice head/i, name: 'Juice Head' } // This should be last as fallback
   ];
   
   for (const productMatch of productMatches) {
@@ -240,13 +242,13 @@ async function queryStateMap(supabase: any, params: any) {
     const foundState = stateData[0];
     console.log(`Found state: ${foundState.name} with ID: ${foundState.id}`);
     
-    // Step 2: Find matching products
+    // Step 2: Find matching products with improved logic
     let productResults = [];
     
     if (product) {
       console.log(`Searching for product: ${product}`);
       
-      // Try exact match first
+      // Step 2a: Try to find the exact product name first
       const { data: exactProducts, error: exactError } = await supabase
         .from('products')
         .select(`
@@ -262,39 +264,86 @@ async function queryStateMap(supabase: any, params: any) {
       if (exactError) {
         console.error('Error in exact product search:', exactError);
       } else if (exactProducts && exactProducts.length > 0) {
-        productResults = exactProducts;
-        console.log(`Found ${productResults.length} products with exact match`);
+        console.log(`Found ${exactProducts.length} products with name matching "${product}"`);
+        
+        // If we're looking for "Pouches", prioritize exact matches
+        if (product.toLowerCase() === 'pouches') {
+          const exactPouchesMatch = exactProducts.find(p => 
+            p.name.toLowerCase() === 'pouches' || p.name.toLowerCase().includes('pouch')
+          );
+          if (exactPouchesMatch) {
+            productResults = [exactPouchesMatch];
+            console.log(`Found exact pouches match: ${exactPouchesMatch.name}`);
+          } else {
+            productResults = exactProducts;
+          }
+        } else {
+          productResults = exactProducts;
+        }
       }
       
-      // If no exact match and product contains multiple words, try brand search
-      if (productResults.length === 0 && product.includes(' ')) {
-        const brandName = product.split(' ')[0]; // Get first word as potential brand
-        console.log(`Searching for brand: ${brandName}`);
+      // Step 2b: If no exact product match, search by brand
+      if (productResults.length === 0) {
+        console.log('No exact product match found, searching by brand...');
         
-        const { data: brandData, error: brandError } = await supabase
-          .from('brands')
-          .select('id, name')
-          .ilike('name', `%${brandName}%`)
-          .limit(1);
+        // Extract potential brand name from query
+        const brandKeywords = ['juice head', 'juice', 'streamline'];
+        let brandName = null;
         
-        if (!brandError && brandData && brandData.length > 0) {
-          console.log(`Found exact brand match: ${brandData[0].name}`);
+        for (const keyword of brandKeywords) {
+          if (params.query.toLowerCase().includes(keyword)) {
+            brandName = keyword === 'juice' ? 'Juice Head' : keyword;
+            break;
+          }
+        }
+        
+        if (brandName) {
+          console.log(`Searching for brand: ${brandName}`);
           
-          const { data: brandProducts, error: brandProductsError } = await supabase
-            .from('products')
-            .select(`
-              id,
-              name,
-              brands (
+          const { data: brandData, error: brandError } = await supabase
+            .from('brands')
+            .select('id, name')
+            .ilike('name', `%${brandName}%`)
+            .limit(1);
+          
+          if (!brandError && brandData && brandData.length > 0) {
+            console.log(`Found brand match: ${brandData[0].name}`);
+            
+            // Get products for this brand, filtered by product name if specified
+            let brandProductsQuery = supabase
+              .from('products')
+              .select(`
                 id,
-                name
-              )
-            `)
-            .eq('brand_id', brandData[0].id);
-          
-          if (!brandProductsError && brandProducts) {
-            productResults = brandProducts;
-            console.log(`Found ${productResults.length} products for brand`);
+                name,
+                brands (
+                  id,
+                  name
+                )
+              `)
+              .eq('brand_id', brandData[0].id);
+            
+            // If we have a specific product name, filter by it
+            if (product && product !== 'Juice Head') {
+              brandProductsQuery = brandProductsQuery.ilike('name', `%${product}%`);
+            }
+            
+            const { data: brandProducts, error: brandProductsError } = await brandProductsQuery;
+            
+            if (!brandProductsError && brandProducts) {
+              productResults = brandProducts;
+              console.log(`Found ${productResults.length} products for brand ${brandData[0].name}`);
+              
+              // If looking for pouches specifically, prioritize them
+              if (product && product.toLowerCase() === 'pouches') {
+                const pouchesProduct = productResults.find(p => 
+                  p.name.toLowerCase() === 'pouches'
+                );
+                if (pouchesProduct) {
+                  productResults = [pouchesProduct];
+                  console.log(`Prioritized pouches product: ${pouchesProduct.name}`);
+                }
+              }
+            }
           }
         }
       }
@@ -302,35 +351,35 @@ async function queryStateMap(supabase: any, params: any) {
     
     // Step 3: Check product legality in the state
     if (productResults.length > 0) {
-      console.log(`Applying product filter for: ${product}`);
+      console.log(`Checking legality for ${productResults.length} products`);
       
-      for (const productItem of productResults) {
-        console.log(`Checking legality for product ID ${productItem.id} in state ID ${foundState.id}`);
-        
-        const { data: legalityData, error: legalityError } = await supabase
-          .from('state_allowed_products')
-          .select('*')
-          .eq('state_id', foundState.id)
-          .eq('product_id', productItem.id);
-        
-        if (legalityError) {
-          console.error('Error checking legality:', legalityError);
-          continue;
-        }
-        
-        const isLegal = legalityData && legalityData.length > 0;
-        console.log(`Product ${productItem.name} is ${isLegal ? 'LEGAL' : 'NOT LEGAL'} in ${foundState.name}`);
-        
-        return [{
-          title: `${productItem.name} Legality in ${foundState.name}`,
-          content: `${productItem.name} is ${isLegal ? 'legal' : 'not legal'} in ${foundState.name}.`,
-          state: foundState.name,
-          product: productItem.name,
-          brand: productItem.brands?.name,
-          isLegal,
-          source: 'state_map'
-        }];
+      // Check the first (most relevant) product
+      const productItem = productResults[0];
+      console.log(`Checking legality for product ID ${productItem.id} (${productItem.name}) in state ID ${foundState.id}`);
+      
+      const { data: legalityData, error: legalityError } = await supabase
+        .from('state_allowed_products')
+        .select('*')
+        .eq('state_id', foundState.id)
+        .eq('product_id', productItem.id);
+      
+      if (legalityError) {
+        console.error('Error checking legality:', legalityError);
+        return [];
       }
+      
+      const isLegal = legalityData && legalityData.length > 0;
+      console.log(`Product ${productItem.name} is ${isLegal ? 'LEGAL' : 'NOT LEGAL'} in ${foundState.name}`);
+      
+      return [{
+        title: `${productItem.name} Legality in ${foundState.name}`,
+        content: `${productItem.name} is ${isLegal ? 'legal' : 'not legal'} in ${foundState.name}.`,
+        state: foundState.name,
+        product: productItem.name,
+        brand: productItem.brands?.name,
+        isLegal,
+        source: 'state_map'
+      }];
     } else {
       console.log('No products found, returning general state info');
       return [{
@@ -342,8 +391,6 @@ async function queryStateMap(supabase: any, params: any) {
         source: 'state_map'
       }];
     }
-    
-    return [];
     
   } catch (error) {
     console.error('Error in queryStateMap:', error);
