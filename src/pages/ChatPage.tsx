@@ -32,11 +32,6 @@ const ChatPage = () => {
     createNewThread
   } = useChatState();
 
-  // Create a new chat on page load
-  useEffect(() => {
-    createNewThread();
-  }, []);
-
   // Focus input when thread changes
   useEffect(() => {
     if (inputRef.current) {
