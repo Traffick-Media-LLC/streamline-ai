@@ -17,15 +17,22 @@ const ChatThread = ({ messages, isLoading, chatId }: ChatThreadProps) => {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // Function to handle scrolling with an option for immediate scrolling
+  // Function to handle scrolling with offset for the input area
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth' });
+      const container = messagesEndRef.current.closest('.overflow-y-auto');
+      if (container) {
+        // Scroll to bottom with offset to account for input area
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: isLoading ? 'auto' : 'smooth'
+        });
+      }
     }
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4 pb-36">
+    <div className="flex h-full flex-col overflow-y-auto p-4 pb-[136px]">
       <div className="mt-auto">
         {messages.map((message, index) => (
           <ChatMessage 

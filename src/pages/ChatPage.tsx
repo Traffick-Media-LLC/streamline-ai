@@ -66,7 +66,7 @@ const ChatPage = () => {
   const showWelcome = !hasActiveChat;
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden bg-background">
+    <div className="flex h-[calc(100dvh-64px)] overflow-hidden bg-background">
       {/* Desktop History Panel */}
       {!isMobile && (
         <div 
@@ -87,7 +87,7 @@ const ChatPage = () => {
       {/* Main Chat Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Chat Header with History Button */}
-        <div className="flex items-center justify-between border-b px-4 py-2">
+        <div className="flex items-center justify-between border-b px-4 py-2 flex-shrink-0">
           <h2 className="text-xl font-semibold">Streamline Assistant</h2>
           <Button 
             variant="ghost" 
@@ -102,7 +102,7 @@ const ChatPage = () => {
         {/* Chat Content */}
         <div className="flex-1 overflow-hidden relative">
           {showWelcome ? (
-            <div className="flex h-full flex-col items-center justify-center p-6">
+            <div className="flex h-full flex-col items-center justify-center p-6 pb-[136px]">
               <div className="max-w-2xl text-center">
                 <h1 className="mb-4 text-2xl font-bold tracking-tight md:text-3xl">
                   Hello{user?.email ? `, ${user.email.split('@')[0]}` : ''}! How can I help you today?
@@ -123,8 +123,8 @@ const ChatPage = () => {
             </div>
           )}
           
-          {/* Fixed Input Area with consistent height */}
-          <div className="absolute bottom-0 left-0 right-0 border-t bg-background p-6 min-h-[88px]">
+          {/* Sticky Input Area with fixed height */}
+          <div className="sticky bottom-0 left-0 right-0 border-t bg-background p-6 min-h-[88px] flex-shrink-0 z-10">
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Input
                 ref={inputRef}
