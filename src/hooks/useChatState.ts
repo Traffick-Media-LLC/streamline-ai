@@ -85,15 +85,14 @@ export const useChatState = (): ChatState => {
           
           setThreads(threadsWithMessages as Chat[]);
           
-          // Set the most recent chat with messages as current, or the most recent one if all are empty
-          const chatWithMessages = threadsWithMessages.find(t => t.messages.length > 0);
-          if (chatWithMessages) {
-            setCurrentThreadId(chatWithMessages.id);
-          } else if (threadsWithMessages.length > 0) {
+          // Set most recent thread as current if there is one and no current thread is selected
+          if (threadsWithMessages.length > 0 && !currentThreadId) {
             setCurrentThreadId(threadsWithMessages[0].id);
           }
+        } else {
+          // No existing chats, create a new one
+          createNewThread();
         }
-        // Don't automatically create a new thread - let the user start one by sending a message
       } catch (e) {
         console.error("Error fetching chats:", e);
         toast.error("Failed to load chat history");
@@ -107,9 +106,9 @@ export const useChatState = (): ChatState => {
   const sendMessage = async (content: string) => {
     if (!content.trim() || !user) return;
     
-    // Create a new thread if there isn't one or if current thread doesn't exist
+    // Create a new thread if there isn't one
     let threadId = currentThreadId;
-    if (!threadId || !threads.find(t => t.id === threadId)) {
+    if (!threadId) {
       threadId = await createNewChatInDb("New Conversation");
       if (!threadId) return;
       
