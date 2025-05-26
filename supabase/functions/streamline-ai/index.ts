@@ -112,6 +112,40 @@ serve(async (req) => {
 
 async function determineDataSource(query: string, messages: Message[]): Promise<{ dataSources: string[], searchParams: any }> {
   try {
+    // Enhanced product legality detection
+    const legalityMatch = query.toLowerCase().match(/(is|are)\s+([a-z0-9\s&]+?)\s+(legal|allowed|permitted|banned|prohibited)\s+in\s+([a-z\s]+)/i);
+    const productStateMatch = query.toLowerCase().match(/([a-z0-9\s&]+?)\s+(in|for)\s+([a-z\s]+)/i);
+    
+    if (legalityMatch) {
+      const product = legalityMatch[2].trim();
+      const state = legalityMatch[4].trim();
+      console.log("Detected product legality query:", { product, state });
+      
+      return {
+        dataSources: ['state_map'],
+        searchParams: { 
+          product,
+          state,
+          query: `${product} legality in ${state}`
+        }
+      };
+    }
+    
+    if (productStateMatch && (query.toLowerCase().includes('legal') || query.toLowerCase().includes('allowed'))) {
+      const product = productStateMatch[1].trim();
+      const state = productStateMatch[3].trim();
+      console.log("Detected product state query:", { product, state });
+      
+      return {
+        dataSources: ['state_map'],
+        searchParams: { 
+          product,
+          state,
+          query: `${product} in ${state}`
+        }
+      };
+    }
+
     // Direct file ID detection
     const fileIdMatch = query.match(/([A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12})/);
     if (fileIdMatch) {
@@ -168,7 +202,10 @@ async function determineDataSource(query: string, messages: Message[]): Promise<
             role: 'system',
             content: `You are a query router for Streamline Group's internal AI assistant. Analyze the user query and determine which data sources to query.
 
-IMPORTANT! If the user is looking for a logo, image, document, sales sheet, spec, or any file, ALWAYS include "drive_files" in your data sources.
+IMPORTANT ROUTING RULES:
+1. If the user asks about product legality in a specific state (e.g., "Are Juice Head pouches legal in Texas?"), ALWAYS include "state_map" in your data sources.
+2. If the user is looking for a logo, image, document, sales sheet, spec, or any file, ALWAYS include "drive_files" in your data sources.
+3. For general knowledge questions, use "knowledge_base"
 
 Return a valid JSON object containing ONLY these fields:
 {
@@ -185,9 +222,9 @@ Return a valid JSON object containing ONLY these fields:
 
 EXAMPLES:
 1. "Is Product X legal in California?" → dataSources: ["state_map"], searchParams: {state: "California", product: "Product X"}
-2. "What's our refund policy?" → dataSources: ["knowledge_base"], searchParams: {query: "refund policy"}
-3. "Show me the Galaxy Treats logo" → dataSources: ["drive_files"], searchParams: {brand: "Galaxy Treats", fileType: "logo"}
-4. "Find the sales sheets for Galaxy Treats" → dataSources: ["drive_files"], searchParams: {brand: "Galaxy Treats", fileType: "sales sheet", category: "Sales Sheets:Specs"}
+2. "Are Juice Head pouches legal in Texas?" → dataSources: ["state_map"], searchParams: {state: "Texas", product: "Juice Head pouches", brand: "Juice Head"}
+3. "What's our refund policy?" → dataSources: ["knowledge_base"], searchParams: {query: "refund policy"}
+4. "Show me the Galaxy Treats logo" → dataSources: ["drive_files"], searchParams: {brand: "Galaxy Treats", fileType: "logo"}
 
 ALWAYS return properly formatted JSON.`
           },
@@ -308,7 +345,7 @@ async function queryDataSources(dataSources: string[], params: any, supabase: an
 
   const queryPromises = [];
 
-  // Query state map database
+  // Query state map database - ENHANCED for product legality
   if (dataSources.includes('state_map')) {
     queryPromises.push(queryStateMap(params, supabase)
       .then(stateMapResults => {
@@ -319,6 +356,14 @@ async function queryDataSources(dataSources: string[], params: any, supabase: an
             found: true,
             brand: params.brand || stateMapResults[0].brand,
             state: params.state || stateMapResults[0].state,
+            message: `Found ${stateMapResults.length} product(s) in database`
+          };
+        } else {
+          results.sourceInfo = {
+            source: 'product_database',
+            found: false,
+            state: params.state,
+            message: 'No matching products found in state permissions database'
           };
         }
       }));
@@ -377,10 +422,12 @@ async function queryDataSources(dataSources: string[], params: any, supabase: an
 
 async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryResult[]> {
   try {
-    const { state, brand, product } = params;
+    const { state, brand, product, query } = params;
     
-    // Start with a query that joins products, brands, and state_allowed_products tables
-    let query = supabase
+    console.log("Querying state map with params:", { state, brand, product, query });
+    
+    // Enhanced query building for product legality
+    let query_builder = supabase
       .from('state_allowed_products')
       .select(`
         product_id,
@@ -389,68 +436,121 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
         brands!inner(id, name)
       `);
     
-    // Apply filters based on parameters
+    // Apply state filter
     if (state) {
       // First try exact match
       const { data: stateData } = await supabase
         .from('states')
-        .select('id')
+        .select('id, name')
         .ilike('name', state)
         .limit(1);
       
       if (stateData && stateData.length > 0) {
-        query = query.eq('state_id', stateData[0].id);
+        query_builder = query_builder.eq('state_id', stateData[0].id);
+        console.log("Found state:", stateData[0].name, "with ID:", stateData[0].id);
       } else {
         // Try fuzzy match
         const { data: fuzzyStateData } = await supabase
           .from('states')
           .select('id, name')
-          .or(`name.ilike.%${state}%`)
+          .ilike('name', `%${state}%`)
           .limit(1);
         
         if (fuzzyStateData && fuzzyStateData.length > 0) {
-          query = query.eq('state_id', fuzzyStateData[0].id);
+          query_builder = query_builder.eq('state_id', fuzzyStateData[0].id);
+          console.log("Found fuzzy state match:", fuzzyStateData[0].name);
         } else {
-          // No state match found
+          console.log("No state match found for:", state);
           return [];
         }
       }
     }
     
-    if (brand) {
-      // First try exact match on brand name
-      const { data: brandData } = await supabase
-        .from('brands')
-        .select('id')
-        .ilike('name', brand)
-        .limit(1);
+    // Apply brand filter with improved matching
+    if (brand || product) {
+      const brandToSearch = brand || extractBrandFromQuery(product || query || '');
       
-      if (brandData && brandData.length > 0) {
-        query = query.eq('products.brand_id', brandData[0].id);
-      } else {
-        // Try fuzzy match
-        const { data: fuzzyBrandData } = await supabase
+      if (brandToSearch) {
+        console.log("Searching for brand:", brandToSearch);
+        
+        // Try exact match first
+        const { data: brandData } = await supabase
           .from('brands')
           .select('id, name')
-          .or(`name.ilike.%${brand}%`)
-          .limit(5);
+          .ilike('name', brandToSearch)
+          .limit(1);
         
-        if (fuzzyBrandData && fuzzyBrandData.length > 0) {
-          const brandIds = fuzzyBrandData.map(b => b.id);
-          query = query.in('products.brand_id', brandIds);
+        if (brandData && brandData.length > 0) {
+          query_builder = query_builder.eq('products.brand_id', brandData[0].id);
+          console.log("Found exact brand match:", brandData[0].name);
+        } else {
+          // Try fuzzy match and brand aliases
+          let foundBrandIds = [];
+          
+          // Check brand aliases
+          for (const [mainBrand, aliases] of Object.entries(BRAND_ALIASES)) {
+            if (mainBrand.toLowerCase().includes(brandToSearch.toLowerCase()) || 
+                aliases.some(alias => alias.toLowerCase().includes(brandToSearch.toLowerCase()) || 
+                             brandToSearch.toLowerCase().includes(alias.toLowerCase()))) {
+              
+              const { data: aliasBrandData } = await supabase
+                .from('brands')
+                .select('id, name')
+                .ilike('name', `%${mainBrand}%`)
+                .limit(1);
+              
+              if (aliasBrandData && aliasBrandData.length > 0) {
+                foundBrandIds.push(aliasBrandData[0].id);
+                console.log("Found brand via alias:", aliasBrandData[0].name);
+              }
+            }
+          }
+          
+          // Try fuzzy match on brand name
+          const { data: fuzzyBrandData } = await supabase
+            .from('brands')
+            .select('id, name')
+            .ilike('name', `%${brandToSearch}%`)
+            .limit(5);
+          
+          if (fuzzyBrandData && fuzzyBrandData.length > 0) {
+            foundBrandIds.push(...fuzzyBrandData.map(b => b.id));
+            console.log("Found fuzzy brand matches:", fuzzyBrandData.map(b => b.name));
+          }
+          
+          if (foundBrandIds.length > 0) {
+            query_builder = query_builder.in('products.brand_id', foundBrandIds);
+          }
         }
       }
     }
     
+    // Apply product filter
     if (product) {
-      // Try to match product name
-      query = query.ilike('products.name', `%${product}%`);
+      const productKeywords = product.toLowerCase().split(/\s+/)
+        .filter(word => word.length > 2 && !['the', 'and', 'for', 'are', 'legal', 'in'].includes(word));
+      
+      console.log("Product keywords:", productKeywords);
+      
+      if (productKeywords.length > 0) {
+        // Try to match any of the keywords in product name
+        const productConditions = productKeywords.map(keyword => 
+          `products.name.ilike.%${keyword}%`
+        ).join(',');
+        
+        query_builder = query_builder.or(productConditions);
+      }
     }
     
     // Execute the query
-    const { data, error } = await query;
+    const { data, error } = await query_builder;
     
-    if (error) throw error;
+    if (error) {
+      console.error("Database query error:", error);
+      throw error;
+    }
+    
+    console.log("Query results:", data);
     
     if (!data || data.length === 0) {
       return [];
@@ -904,13 +1004,17 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
     // Build context based on query results
     let context = "";
     
-    // Add state map results to context
+    // Add state map results to context with enhanced formatting
     if (results.stateMapResults && results.stateMapResults.length > 0) {
-      context += "## State Map Database Results\n";
+      context += "## Product Legality Database Results\n";
       results.stateMapResults.forEach((result: StateMapQueryResult) => {
-        context += `- ${result.product} by ${result.brand} is ${result.isLegal ? 'legal' : 'not legal'} in ${result.state}.\n`;
+        context += `- **${result.product}** by **${result.brand}** is **${result.isLegal ? 'LEGAL' : 'NOT LEGAL'}** in **${result.state}**.\n`;
       });
       context += "\n";
+    } else if (dataSources.includes('state_map')) {
+      context += "## Product Legality Database Results\n";
+      context += "- No matching products found in our state permissions database.\n";
+      context += "- This could mean the product is not in our system or may require verification with current regulations.\n\n";
     }
     
     // Add knowledge base results to context
@@ -956,7 +1060,7 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
       context += "No matching information found in any database. Please follow up with a more specific question or contact the appropriate department.\n\n";
     }
     
-    // Generate response using OpenAI
+    // Generate response using OpenAI with enhanced instructions
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -971,6 +1075,14 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
             content: `You are Streamline AI, the internal assistant for Streamline Group. 
             Use the following context from our databases to answer the user's question.
             
+            CRITICAL INSTRUCTIONS FOR PRODUCT LEGALITY QUESTIONS:
+            - When you have Product Legality Database Results, provide DEFINITIVE answers based on that data
+            - If a product is found in the database for a specific state, it IS LEGAL in that state
+            - If a product is NOT found in the database, clearly state this and explain what it means
+            - Always cite the source: "According to our Product Legality Database..."
+            - Include the specific brand and product name from the database results
+            - DO NOT provide generic legal advice when specific database results are available
+            
             MARKDOWN FORMATTING RULES (CRITICAL):
             - When mentioning file names, ALWAYS use bold markdown: **filename.ext**
             - When providing download links, ALWAYS use markdown link syntax: [Download Link](URL)
@@ -978,28 +1090,18 @@ async function generateAIResponse(messages: Message[], results: any, dataSources
             - If no URL is available, show "[Download Link Unavailable]" in plain text
             
             When answering about product legality:
-            - State clearly if a product is legal, not legal, or restricted
+            - State clearly if a product is legal, not legal, or not found in our database
             - Include brand and product specifics when available
-            - Mention ingredients like nicotine or cannabinoids if relevant
-            
-            When providing file information:
-            - Each file must be listed as: "- **filename.ext**"
-            - For file download links, use EXACTLY this format: "[Download Link](URL)"
-            - If writing a link without URL, use EXACTLY: "[Download Link Available]" 
+            - Mention that legality is based on our current database records
+            - Suggest contacting compliance team for products not in the database
             
             Format your responses as follows:
-            1. Short summary (1-2 sentences)
-            2. Detailed explanation
-            3. Include relevant context from the knowledge base
-            4. Suggest next steps if needed
+            1. Direct answer to the question (legal/not legal/not found)
+            2. Source attribution (database/knowledge base)
+            3. Relevant details from the database
+            4. Next steps if needed
             
-            Cite your sources clearly:
-            "According to the State Map database..."
-            "Based on the Knowledge Base..."
-            
-            For sales-specific questions, provide clear explanations that can be shared with distributors.
-            
-            Keep your tone conversational and helpful like an internal Slack chat.
+            Keep your tone professional and informative.
             
             Here is the context from our databases:
             ${context}`
