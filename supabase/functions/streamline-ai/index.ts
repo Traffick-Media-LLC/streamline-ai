@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -49,15 +50,18 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Enhanced query analysis with dynamic brand detection
+    // Enhanced query analysis with better file search detection
     const queryAnalysis = await analyzeQuery(userMessage, supabase);
     console.log('Query analysis:', queryAnalysis);
 
     let selectedSources = [];
     let searchParams = {};
 
-    // Determine data sources and search parameters
-    if (queryAnalysis.isProductLegality) {
+    // Determine data sources and search parameters with improved logic
+    if (queryAnalysis.isFileSearch) {
+      selectedSources = ['drive_files', 'knowledge_base'];
+      searchParams = { query: userMessage };
+    } else if (queryAnalysis.isProductLegality) {
       selectedSources = ['state_map'];
       searchParams = {
         product: queryAnalysis.product,
@@ -137,6 +141,7 @@ async function analyzeQuery(query: string, supabase: any) {
     console.error('Invalid query provided to analyzeQuery:', query);
     return {
       isProductLegality: false,
+      isFileSearch: false,
       product: null,
       brand: null,
       state: null,
@@ -145,6 +150,10 @@ async function analyzeQuery(query: string, supabase: any) {
   }
 
   const lowerQuery = query.toLowerCase();
+  
+  // File search keywords - prioritize these over product legality
+  const fileKeywords = ['logo', 'document', 'file', 'sheet', 'sales sheet', 'find me', 'download', 'pdf', 'image', 'picture'];
+  const hasFileKeyword = fileKeywords.some(keyword => lowerQuery.includes(keyword));
   
   // Enhanced legality detection patterns
   const legalityKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited', 'can i', 'available'];
@@ -295,15 +304,20 @@ async function analyzeQuery(query: string, supabase: any) {
     }
   }
   
-  // Determine if this is a product legality query
+  // Determine query type priority: file search takes precedence
+  const isFileSearch = hasFileKeyword;
+  
+  // Only consider product legality if not a file search AND has legality/state keywords
   const hasProductKeyword = detectedProduct !== null;
-  const isProductLegality = (hasLegalityKeyword || hasStateKeyword) && (hasProductKeyword || detectedBrand);
+  const isProductLegality = !isFileSearch && (hasLegalityKeyword || hasStateKeyword) && (hasProductKeyword || detectedBrand);
   
   console.log('Enhanced query analysis result:', {
+    isFileSearch,
     isProductLegality,
     product: detectedProduct,
     brand: detectedBrand,
     state: detectedState,
+    hasFileKeyword,
     hasLegalityKeyword,
     hasStateKeyword,
     hasProductKeyword,
@@ -311,6 +325,7 @@ async function analyzeQuery(query: string, supabase: any) {
   });
   
   return {
+    isFileSearch,
     isProductLegality,
     product: detectedProduct,
     brand: detectedBrand,
@@ -603,12 +618,13 @@ async function queryDriveFiles(supabase: any, params: any) {
     
     console.log('Using OR condition:', orCondition);
     
-    // Search in file names and content
+    // Search in file names and content - include file_url for download links
     const { data: files, error } = await supabase
       .from('drive_files')
       .select(`
         id,
         file_name,
+        file_url,
         category,
         brand,
         subcategory_1,
@@ -632,7 +648,9 @@ async function queryDriveFiles(supabase: any, params: any) {
       content: file.file_content?.[0]?.content || `File: ${file.file_name}`,
       category: file.category,
       brand: file.brand,
-      file_name: file.file_name
+      file_name: file.file_name,
+      file_url: file.file_url, // Include download URL
+      download_url: file.file_url // Also provide as download_url for consistency
     }));
     
   } catch (error) {
@@ -706,6 +724,12 @@ Response Format Requirements:
 3. Relevant Details: Include any important details from the sources
 4. Next Steps: If applicable, suggest what the user should do next
 
+For file searches:
+- Present files in a numbered list format
+- Include download links using the format: [Download Link](URL)
+- Show file names clearly
+- Group files by category if applicable
+
 Always be helpful, accurate, and cite your sources appropriately.`;
 
     if (queryAnalysis.isProductLegality) {
@@ -720,10 +744,22 @@ For product legality questions:
 - Be precise about what products are covered`;
     }
 
+    if (queryAnalysis.isFileSearch) {
+      systemPrompt += `
+
+For file search questions:
+- Present available files in a clear numbered list
+- Include clickable download links for each file
+- Show file categories and brands when available
+- If no files are found, suggest alternative search terms or contacting the relevant department`;
+    }
+
     const contextText = contextData.length > 0 
       ? contextData.map(item => {
           if (item.source === 'state_map') {
             return `Product Legality Data: ${item.content}`;
+          } else if (item.source === 'drive_files') {
+            return `File: ${item.file_name}${item.file_url ? ` - Download: ${item.file_url}` : ''}${item.category ? ` (Category: ${item.category})` : ''}`;
           }
           return `${item.title}: ${item.content}`;
         }).join('\n\n')
