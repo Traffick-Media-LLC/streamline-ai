@@ -14,8 +14,35 @@ serve(async (req) => {
   }
 
   try {
-    const { message } = await req.json();
-    console.log('Received message:', message);
+    const requestBody = await req.json();
+    console.log('Full request body:', JSON.stringify(requestBody, null, 2));
+
+    // Extract the user's message from the request
+    let userMessage = '';
+    
+    if (requestBody.message) {
+      // Direct message format
+      userMessage = requestBody.message;
+    } else if (requestBody.messages && Array.isArray(requestBody.messages)) {
+      // Chat messages format - get the last user message
+      const lastUserMessage = requestBody.messages
+        .filter(msg => msg.role === 'user')
+        .pop();
+      userMessage = lastUserMessage?.content || '';
+    }
+
+    if (!userMessage) {
+      console.error('No message found in request');
+      return new Response(JSON.stringify({ 
+        error: 'No message provided',
+        details: 'Request must include either a message field or messages array with user messages'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('Processing user message:', userMessage);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -24,7 +51,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Enhanced query analysis with better product legality detection
-    const queryAnalysis = analyzeQuery(message);
+    const queryAnalysis = analyzeQuery(userMessage);
     console.log('Query analysis:', queryAnalysis);
 
     let selectedSources = [];
@@ -36,11 +63,11 @@ serve(async (req) => {
       searchParams = {
         product: queryAnalysis.product,
         state: queryAnalysis.state,
-        query: message
+        query: userMessage
       };
     } else {
       selectedSources = ['drive_files', 'knowledge_base'];
-      searchParams = { query: message };
+      searchParams = { query: userMessage };
     }
 
     console.log('Selected data sources:', selectedSources);
@@ -79,7 +106,7 @@ serve(async (req) => {
     console.log('Total context data items:', contextData.length);
 
     // Generate AI response
-    const aiResponse = await generateAIResponse(openaiApiKey, message, contextData, queryAnalysis);
+    const aiResponse = await generateAIResponse(openaiApiKey, userMessage, contextData, queryAnalysis);
     
     return new Response(JSON.stringify({ 
       response: aiResponse,
@@ -105,6 +132,15 @@ serve(async (req) => {
 });
 
 function analyzeQuery(query: string) {
+  if (!query || typeof query !== 'string') {
+    console.error('Invalid query provided to analyzeQuery:', query);
+    return {
+      isProductLegality: false,
+      product: null,
+      state: null
+    };
+  }
+
   const lowerQuery = query.toLowerCase();
   
   // Enhanced product legality detection patterns
@@ -327,6 +363,12 @@ async function queryDriveFiles(supabase: any, params: any) {
       return [];
     }
     
+    // Build OR conditions for file names
+    const fileNameConditions = keywords.map(keyword => `file_name.ilike.%${keyword}%`);
+    const orCondition = fileNameConditions.join(',');
+    
+    console.log('Using OR condition:', orCondition);
+    
     // Search in file names and content
     const { data: files, error } = await supabase
       .from('drive_files')
@@ -341,7 +383,7 @@ async function queryDriveFiles(supabase: any, params: any) {
           content
         )
       `)
-      .or(keywords.map(keyword => `file_name.ilike.%${keyword}%`).join(','))
+      .or(orCondition)
       .limit(10);
     
     if (error) {
@@ -377,11 +419,15 @@ async function queryKnowledgeBase(supabase: any, params: any) {
       return [];
     }
     
+    // Build OR conditions for content
+    const contentConditions = keywords.map(keyword => `content.ilike.%${keyword}%`);
+    const orCondition = contentConditions.join(',');
+    
     const { data: entries, error } = await supabase
       .from('knowledge_entries')
       .select('*')
       .eq('is_active', true)
-      .or(keywords.map(keyword => `content.ilike.%${keyword}%`).join(','))
+      .or(orCondition)
       .limit(5);
     
     if (error) {
