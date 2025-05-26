@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { ExternalLink, Map, MessageSquare, Flag } from "lucide-react"
+import { ExternalLink, Flag } from "lucide-react"
 import { Animated, AnimatedImage, AnimatedList } from "@/components/ui/animated"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useState, useEffect } from "react"
@@ -84,35 +84,8 @@ const HomePage = () => {
         </div>
       </Animated>
 
-      {/* Navigation Cards */}
+      {/* Employee Resources Section */}
       <div className="max-w-7xl mx-auto px-4 py-12 space-y-12">
-        {/* Main Navigation Cards */}
-        <AnimatedList className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto" staggerDelay={0.15}>
-          <Link to="/map" className="group">
-            <Card className="h-full transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
-              <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
-                <Map className="h-12 w-12 text-black/80 group-hover:scale-110 transition-transform" />
-                <h3 className="text-xl font-semibold">Explore State Map</h3>
-                <p className="text-muted-foreground">
-                  Interactive map for managing product legality across states
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-          <Link to="/chat" className="group">
-            <Card className="h-full transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
-              <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
-                <MessageSquare className="h-12 w-12 text-black/80 group-hover:scale-110 transition-transform" />
-                <h3 className="text-xl font-semibold">AI Assistant</h3>
-                <p className="text-muted-foreground">
-                  Get instant support and answers to your questions
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        </AnimatedList>
-
-        {/* Employee Resources Section */}
         <div className="space-y-8">
           {/* Marketing Requests card */}
           <Animated type="slide-up" threshold={0.1}>
