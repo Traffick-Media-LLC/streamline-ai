@@ -63,7 +63,8 @@ serve(async (req) => {
         product: queryAnalysis.product,
         brand: queryAnalysis.brand,
         state: queryAnalysis.state,
-        query: userMessage
+        query: userMessage,
+        isListQuery: queryAnalysis.isListQuery
       };
     } else {
       selectedSources = ['drive_files', 'knowledge_base'];
@@ -138,7 +139,8 @@ async function analyzeQuery(query: string, supabase: any) {
       isProductLegality: false,
       product: null,
       brand: null,
-      state: null
+      state: null,
+      isListQuery: false
     };
   }
 
@@ -147,6 +149,11 @@ async function analyzeQuery(query: string, supabase: any) {
   // Enhanced legality detection patterns
   const legalityKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited', 'can i', 'available'];
   const hasLegalityKeyword = legalityKeywords.some(keyword => lowerQuery.includes(keyword));
+  
+  // Detect if this is a "list all products" query
+  const listKeywords = ['which', 'what', 'list', 'all', 'what are', 'show me'];
+  const isListQuery = listKeywords.some(keyword => lowerQuery.includes(keyword));
+  console.log('Is list query:', isListQuery);
   
   // Dynamically fetch all states from database
   let detectedState = null;
@@ -299,14 +306,16 @@ async function analyzeQuery(query: string, supabase: any) {
     state: detectedState,
     hasLegalityKeyword,
     hasStateKeyword,
-    hasProductKeyword
+    hasProductKeyword,
+    isListQuery
   });
   
   return {
     isProductLegality,
     product: detectedProduct,
     brand: detectedBrand,
-    state: detectedState
+    state: detectedState,
+    isListQuery
   };
 }
 
@@ -314,7 +323,7 @@ async function queryStateMap(supabase: any, params: any) {
   try {
     console.log('Querying state map with params:', params);
     
-    const { product, brand, state } = params;
+    const { product, brand, state, isListQuery } = params;
     
     if (!state) {
       console.log('No state detected, cannot query state map');
@@ -342,7 +351,71 @@ async function queryStateMap(supabase: any, params: any) {
     const foundState = stateData[0];
     console.log(`Found state: ${foundState.name} with ID: ${foundState.id}`);
     
-    // Step 2: Enhanced product search with brand + product combination
+    // Step 2: Handle list queries vs specific product queries differently
+    if (isListQuery && brand) {
+      console.log(`List query detected for brand: ${brand}`);
+      
+      // Find the brand
+      const { data: brandData, error: brandError } = await supabase
+        .from('brands')
+        .select('id, name')
+        .ilike('name', `%${brand}%`)
+        .limit(1);
+      
+      if (!brandError && brandData && brandData.length > 0) {
+        const foundBrand = brandData[0];
+        console.log(`Found brand: ${foundBrand.name} with ID: ${foundBrand.id}`);
+        
+        // Get all products from this brand that are legal in this state
+        const { data: legalProducts, error: legalError } = await supabase
+          .from('state_allowed_products')
+          .select(`
+            products (
+              id,
+              name,
+              brands (
+                id,
+                name
+              )
+            )
+          `)
+          .eq('state_id', foundState.id)
+          .eq('products.brand_id', foundBrand.id);
+        
+        if (!legalError && legalProducts && legalProducts.length > 0) {
+          console.log(`Found ${legalProducts.length} legal products for ${foundBrand.name} in ${foundState.name}`);
+          
+          const productList = legalProducts
+            .map(item => item.products)
+            .filter(product => product !== null)
+            .map(product => product.name);
+          
+          return [{
+            title: `${foundBrand.name} Products Legal in ${foundState.name}`,
+            content: `The following ${foundBrand.name} products are legal in ${foundState.name}:\n\n${productList.map(name => `• ${name}`).join('\n')}\n\nTotal: ${productList.length} products`,
+            state: foundState.name,
+            brand: foundBrand.name,
+            productCount: productList.length,
+            productList: productList,
+            isLegal: true,
+            source: 'state_map'
+          }];
+        } else {
+          console.log(`No legal products found for ${foundBrand.name} in ${foundState.name}`);
+          return [{
+            title: `${foundBrand.name} Products in ${foundState.name}`,
+            content: `No ${foundBrand.name} products are currently legal in ${foundState.name}. Please check with compliance for the latest regulations.`,
+            state: foundState.name,
+            brand: foundBrand.name,
+            productCount: 0,
+            isLegal: false,
+            source: 'state_map'
+          }];
+        }
+      }
+    }
+    
+    // Enhanced product search with brand + product combination (existing logic)
     let productResults = [];
     
     if (brand && product) {
@@ -639,7 +712,9 @@ Always be helpful, accurate, and cite your sources appropriately.`;
       systemPrompt += `
 
 For product legality questions:
-- Give a clear YES/NO answer about legality
+- Give a clear YES/NO answer about legality when asking about specific products
+- For "which products" or "what products" questions, provide a comprehensive numbered list
+- Format product lists clearly with bullet points or numbers
 - Cite the specific product, brand, and state
 - If no data is found, clearly state this and suggest contacting compliance
 - Be precise about what products are covered`;
