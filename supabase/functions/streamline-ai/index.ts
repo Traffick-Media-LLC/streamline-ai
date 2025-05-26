@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -60,7 +59,12 @@ serve(async (req) => {
     // Determine data sources and search parameters with improved logic
     if (queryAnalysis.isFileSearch) {
       selectedSources = ['drive_files', 'knowledge_base'];
-      searchParams = { query: userMessage };
+      searchParams = { 
+        query: userMessage,
+        fileType: queryAnalysis.fileType,
+        brand: queryAnalysis.brand,
+        category: queryAnalysis.category
+      };
     } else if (queryAnalysis.isProductLegality) {
       selectedSources = ['state_map'];
       searchParams = {
@@ -72,7 +76,12 @@ serve(async (req) => {
       };
     } else {
       selectedSources = ['drive_files', 'knowledge_base'];
-      searchParams = { query: userMessage };
+      searchParams = { 
+        query: userMessage,
+        fileType: queryAnalysis.fileType,
+        brand: queryAnalysis.brand,
+        category: queryAnalysis.category
+      };
     }
 
     console.log('Selected data sources:', selectedSources);
@@ -90,7 +99,7 @@ serve(async (req) => {
         if (source === 'state_map') {
           sourceData = await queryStateMap(supabase, searchParams);
         } else if (source === 'drive_files') {
-          sourceData = await queryDriveFiles(supabase, searchParams);
+          sourceData = await queryDriveFilesEnhanced(supabase, searchParams);
         } else if (source === 'knowledge_base') {
           sourceData = await queryKnowledgeBase(supabase, searchParams);
         }
@@ -145,15 +154,37 @@ async function analyzeQuery(query: string, supabase: any) {
       product: null,
       brand: null,
       state: null,
-      isListQuery: false
+      isListQuery: false,
+      fileType: null,
+      category: null
     };
   }
 
   const lowerQuery = query.toLowerCase();
   
-  // File search keywords - prioritize these over product legality
-  const fileKeywords = ['logo', 'document', 'file', 'sheet', 'sales sheet', 'find me', 'download', 'pdf', 'image', 'picture'];
+  // Enhanced file search keywords - prioritize these over product legality
+  const fileKeywords = ['logo', 'document', 'file', 'sheet', 'sales sheet', 'find me', 'download', 'pdf', 'image', 'picture', 'brochure', 'flyer'];
   const hasFileKeyword = fileKeywords.some(keyword => lowerQuery.includes(keyword));
+  
+  // File type detection
+  let detectedFileType = null;
+  const fileTypePatterns = [
+    { pattern: /logo/i, type: 'logo' },
+    { pattern: /sales sheet/i, type: 'sales sheet' },
+    { pattern: /document/i, type: 'document' },
+    { pattern: /pdf/i, type: 'pdf' },
+    { pattern: /image/i, type: 'image' },
+    { pattern: /picture/i, type: 'image' },
+    { pattern: /brochure/i, type: 'brochure' },
+    { pattern: /flyer/i, type: 'flyer' }
+  ];
+  
+  for (const fileType of fileTypePatterns) {
+    if (fileType.pattern.test(lowerQuery)) {
+      detectedFileType = fileType.type;
+      break;
+    }
+  }
   
   // Enhanced legality detection patterns
   const legalityKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited', 'can i', 'available'];
@@ -186,7 +217,7 @@ async function analyzeQuery(query: string, supabase: any) {
     console.error('Error fetching states:', error);
   }
   
-  // If no state found in database, fallback to hardcoded patterns for common variations
+  // Fallback state detection logic
   if (!detectedState) {
     const stateMatches = [
       { pattern: /texas/i, name: 'Texas' },
@@ -304,6 +335,14 @@ async function analyzeQuery(query: string, supabase: any) {
     }
   }
   
+  // Category detection for files
+  let detectedCategory = null;
+  if (detectedFileType === 'logo') {
+    detectedCategory = 'Logos';
+  } else if (detectedFileType === 'sales sheet') {
+    detectedCategory = 'Sales Sheets';
+  }
+  
   // Determine query type priority: file search takes precedence
   const isFileSearch = hasFileKeyword;
   
@@ -321,7 +360,9 @@ async function analyzeQuery(query: string, supabase: any) {
     hasLegalityKeyword,
     hasStateKeyword,
     hasProductKeyword,
-    isListQuery
+    isListQuery,
+    fileType: detectedFileType,
+    category: detectedCategory
   });
   
   return {
@@ -330,14 +371,220 @@ async function analyzeQuery(query: string, supabase: any) {
     product: detectedProduct,
     brand: detectedBrand,
     state: detectedState,
-    isListQuery
+    isListQuery,
+    fileType: detectedFileType,
+    category: detectedCategory
   };
+}
+
+async function queryDriveFilesEnhanced(supabase: any, params: any) {
+  try {
+    const { query, fileType, brand, category } = params;
+    console.log('Enhanced drive files search with params:', params);
+    
+    // Enhanced keyword extraction that preserves important short words
+    const keywords = extractEnhancedKeywords(query);
+    console.log('Enhanced keywords extracted:', keywords);
+    
+    if (keywords.length === 0) {
+      console.log('No valid keywords found');
+      return [];
+    }
+    
+    // Multi-pass search strategy
+    const searchResults = [];
+    
+    // Pass 1: Exact category + brand + file type match
+    if (category && brand && fileType) {
+      console.log(`Pass 1: Searching for ${fileType} in ${category} category for ${brand}`);
+      const exactResults = await searchWithCriteria(supabase, {
+        category: category,
+        brand: brand,
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (exactResults.length > 0) {
+        console.log(`Pass 1 found ${exactResults.length} exact matches`);
+        return rankAndSortResults(exactResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 2: Category + file type match
+    if (category && fileType) {
+      console.log(`Pass 2: Searching for ${fileType} in ${category} category`);
+      const categoryResults = await searchWithCriteria(supabase, {
+        category: category,
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (categoryResults.length > 0) {
+        console.log(`Pass 2 found ${categoryResults.length} category matches`);
+        return rankAndSortResults(categoryResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 3: Brand + file type match
+    if (brand && fileType) {
+      console.log(`Pass 3: Searching for ${fileType} files from ${brand}`);
+      const brandResults = await searchWithCriteria(supabase, {
+        brand: brand,
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (brandResults.length > 0) {
+        console.log(`Pass 3 found ${brandResults.length} brand + file type matches`);
+        return rankAndSortResults(brandResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 4: File type only
+    if (fileType) {
+      console.log(`Pass 4: Searching for ${fileType} files`);
+      const fileTypeResults = await searchWithCriteria(supabase, {
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (fileTypeResults.length > 0) {
+        console.log(`Pass 4 found ${fileTypeResults.length} file type matches`);
+        return rankAndSortResults(fileTypeResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 5: Keyword-based search as fallback
+    console.log('Pass 5: Fallback keyword search');
+    const keywordResults = await searchWithCriteria(supabase, {
+      keywords: keywords
+    });
+    
+    console.log(`Pass 5 found ${keywordResults.length} keyword matches`);
+    return rankAndSortResults(keywordResults, { fileType, brand, category });
+    
+  } catch (error) {
+    console.error('Error in queryDriveFilesEnhanced:', error);
+    return [];
+  }
+}
+
+function extractEnhancedKeywords(query: string): string[] {
+  // Preserve important file-related short words
+  const importantShortWords = new Set(['logo', 'pdf', 'doc', 'img', 'pic']);
+  const stopWords = new Set(['the', 'is', 'are', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an', 'me', 'find']);
+  
+  return query
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => {
+      // Keep important short words even if they're normally filtered
+      if (importantShortWords.has(word)) return true;
+      // Filter out stop words and very short words
+      return word.length > 2 && !stopWords.has(word);
+    })
+    .slice(0, 8); // Increase limit to capture more context
+}
+
+async function searchWithCriteria(supabase: any, criteria: any) {
+  try {
+    console.log('Searching with criteria:', criteria);
+    
+    let query = supabase
+      .from('drive_files')
+      .select(`
+        id,
+        file_name,
+        file_url,
+        category,
+        brand,
+        subcategory_1,
+        subcategory_2,
+        file_content (
+          content
+        )
+      `);
+    
+    // Apply category filter
+    if (criteria.category) {
+      query = query.eq('category', criteria.category);
+    }
+    
+    // Apply brand filter
+    if (criteria.brand) {
+      query = query.ilike('brand', `%${criteria.brand}%`);
+    }
+    
+    // Apply file name contains filter
+    if (criteria.fileNameContains) {
+      query = query.ilike('file_name', `%${criteria.fileNameContains}%`);
+    }
+    
+    // Apply keyword filters
+    if (criteria.keywords && criteria.keywords.length > 0) {
+      const keywordConditions = criteria.keywords.map(keyword => `file_name.ilike.%${keyword}%`);
+      const orCondition = keywordConditions.join(',');
+      query = query.or(orCondition);
+    }
+    
+    const { data: files, error } = await query.limit(15);
+    
+    if (error) {
+      console.error('Search query error:', error);
+      return [];
+    }
+    
+    console.log(`Search criteria returned ${files?.length || 0} results`);
+    return files || [];
+    
+  } catch (error) {
+    console.error('Error in searchWithCriteria:', error);
+    return [];
+  }
+}
+
+function rankAndSortResults(results: any[], searchContext: any) {
+  const { fileType, brand, category } = searchContext;
+  
+  return results
+    .map(file => {
+      let score = 0;
+      const fileName = file.file_name.toLowerCase();
+      
+      // Score based on file type match
+      if (fileType && fileName.includes(fileType.toLowerCase())) {
+        score += 100;
+      }
+      
+      // Score based on category match
+      if (category && file.category === category) {
+        score += 50;
+      }
+      
+      // Score based on brand match
+      if (brand && file.brand && file.brand.toLowerCase().includes(brand.toLowerCase())) {
+        score += 75;
+      }
+      
+      // Boost exact matches
+      if (fileType && brand && fileName.includes(fileType.toLowerCase()) && file.brand && file.brand.toLowerCase().includes(brand.toLowerCase())) {
+        score += 200;
+      }
+      
+      return { ...file, relevanceScore: score };
+    })
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .map(file => ({
+      title: file.file_name,
+      content: file.file_content?.[0]?.content || `File: ${file.file_name}`,
+      category: file.category,
+      brand: file.brand,
+      file_name: file.file_name,
+      file_url: file.file_url,
+      download_url: file.file_url,
+      relevanceScore: file.relevanceScore
+    }));
 }
 
 async function queryStateMap(supabase: any, params: any) {
   try {
-    console.log('Querying state map with params:', params);
-    
     const { product, brand, state, isListQuery } = params;
     
     if (!state) {
@@ -600,71 +847,12 @@ async function queryStateMap(supabase: any, params: any) {
   }
 }
 
-async function queryDriveFiles(supabase: any, params: any) {
-  try {
-    const { query } = params;
-    console.log('Querying drive files with query:', query);
-    
-    const keywords = extractKeywords(query);
-    console.log('Trying keyword search with:', keywords);
-    
-    if (keywords.length === 0) {
-      return [];
-    }
-    
-    // Build OR conditions for file names
-    const fileNameConditions = keywords.map(keyword => `file_name.ilike.%${keyword}%`);
-    const orCondition = fileNameConditions.join(',');
-    
-    console.log('Using OR condition:', orCondition);
-    
-    // Search in file names and content - include file_url for download links
-    const { data: files, error } = await supabase
-      .from('drive_files')
-      .select(`
-        id,
-        file_name,
-        file_url,
-        category,
-        brand,
-        subcategory_1,
-        subcategory_2,
-        file_content (
-          content
-        )
-      `)
-      .or(orCondition)
-      .limit(10);
-    
-    if (error) {
-      console.error('Drive files query error:', error);
-      return [];
-    }
-    
-    console.log(`Drive files query returned ${files?.length || 0} results`);
-    
-    return (files || []).map(file => ({
-      title: file.file_name,
-      content: file.file_content?.[0]?.content || `File: ${file.file_name}`,
-      category: file.category,
-      brand: file.brand,
-      file_name: file.file_name,
-      file_url: file.file_url, // Include download URL
-      download_url: file.file_url // Also provide as download_url for consistency
-    }));
-    
-  } catch (error) {
-    console.error('Error in queryDriveFiles:', error);
-    return [];
-  }
-}
-
 async function queryKnowledgeBase(supabase: any, params: any) {
   try {
     const { query } = params;
     console.log('Querying knowledge base with query:', query);
     
-    const keywords = extractKeywords(query);
+    const keywords = extractEnhancedKeywords(query);
     console.log('Knowledge base keywords:', keywords);
     
     if (keywords.length === 0) {
@@ -701,20 +889,10 @@ async function queryKnowledgeBase(supabase: any, params: any) {
   }
 }
 
-function extractKeywords(query: string): string[] {
-  const stopWords = new Set(['the', 'is', 'are', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an']);
-  
-  return query
-    .toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(word => word.length > 2 && !stopWords.has(word))
-    .slice(0, 5);
-}
-
 async function generateAIResponse(openaiApiKey: string, query: string, contextData: any[], queryAnalysis: any) {
   try {
     console.log('Generating AI response with', contextData.length, 'context items');
+    console.log('Query analysis for AI:', queryAnalysis);
     
     let systemPrompt = `You are a helpful AI assistant for Streamline Brands. You provide accurate information based on the company's data sources.
 
@@ -725,15 +903,11 @@ Response Format Requirements:
 4. Next Steps: If applicable, suggest what the user should do next
 
 For file searches:
-- Present files in a numbered list format
-- Include download links using the format: [Download Link](URL)
-- Show file names clearly
-- Group files by category if applicable
-
-Always be helpful, accurate, and cite your sources appropriately.`;
-
-    if (queryAnalysis.isProductLegality) {
-      systemPrompt += `
+- Present files in a numbered list format with clear descriptions
+- Include download links using the format: [Download](URL) for each file
+- Show file names, categories, and brands when available
+- Group files by relevance with most relevant first
+- If specific files like logos aren't found, suggest checking alternative categories or contacting relevant departments
 
 For product legality questions:
 - Give a clear YES/NO answer about legality when asking about specific products
@@ -741,29 +915,24 @@ For product legality questions:
 - Format product lists clearly with bullet points or numbers
 - Cite the specific product, brand, and state
 - If no data is found, clearly state this and suggest contacting compliance
-- Be precise about what products are covered`;
-    }
+- Be precise about what products are covered
 
-    if (queryAnalysis.isFileSearch) {
-      systemPrompt += `
-
-For file search questions:
-- Present available files in a clear numbered list
-- Include clickable download links for each file
-- Show file categories and brands when available
-- If no files are found, suggest alternative search terms or contacting the relevant department`;
-    }
+Always be helpful, accurate, and cite your sources appropriately.`;
 
     const contextText = contextData.length > 0 
-      ? contextData.map(item => {
+      ? contextData.map((item, index) => {
           if (item.source === 'state_map') {
             return `Product Legality Data: ${item.content}`;
           } else if (item.source === 'drive_files') {
-            return `File: ${item.file_name}${item.file_url ? ` - Download: ${item.file_url}` : ''}${item.category ? ` (Category: ${item.category})` : ''}`;
+            const downloadLink = item.file_url ? ` - [Download](${item.file_url})` : '';
+            const relevanceNote = item.relevanceScore ? ` (Relevance: ${item.relevanceScore})` : '';
+            return `File ${index + 1}: ${item.file_name}${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
           }
           return `${item.title}: ${item.content}`;
         }).join('\n\n')
       : 'No specific information found in the database.';
+
+    console.log('Context sent to AI:', contextText);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -775,7 +944,7 @@ For file search questions:
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `User Question: ${query}\n\nAvailable Information:\n${contextText}` }
+          { role: 'user', content: `User Question: ${query}\n\nQuery Analysis: ${JSON.stringify(queryAnalysis)}\n\nAvailable Information:\n${contextText}` }
         ],
         temperature: 0.3,
         max_tokens: 1000
