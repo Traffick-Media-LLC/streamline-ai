@@ -25,7 +25,7 @@ const ChatThread = ({ messages, isLoading, chatId }: ChatThreadProps) => {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4 pb-24">
+    <div className="flex h-full flex-col overflow-y-auto p-4 pb-36">
       <div className="mt-auto">
         {messages.map((message, index) => (
           <ChatMessage 

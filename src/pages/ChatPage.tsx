@@ -123,8 +123,8 @@ const ChatPage = () => {
             </div>
           )}
           
-          {/* Fixed Input Area */}
-          <div className="absolute bottom-0 left-0 right-0 border-t bg-background p-4">
+          {/* Fixed Input Area with consistent height */}
+          <div className="absolute bottom-0 left-0 right-0 border-t bg-background p-6 min-h-[88px]">
             <form onSubmit={handleSubmit} className="flex items-center gap-2">
               <Input
                 ref={inputRef}
