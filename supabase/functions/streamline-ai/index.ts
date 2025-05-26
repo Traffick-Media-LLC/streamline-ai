@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -147,10 +146,95 @@ async function analyzeQuery(query: string, supabase: any) {
   
   // Enhanced legality detection patterns
   const legalityKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited', 'can i', 'available'];
-  const stateKeywords = ['state', 'texas', 'california', 'florida', 'new york', 'nevada', 'colorado', 'washington'];
-  
   const hasLegalityKeyword = legalityKeywords.some(keyword => lowerQuery.includes(keyword));
-  const hasStateKeyword = stateKeywords.some(keyword => lowerQuery.includes(keyword));
+  
+  // Dynamically fetch all states from database
+  let detectedState = null;
+  try {
+    const { data: states, error } = await supabase
+      .from('states')
+      .select('name');
+    
+    if (!error && states) {
+      // Check for state matches (case insensitive)
+      for (const state of states) {
+        const statePattern = new RegExp(`\\b${state.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (statePattern.test(lowerQuery)) {
+          detectedState = state.name;
+          console.log(`Detected state: ${detectedState}`);
+          break;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching states:', error);
+  }
+  
+  // If no state found in database, fallback to hardcoded patterns for common variations
+  if (!detectedState) {
+    const stateMatches = [
+      { pattern: /texas/i, name: 'Texas' },
+      { pattern: /california/i, name: 'California' },
+      { pattern: /florida/i, name: 'Florida' },
+      { pattern: /nevada/i, name: 'Nevada' },
+      { pattern: /colorado/i, name: 'Colorado' },
+      { pattern: /washington/i, name: 'Washington' },
+      { pattern: /new york/i, name: 'New York' },
+      { pattern: /kentucky/i, name: 'Kentucky' },
+      { pattern: /alabama/i, name: 'Alabama' },
+      { pattern: /georgia/i, name: 'Georgia' },
+      { pattern: /tennessee/i, name: 'Tennessee' },
+      { pattern: /north carolina/i, name: 'North Carolina' },
+      { pattern: /south carolina/i, name: 'South Carolina' },
+      { pattern: /virginia/i, name: 'Virginia' },
+      { pattern: /west virginia/i, name: 'West Virginia' },
+      { pattern: /maryland/i, name: 'Maryland' },
+      { pattern: /delaware/i, name: 'Delaware' },
+      { pattern: /pennsylvania/i, name: 'Pennsylvania' },
+      { pattern: /new jersey/i, name: 'New Jersey' },
+      { pattern: /connecticut/i, name: 'Connecticut' },
+      { pattern: /rhode island/i, name: 'Rhode Island' },
+      { pattern: /massachusetts/i, name: 'Massachusetts' },
+      { pattern: /vermont/i, name: 'Vermont' },
+      { pattern: /new hampshire/i, name: 'New Hampshire' },
+      { pattern: /maine/i, name: 'Maine' },
+      { pattern: /ohio/i, name: 'Ohio' },
+      { pattern: /michigan/i, name: 'Michigan' },
+      { pattern: /indiana/i, name: 'Indiana' },
+      { pattern: /illinois/i, name: 'Illinois' },
+      { pattern: /wisconsin/i, name: 'Wisconsin' },
+      { pattern: /minnesota/i, name: 'Minnesota' },
+      { pattern: /iowa/i, name: 'Iowa' },
+      { pattern: /missouri/i, name: 'Missouri' },
+      { pattern: /arkansas/i, name: 'Arkansas' },
+      { pattern: /louisiana/i, name: 'Louisiana' },
+      { pattern: /mississippi/i, name: 'Mississippi' },
+      { pattern: /oklahoma/i, name: 'Oklahoma' },
+      { pattern: /kansas/i, name: 'Kansas' },
+      { pattern: /nebraska/i, name: 'Nebraska' },
+      { pattern: /south dakota/i, name: 'South Dakota' },
+      { pattern: /north dakota/i, name: 'North Dakota' },
+      { pattern: /montana/i, name: 'Montana' },
+      { pattern: /wyoming/i, name: 'Wyoming' },
+      { pattern: /idaho/i, name: 'Idaho' },
+      { pattern: /utah/i, name: 'Utah' },
+      { pattern: /arizona/i, name: 'Arizona' },
+      { pattern: /new mexico/i, name: 'New Mexico' },
+      { pattern: /oregon/i, name: 'Oregon' },
+      { pattern: /alaska/i, name: 'Alaska' },
+      { pattern: /hawaii/i, name: 'Hawaii' }
+    ];
+    
+    for (const stateMatch of stateMatches) {
+      if (stateMatch.pattern.test(lowerQuery)) {
+        detectedState = stateMatch.name;
+        console.log(`Detected state (fallback): ${detectedState}`);
+        break;
+      }
+    }
+  }
+  
+  const hasStateKeyword = detectedState !== null;
   
   // Dynamically fetch all brands from database
   let detectedBrand = null;
@@ -172,25 +256,6 @@ async function analyzeQuery(query: string, supabase: any) {
     }
   } catch (error) {
     console.error('Error fetching brands:', error);
-  }
-  
-  // Extract state name
-  let detectedState = null;
-  const stateMatches = [
-    { pattern: /texas/i, name: 'Texas' },
-    { pattern: /california/i, name: 'California' },
-    { pattern: /florida/i, name: 'Florida' },
-    { pattern: /nevada/i, name: 'Nevada' },
-    { pattern: /colorado/i, name: 'Colorado' },
-    { pattern: /washington/i, name: 'Washington' },
-    { pattern: /new york/i, name: 'New York' }
-  ];
-  
-  for (const stateMatch of stateMatches) {
-    if (stateMatch.pattern.test(lowerQuery)) {
-      detectedState = stateMatch.name;
-      break;
-    }
   }
   
   // Enhanced product name extraction with hierarchy (specific to general)
