@@ -101,11 +101,13 @@ const ChatPage = () => {
               </div>
             </div>
           ) : (
-            <ChatThread 
-              messages={currentThread?.messages || []} 
-              isLoading={isLoading}
-              chatId={currentThreadId || undefined}
-            />
+            <div className="h-full">
+              <ChatThread 
+                messages={currentThread?.messages || []} 
+                isLoading={isLoading}
+                chatId={currentThreadId || undefined}
+              />
+            </div>
           )}
           
           {/* Fixed Input Area */}
