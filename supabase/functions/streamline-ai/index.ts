@@ -427,7 +427,7 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
     
     console.log("Querying state map with params:", { state, brand, product, query });
     
-    // FIXED: Enhanced query building with proper PostgREST syntax
+    // FIXED: Simplified query approach to avoid PostgREST syntax issues
     let query_builder = supabase
       .from('state_allowed_products')
       .select(`
@@ -437,7 +437,7 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
         brands!inner(id, name)
       `);
     
-    // Apply state filter
+    // Apply state filter first
     if (state) {
       // First try exact match
       const { data: stateData } = await supabase
@@ -526,39 +526,90 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
       }
     }
     
-    // FIXED: Apply product filter with proper PostgREST syntax
+    // FIXED: Apply product filter with corrected PostgREST syntax
     if (product) {
-      const productKeywords = product.toLowerCase().split(/\s+/)
-        .filter(word => word.length > 2 && !['the', 'and', 'for', 'are', 'legal', 'in'].includes(word));
+      console.log("Applying product filter for:", product);
       
-      console.log("Product keywords:", productKeywords);
+      // First try exact product name match
+      const exactMatch = await query_builder
+        .ilike('products.name', `%${product}%`)
+        .limit(10);
       
-      if (productKeywords.length > 0) {
-        // FIXED: Use proper .or() syntax with individual filter strings
-        const orFilters = productKeywords.map(keyword => 
-          `products.name.ilike.%${keyword}%`
-        );
+      console.log("Exact product match query executed");
+      
+      if (exactMatch.error) {
+        console.error("Exact match query error:", exactMatch.error);
         
-        // Apply OR conditions properly
-        query_builder = query_builder.or(orFilters.join(','));
+        // If exact match fails, try individual keyword searches
+        const productKeywords = product.toLowerCase().split(/\s+/)
+          .filter(word => word.length > 2 && !['the', 'and', 'for', 'are', 'legal', 'in'].includes(word));
+        
+        console.log("Trying keyword search with:", productKeywords);
+        
+        if (productKeywords.length > 0) {
+          // Try each keyword individually and combine results
+          let allResults = [];
+          
+          for (const keyword of productKeywords) {
+            const keywordQuery = supabase
+              .from('state_allowed_products')
+              .select(`
+                product_id,
+                states!inner(id, name),
+                products!inner(id, name, brand_id),
+                brands!inner(id, name)
+              `);
+            
+            // Apply the same state filter
+            if (state) {
+              const { data: stateData } = await supabase
+                .from('states')
+                .select('id, name')
+                .ilike('name', `%${state}%`)
+                .limit(1);
+              
+              if (stateData && stateData.length > 0) {
+                keywordQuery.eq('state_id', stateData[0].id);
+              }
+            }
+            
+            const keywordResult = await keywordQuery
+              .ilike('products.name', `%${keyword}%`)
+              .limit(5);
+            
+            if (!keywordResult.error && keywordResult.data) {
+              allResults.push(...keywordResult.data);
+            }
+          }
+          
+          if (allResults.length > 0) {
+            console.log("Keyword search found results:", allResults);
+            return allResults.map(item => ({
+              state: item.states.name,
+              brand: item.brands.name,
+              product: item.products.name,
+              isLegal: true,
+              details: `${item.products.name} by ${item.brands.name} is legal in ${item.states.name}.`
+            }));
+          }
+        }
+        
+        return [];
       }
-    }
-    
-    // Execute the query
-    const { data, error } = await query_builder.limit(10);
-    
-    if (error) {
-      console.error("Database query error:", error);
-      throw error;
-    }
-    
-    console.log("Query results:", data);
-    
-    if (!data || data.length === 0) {
-      console.log("No results found, trying broader search...");
       
-      // FIXED: Fallback search with exact product name matching
-      if (product) {
+      const { data, error } = exactMatch;
+      
+      if (error) {
+        console.error("Database query error:", error);
+        return [];
+      }
+      
+      console.log("Query results:", data);
+      
+      if (!data || data.length === 0) {
+        console.log("No exact match found, trying broader fallback search...");
+        
+        // Fallback: try a very simple product name search without complex filters
         const fallbackQuery = supabase
           .from('state_allowed_products')
           .select(`
@@ -581,10 +632,10 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
           }
         }
         
-        // Try exact product name match
-        fallbackQuery.ilike('products.name', `%${product}%`);
-        
-        const { data: fallbackData, error: fallbackError } = await fallbackQuery.limit(5);
+        // Simple product name search
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery
+          .ilike('products.name', `%${product}%`)
+          .limit(10);
         
         if (!fallbackError && fallbackData && fallbackData.length > 0) {
           console.log("Fallback search found results:", fallbackData);
@@ -596,8 +647,31 @@ async function queryStateMap(params: any, supabase: any): Promise<StateMapQueryR
             details: `${item.products.name} by ${item.brands.name} is legal in ${item.states.name}.`
           }));
         }
+        
+        return [];
       }
       
+      // Transform the results into the expected format
+      return data.map(item => ({
+        state: item.states.name,
+        brand: item.brands.name,
+        product: item.products.name,
+        isLegal: true, // Since it exists in state_allowed_products, it must be legal
+        details: `${item.products.name} by ${item.brands.name} is legal in ${item.states.name}.`
+      }));
+    }
+    
+    // If no product filter, execute the base query
+    const { data, error } = await query_builder.limit(10);
+    
+    if (error) {
+      console.error("Database query error:", error);
+      throw error;
+    }
+    
+    console.log("Base query results:", data);
+    
+    if (!data || data.length === 0) {
       return [];
     }
     
