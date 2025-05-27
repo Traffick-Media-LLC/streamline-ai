@@ -108,7 +108,7 @@ const HomePage = () => {
           <Animated type="slide-up" threshold={0.1} delay={0.1}>
             <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-blue-600 to-blue-800 text-white">
               <CardHeader>
-                <CardTitle className="text-2xl">IT Requests</CardTitle>
+                <CardTitle className="text-2xl text-white">IT Requests</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <p className="text-blue-100">
