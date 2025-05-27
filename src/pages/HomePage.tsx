@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -247,7 +248,7 @@ const HomePage = () => {
                           <Skeleton className="w-full h-full" />
                         ) : (
                           <img 
-                            src="/lovable-uploads/3d626fa7-68f1-4ac4-8a5d-f80724b74847.png"
+                            src="/lovable-uploads/1fc217af-f0e9-42ec-b678-2c2c8a49858b.png"
                             alt="Patrick Mulcahy - Driver #54"
                             className="w-full h-full object-cover"
                           />
