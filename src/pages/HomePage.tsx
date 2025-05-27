@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -172,24 +173,28 @@ const HomePage = () => {
             </Card>
           </Animated>
 
-          {/* Racing Section */}
+          {/* Combined Racing Section */}
           <Animated type="slide-up" threshold={0.05} delay={0.3}>
-            <Card className="overflow-hidden border-0 shadow-lg">
-              <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl overflow-hidden border-2 border-red-200 shadow-2xl">
+              {/* Racing Introduction */}
+              <div className="grid md:grid-cols-2 gap-6 mb-0">
                 {/* Content Side */}
                 <div className="p-8 flex flex-col justify-center space-y-6">
                   <div>
-                    <CardTitle className="text-3xl mb-4">
-                      Streamline Group Racing: The Ultimate Sales Advantage
-                    </CardTitle>
-                    <p className="text-gray-600">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-1 h-12 bg-red-500 rounded-full"></div>
+                      <h2 className="text-3xl font-bold text-black-primary">
+                        Streamline Group Racing: The Ultimate Sales Advantage
+                      </h2>
+                    </div>
+                    <p className="text-gray-700 leading-relaxed">
                       Streamline Group Racing isn't just about speed—it's a powerful sales tool that sets us apart from every competitor. As part of the Streamline team, you now have access to a one-of-a-kind platform that helps you build relationships, impress clients, and close more deals. This isn't a sponsorship—it's a strategic edge.
                     </p>
                   </div>
                   
                   <div>
-                    <h4 className="text-xl font-semibold mb-4">How you can use it:</h4>
-                    <ul className="space-y-3 text-gray-600">
+                    <h4 className="text-xl font-semibold mb-4 text-black-primary">How you can use it:</h4>
+                    <ul className="space-y-3 text-gray-700">
                       <li className="flex items-start gap-2">
                         <Flag className="h-5 w-5 mt-1 text-red-500 flex-shrink-0" />
                         <span>Bring clients to races for exclusive, high-impact experiences</span>
@@ -223,101 +228,109 @@ const HomePage = () => {
                   )}
                 </div>
               </div>
-            </Card>
-          </Animated>
 
-          {/* Our Drivers Section */}
-          <Animated type="slide-up" threshold={0.05} delay={0.4}>
-            <div className="space-y-8">
-              <div className="text-center">
-                <h2 className="text-3xl font-bold text-black-primary mb-4">Our Drivers</h2>
-                <p className="text-gray-600 max-w-3xl mx-auto">
-                  Meet the talented drivers representing Streamline Group on the track, bringing our brands to racing's biggest stages.
-                </p>
+              {/* Racing Stripe Divider */}
+              <div className="relative">
+                <div className="h-2 bg-gradient-to-r from-red-500 via-black to-red-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
               </div>
-              
-              <div className="grid md:grid-cols-2 gap-8">
-                {/* Patrick Mulcahy Card */}
-                <Animated type="scale" delay={0.1}>
-                  <Card className="overflow-hidden border-0 shadow-lg">
-                    <div className="flex flex-col h-full">
-                      {/* Driver Image */}
-                      <div className="relative h-64 overflow-hidden">
-                        {!imagesLoaded ? (
-                          <Skeleton className="w-full h-full" />
-                        ) : (
-                          <img 
-                            src="/lovable-uploads/1fc217af-f0e9-42ec-b678-2c2c8a49858b.png"
-                            alt="Patrick Mulcahy - Driver #54"
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                        {/* Driver Number Overlay */}
-                        <div className="absolute top-4 right-4 bg-red-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg">
-                          54
-                        </div>
-                      </div>
-                      
-                      {/* Driver Info */}
-                      <CardContent className="p-6 flex-1">
-                        <div className="space-y-4">
-                          <div>
-                            <h3 className="text-2xl font-bold text-black-primary">Patrick Mulcahy</h3>
-                            <p className="text-red-500 font-semibold">#54 • Porsche Carrera Cup</p>
-                          </div>
-                          <p className="text-gray-600 leading-relaxed">
-                            Patrick Mulcahy, CEO of Streamline Group, is making waves both in business and behind the wheel. 
-                            As a driver in the Porsche Carrera Cup, Patrick races with GMG while representing Streamline's 
-                            high-performance brands. His presence on the track isn't just competitive—it's strategic. With 
-                            Streamline logos featured prominently, each race becomes a high-impact opportunity to engage 
-                            clients, build relationships, and accelerate sales.
-                          </p>
-                        </div>
-                      </CardContent>
-                    </div>
-                  </Card>
-                </Animated>
 
-                {/* Alexander Rossi Card */}
-                <Animated type="scale" delay={0.2}>
-                  <Card className="overflow-hidden border-0 shadow-lg">
-                    <div className="flex flex-col h-full">
-                      {/* Driver Image */}
-                      <div className="relative h-64 overflow-hidden">
-                        {!imagesLoaded ? (
-                          <Skeleton className="w-full h-full" />
-                        ) : (
-                          <img 
-                            src="/lovable-uploads/dbec5171-816a-4d3d-a3b9-550d3166d0a9.png"
-                            alt="Alexander Rossi - Driver #20"
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-                        {/* Driver Number Overlay */}
-                        <div className="absolute top-4 right-4 bg-red-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg">
-                          20
-                        </div>
-                      </div>
-                      
-                      {/* Driver Info */}
-                      <CardContent className="p-6 flex-1">
-                        <div className="space-y-4">
-                          <div>
-                            <h3 className="text-2xl font-bold text-black-primary">Alexander Rossi</h3>
-                            <p className="text-red-500 font-semibold">#20 • IndyCar Series</p>
+              {/* Our Drivers Section */}
+              <div className="p-8 space-y-8 bg-gradient-to-br from-white/90 to-red-50/90">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-3 mb-4">
+                    <div className="w-1 h-10 bg-red-500 rounded-full"></div>
+                    <h3 className="text-3xl font-bold text-black-primary">Meet Our Champions</h3>
+                    <div className="w-1 h-10 bg-red-500 rounded-full"></div>
+                  </div>
+                  <p className="text-gray-700 max-w-3xl mx-auto">
+                    These talented drivers represent Streamline Group on the track, bringing our brands to racing's biggest stages and creating unforgettable experiences for our clients.
+                  </p>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-8">
+                  {/* Patrick Mulcahy Card */}
+                  <Animated type="scale" delay={0.1}>
+                    <Card className="overflow-hidden border-2 border-red-200 shadow-xl bg-white/95 backdrop-blur">
+                      <div className="flex flex-col h-full">
+                        {/* Driver Image */}
+                        <div className="relative h-64 overflow-hidden">
+                          {!imagesLoaded ? (
+                            <Skeleton className="w-full h-full" />
+                          ) : (
+                            <img 
+                              src="/lovable-uploads/1fc217af-f0e9-42ec-b678-2c2c8a49858b.png"
+                              alt="Patrick Mulcahy - Driver #54"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                          {/* Driver Number Overlay */}
+                          <div className="absolute top-4 right-4 bg-red-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg shadow-lg border-2 border-white">
+                            54
                           </div>
-                          <p className="text-gray-600 leading-relaxed">
-                            Indy 500 Champion, Alexander Rossi, is now behind the wheel of the No. 20 Chevrolet for the 
-                            2025 season, and Juice Head is right there with him! Juice Head's logo is being prominently 
-                            displayed on his helmet during the 2025 Season, reaching millions of viewers. With Rossi's 
-                            success and IndyCar's massive audience, Juice Head gains a powerful platform to connect with 
-                            clients and drive business growth.
-                          </p>
                         </div>
-                      </CardContent>
-                    </div>
-                  </Card>
-                </Animated>
+                        
+                        {/* Driver Info */}
+                        <CardContent className="p-6 flex-1 bg-gradient-to-b from-white to-red-50/30">
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="text-2xl font-bold text-black-primary">Patrick Mulcahy</h4>
+                              <p className="text-red-500 font-semibold text-lg">#54 • Porsche Carrera Cup</p>
+                            </div>
+                            <p className="text-gray-700 leading-relaxed">
+                              Patrick Mulcahy, CEO of Streamline Group, is making waves both in business and behind the wheel. 
+                              As a driver in the Porsche Carrera Cup, Patrick races with GMG while representing Streamline's 
+                              high-performance brands. His presence on the track isn't just competitive—it's strategic. With 
+                              Streamline logos featured prominently, each race becomes a high-impact opportunity to engage 
+                              clients, build relationships, and accelerate sales.
+                            </p>
+                          </div>
+                        </CardContent>
+                      </div>
+                    </Card>
+                  </Animated>
+
+                  {/* Alexander Rossi Card */}
+                  <Animated type="scale" delay={0.2}>
+                    <Card className="overflow-hidden border-2 border-red-200 shadow-xl bg-white/95 backdrop-blur">
+                      <div className="flex flex-col h-full">
+                        {/* Driver Image */}
+                        <div className="relative h-64 overflow-hidden">
+                          {!imagesLoaded ? (
+                            <Skeleton className="w-full h-full" />
+                          ) : (
+                            <img 
+                              src="/lovable-uploads/dbec5171-816a-4d3d-a3b9-550d3166d0a9.png"
+                              alt="Alexander Rossi - Driver #20"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                          {/* Driver Number Overlay */}
+                          <div className="absolute top-4 right-4 bg-red-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg shadow-lg border-2 border-white">
+                            20
+                          </div>
+                        </div>
+                        
+                        {/* Driver Info */}
+                        <CardContent className="p-6 flex-1 bg-gradient-to-b from-white to-red-50/30">
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="text-2xl font-bold text-black-primary">Alexander Rossi</h4>
+                              <p className="text-red-500 font-semibold text-lg">#20 • IndyCar Series</p>
+                            </div>
+                            <p className="text-gray-700 leading-relaxed">
+                              Indy 500 Champion, Alexander Rossi, is now behind the wheel of the No. 20 Chevrolet for the 
+                              2025 season, and Juice Head is right there with him! Juice Head's logo is being prominently 
+                              displayed on his helmet during the 2025 Season, reaching millions of viewers. With Rossi's 
+                              success and IndyCar's massive audience, Juice Head gains a powerful platform to connect with 
+                              clients and drive business growth.
+                            </p>
+                          </div>
+                        </CardContent>
+                      </div>
+                    </Card>
+                  </Animated>
+                </div>
               </div>
             </div>
           </Animated>
