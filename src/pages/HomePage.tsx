@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -96,6 +97,30 @@ const HomePage = () => {
                     hover:bg-gray-100 transition-colors font-medium"
                 >
                   Submit Marketing Request
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </CardContent>
+            </Card>
+          </Animated>
+
+          {/* IT Requests card */}
+          <Animated type="slide-up" threshold={0.1} delay={0.1}>
+            <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-blue-600 to-blue-800 text-white">
+              <CardHeader>
+                <CardTitle className="text-2xl">IT Requests</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <p className="text-blue-100">
+                  Need technical support or have an IT request? Submit your request for hardware, software, or technical assistance.
+                </p>
+                <a 
+                  href="https://go.streamlinevape.com/it"
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-2 bg-white text-blue-800 px-6 py-3 rounded-lg 
+                    hover:bg-gray-100 transition-colors font-medium"
+                >
+                  Submit IT Request
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </CardContent>
