@@ -1,4 +1,5 @@
 
+
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -83,7 +84,7 @@ const HomePage = () => {
           <Animated type="slide-up" threshold={0.1}>
             <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-black to-gray-800 text-white">
               <CardHeader>
-                <CardTitle className="text-2xl">Marketing Requests</CardTitle>
+                <CardTitle className="text-2xl text-white">Marketing Requests</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <p className="text-gray-300">
@@ -221,3 +222,4 @@ const HomePage = () => {
 };
 
 export default HomePage;
+
