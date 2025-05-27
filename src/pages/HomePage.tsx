@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -169,6 +168,31 @@ const HomePage = () => {
                     </Animated>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </Animated>
+
+          {/* Brand Assets card */}
+          <Animated type="slide-up" threshold={0.1} delay={0.25}>
+            <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-green-600 to-green-800 text-white">
+              <CardHeader>
+                <CardTitle className="text-2xl text-white">Brand Assets</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <p className="text-green-100">
+                  Access our complete library of brand assets including logos, brand guidelines, marketing materials, 
+                  product images, and design templates. Everything you need to maintain brand consistency.
+                </p>
+                <a 
+                  href="https://drive.google.com/drive/folders/1EoZyhbD_tBMe_h8q-YzVT60E-a-76eOr"
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-2 bg-white text-green-800 px-6 py-3 rounded-lg 
+                    hover:bg-gray-100 transition-colors font-medium"
+                >
+                  Access Brand Assets
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               </CardContent>
             </Card>
           </Animated>
