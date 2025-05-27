@@ -239,7 +239,7 @@ const HomePage = () => {
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-3 mb-4">
                     <div className="w-1 h-10 bg-red-500 rounded-full"></div>
-                    <h3 className="text-3xl font-bold text-black-primary">Meet Our Champions</h3>
+                    <h3 className="text-3xl font-bold text-black-primary">Meet Our Drivers</h3>
                     <div className="w-1 h-10 bg-red-500 rounded-full"></div>
                   </div>
                   <p className="text-gray-700 max-w-3xl mx-auto">
