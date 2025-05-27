@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -253,15 +252,15 @@ const HomePage = () => {
                   <Animated type="scale" delay={0.1}>
                     <Card className="overflow-hidden border-2 border-red-200 shadow-xl bg-white/95 backdrop-blur">
                       <div className="flex flex-col h-full">
-                        {/* Driver Image */}
-                        <div className="relative h-64 overflow-hidden">
+                        {/* Driver Image - Fixed container */}
+                        <div className="relative h-64 overflow-hidden bg-gray-100">
                           {!imagesLoaded ? (
                             <Skeleton className="w-full h-full" />
                           ) : (
                             <img 
                               src="/lovable-uploads/1fc217af-f0e9-42ec-b678-2c2c8a49858b.png"
                               alt="Patrick Mulcahy - Driver #54"
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain bg-white"
                             />
                           )}
                           {/* Driver Number Overlay */}
@@ -294,15 +293,15 @@ const HomePage = () => {
                   <Animated type="scale" delay={0.2}>
                     <Card className="overflow-hidden border-2 border-red-200 shadow-xl bg-white/95 backdrop-blur">
                       <div className="flex flex-col h-full">
-                        {/* Driver Image */}
-                        <div className="relative h-64 overflow-hidden">
+                        {/* Driver Image - Fixed container */}
+                        <div className="relative h-64 overflow-hidden bg-gray-100">
                           {!imagesLoaded ? (
                             <Skeleton className="w-full h-full" />
                           ) : (
                             <img 
                               src="/lovable-uploads/dbec5171-816a-4d3d-a3b9-550d3166d0a9.png"
                               alt="Alexander Rossi - Driver #20"
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain bg-white"
                             />
                           )}
                           {/* Driver Number Overlay */}
