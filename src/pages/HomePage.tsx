@@ -1,5 +1,3 @@
-
-
 import { Button } from "@/components/ui/button"
 import { Link } from "react-router-dom"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -227,6 +225,102 @@ const HomePage = () => {
               </div>
             </Card>
           </Animated>
+
+          {/* Our Drivers Section */}
+          <Animated type="slide-up" threshold={0.05} delay={0.4}>
+            <div className="space-y-8">
+              <div className="text-center">
+                <h2 className="text-3xl font-bold text-black-primary mb-4">Our Drivers</h2>
+                <p className="text-gray-600 max-w-3xl mx-auto">
+                  Meet the talented drivers representing Streamline Group on the track, bringing our brands to racing's biggest stages.
+                </p>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* Patrick Mulcahy Card */}
+                <Animated type="scale" delay={0.1}>
+                  <Card className="overflow-hidden border-0 shadow-lg">
+                    <div className="flex flex-col h-full">
+                      {/* Driver Image */}
+                      <div className="relative h-64 overflow-hidden">
+                        {!imagesLoaded ? (
+                          <Skeleton className="w-full h-full" />
+                        ) : (
+                          <img 
+                            src="/lovable-uploads/3d626fa7-68f1-4ac4-8a5d-f80724b74847.png"
+                            alt="Patrick Mulcahy - Driver #54"
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                        {/* Driver Number Overlay */}
+                        <div className="absolute top-4 right-4 bg-red-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg">
+                          54
+                        </div>
+                      </div>
+                      
+                      {/* Driver Info */}
+                      <CardContent className="p-6 flex-1">
+                        <div className="space-y-4">
+                          <div>
+                            <h3 className="text-2xl font-bold text-black-primary">Patrick Mulcahy</h3>
+                            <p className="text-red-500 font-semibold">#54 • Porsche Carrera Cup</p>
+                          </div>
+                          <p className="text-gray-600 leading-relaxed">
+                            Patrick Mulcahy, CEO of Streamline Group, is making waves both in business and behind the wheel. 
+                            As a driver in the Porsche Carrera Cup, Patrick races with GMG while representing Streamline's 
+                            high-performance brands. His presence on the track isn't just competitive—it's strategic. With 
+                            Streamline logos featured prominently, each race becomes a high-impact opportunity to engage 
+                            clients, build relationships, and accelerate sales.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </div>
+                  </Card>
+                </Animated>
+
+                {/* Alexander Rossi Card */}
+                <Animated type="scale" delay={0.2}>
+                  <Card className="overflow-hidden border-0 shadow-lg">
+                    <div className="flex flex-col h-full">
+                      {/* Driver Image */}
+                      <div className="relative h-64 overflow-hidden">
+                        {!imagesLoaded ? (
+                          <Skeleton className="w-full h-full" />
+                        ) : (
+                          <img 
+                            src="/lovable-uploads/6f19fc07-7efb-4ae0-89e0-aeddd8e92447.png"
+                            alt="Alexander Rossi - Driver #20"
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                        {/* Driver Number Overlay */}
+                        <div className="absolute top-4 right-4 bg-red-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold text-lg">
+                          20
+                        </div>
+                      </div>
+                      
+                      {/* Driver Info */}
+                      <CardContent className="p-6 flex-1">
+                        <div className="space-y-4">
+                          <div>
+                            <h3 className="text-2xl font-bold text-black-primary">Alexander Rossi</h3>
+                            <p className="text-red-500 font-semibold">#20 • IndyCar Series</p>
+                          </div>
+                          <p className="text-gray-600 leading-relaxed">
+                            Indy 500 Champion, Alexander Rossi, is now behind the wheel of the No. 20 Chevrolet for the 
+                            2025 season, and Juice Head is right there with him! Juice Head's logo is being prominently 
+                            displayed on his helmet during the 2025 Season, reaching millions of viewers. With Rossi's 
+                            success and IndyCar's massive audience, Juice Head gains a powerful platform to connect with 
+                            clients and drive business growth.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </div>
+                  </Card>
+                </Animated>
+              </div>
+            </div>
+          </Animated>
         </div>
       </div>
     </div>
@@ -234,4 +328,3 @@ const HomePage = () => {
 };
 
 export default HomePage;
-
