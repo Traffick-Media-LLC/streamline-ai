@@ -137,13 +137,25 @@ const HomePage = () => {
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-3">
                   {[
-                    { title: "Sales Sheets", description: "Access all sales materials" },
-                    { title: "POS Materials", description: "Point of sale resources" },
-                    { title: "One Sheets", description: "Product information sheets" }
+                    { 
+                      title: "Order Form", 
+                      description: "Submit product orders and requests",
+                      url: "https://docs.google.com/spreadsheets/d/1kcHHXzRuAKMeSsFg2k-LjZAwuuMYzsh6/edit?pli=1&gid=1609198106#gid=1609198106"
+                    },
+                    { 
+                      title: "Pact Act Form", 
+                      description: "Compliance and regulatory documentation",
+                      url: "https://docs.google.com/spreadsheets/d/1-Yri86OKObZoEo2BQ8H5nDoEwvmQWEJdQFAx_Yei5EU/edit?gid=881087572#gid=881087572"
+                    },
+                    { 
+                      title: "RMA Form", 
+                      description: "Return merchandise authorization",
+                      url: "https://form.jotform.com/242196101283046"
+                    }
                   ].map((link, index) => (
                     <Animated key={link.title} type="scale" delay={0.1 * index}>
                       <a 
-                        href="#" 
+                        href={link.url} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="group p-4 rounded-xl border bg-white shadow-sm hover:bg-white 
