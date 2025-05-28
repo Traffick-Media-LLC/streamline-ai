@@ -135,8 +135,7 @@ const HomePage = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <p className="text-green-100">
-                  Access our complete library of brand assets including logos, brand guidelines, marketing materials, 
-                  product images, and design templates. Everything you need to maintain brand consistency.
+                  Access our Google Drive library of brand assets including logos, Sales Sheets, marketing and sales materials.
                 </p>
                 <a 
                   href="https://drive.google.com/drive/folders/1EoZyhbD_tBMe_h8q-YzVT60E-a-76eOr"
