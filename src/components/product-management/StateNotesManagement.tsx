@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Edit, Save, X, FileText } from "lucide-react";
+import { Search, Edit, FileText } from "lucide-react";
+import StateNotesRichEditor from './StateNotesRichEditor';
+import { renderTextWithLinks } from "@/utils/textUtils";
 
 interface StateNote {
   id: string;
@@ -31,9 +32,7 @@ const StateNotesManagement: React.FC<StateNotesManagementProps> = ({ onDataLoade
   const [allStates, setAllStates] = useState<{id: number, name: string}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [editingState, setEditingState] = useState<number | null>(null);
-  const [editingNotes, setEditingNotes] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [editingState, setEditingState] = useState<{id: number, name: string, notes: string | null} | null>(null);
   const { isAuthenticated, isAdmin } = useAuth();
 
   // Fetch all states and their notes
@@ -106,65 +105,49 @@ const StateNotesManagement: React.FC<StateNotesManagementProps> = ({ onDataLoade
     );
   }, [allStates, stateNotes, searchQuery]);
 
-  const handleEdit = (stateId: number, currentNotes: string | null) => {
-    setEditingState(stateId);
-    setEditingNotes(currentNotes || '');
+  const handleEdit = (stateId: number, stateName: string, currentNotes: string | null) => {
+    setEditingState({ id: stateId, name: stateName, notes: currentNotes });
   };
 
-  const handleSave = async (stateId: number) => {
-    if (!isAdmin) {
+  const handleSave = async (notes: string) => {
+    if (!isAdmin || !editingState) {
       toast.error("Admin access required");
       return;
     }
 
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('state_notes')
-        .upsert(
-          { 
-            state_id: stateId, 
-            notes: editingNotes.trim() || null 
-          },
-          { 
-            onConflict: 'state_id' 
-          }
-        );
+    const { error } = await supabase
+      .from('state_notes')
+      .upsert(
+        { 
+          state_id: editingState.id, 
+          notes: notes.trim() || null 
+        },
+        { 
+          onConflict: 'state_id' 
+        }
+      );
 
-      if (error) throw error;
+    if (error) throw error;
 
-      // Refetch data to update the UI
-      const { data: updatedNotes, error: fetchError } = await supabase
-        .from('state_notes')
-        .select(`
-          id,
-          state_id,
-          notes,
-          created_at,
-          updated_at,
-          states (
-            name
-          )
-        `)
-        .order('states(name)');
+    // Refetch data to update the UI
+    const { data: updatedNotes, error: fetchError } = await supabase
+      .from('state_notes')
+      .select(`
+        id,
+        state_id,
+        notes,
+        created_at,
+        updated_at,
+        states (
+          name
+        )
+      `)
+      .order('states(name)');
 
-      if (fetchError) throw fetchError;
-      setStateNotes(updatedNotes || []);
+    if (fetchError) throw fetchError;
+    setStateNotes(updatedNotes || []);
 
-      toast.success("Notes saved successfully");
-      setEditingState(null);
-      setEditingNotes('');
-    } catch (error) {
-      console.error('Error saving notes:', error);
-      toast.error("Failed to save notes");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleCancel = () => {
-    setEditingState(null);
-    setEditingNotes('');
+    toast.success("Notes saved successfully");
   };
 
   if (!isAuthenticated || !isAdmin) {
@@ -250,7 +233,7 @@ const StateNotesManagement: React.FC<StateNotesManagementProps> = ({ onDataLoade
                 <TableRow>
                   <TableHead>State</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead>Notes Preview</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -266,55 +249,25 @@ const StateNotesManagement: React.FC<StateNotesManagementProps> = ({ onDataLoade
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {editingState === item.state_id ? (
-                        <Textarea
-                          value={editingNotes}
-                          onChange={(e) => setEditingNotes(e.target.value)}
-                          placeholder="Add notes about this state's regulations, considerations, etc..."
-                          rows={3}
-                          className="w-full"
-                        />
-                      ) : (
-                        <div className="max-w-md">
-                          {item.notes ? (
-                            <p className="text-sm whitespace-pre-wrap">{item.notes}</p>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">No notes</span>
-                          )}
-                        </div>
-                      )}
+                      <div className="max-w-md">
+                        {item.notes ? (
+                          <div className="text-sm text-muted-foreground line-clamp-2">
+                            {renderTextWithLinks(item.notes.length > 100 ? item.notes.substring(0, 100) + '...' : item.notes)}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">No notes</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      {editingState === item.state_id ? (
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleSave(item.state_id)}
-                            disabled={isSaving}
-                          >
-                            <Save className="h-4 w-4 mr-1" />
-                            {isSaving ? "Saving..." : "Save"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCancel}
-                            disabled={isSaving}
-                          >
-                            <X className="h-4 w-4 mr-1" />
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEdit(item.state_id, item.notes)}
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(item.state_id, item.state_name, item.notes)}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -329,6 +282,17 @@ const StateNotesManagement: React.FC<StateNotesManagementProps> = ({ onDataLoade
           )}
         </CardContent>
       </Card>
+
+      {/* Rich Text Editor Dialog */}
+      {editingState && (
+        <StateNotesRichEditor
+          isOpen={!!editingState}
+          onClose={() => setEditingState(null)}
+          initialNotes={editingState.notes || ''}
+          onSave={handleSave}
+          stateName={editingState.name}
+        />
+      )}
     </div>
   );
 };
