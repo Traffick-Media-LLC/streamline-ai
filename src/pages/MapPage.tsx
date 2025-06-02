@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import USAMap from '../components/USAMap';
 import StateNotes from '../components/StateNotes';
@@ -168,6 +167,17 @@ const MapPage = () => {
                   Refresh
                 </button>
               </div>
+
+              {/* State Notes Section - Now positioned above the product list */}
+              {selectedState.id && (
+                <div className="mb-6">
+                  <StateNotes 
+                    stateName={selectedState.name}
+                    stateId={selectedState.id}
+                  />
+                </div>
+              )}
+
               <div>
                 <h3 className="text-lg font-medium mb-2">Allowed Products by Brand:</h3>
                 {selectedState.data.allowedProducts.length > 0 ? (
@@ -191,18 +201,6 @@ const MapPage = () => {
           </div>
         )}
       </div>
-
-      {/* State Notes Section - Below the map */}
-      {selectedState && selectedState.id && (
-        <div className={`mt-8 transition-all duration-300 ease-in-out ${
-          selectedState && !isMobile ? 'w-1/2' : 'w-full'
-        }`}>
-          <StateNotes 
-            stateName={selectedState.name}
-            stateId={selectedState.id}
-          />
-        </div>
-      )}
     </div>
   );
 };
