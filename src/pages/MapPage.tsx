@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import USAMap from '../components/USAMap';
+import StateNotes from '../components/StateNotes';
 import { supabase } from "@/integrations/supabase/client";
 import { StateData } from '../data/stateData';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -61,6 +62,7 @@ const MapPage = () => {
   const [selectedState, setSelectedState] = useState<{
     name: string;
     data: StateData;
+    id?: number;
   } | null>(null);
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
@@ -93,11 +95,31 @@ const MapPage = () => {
 
   const handleStateClick = (stateName: string) => {
     console.log("State clicked:", stateName);
-    setSelectedState({
-      name: stateName,
-      data: {
-        allowedProducts: []
-      } // Initial empty state, will be updated by the query
+    
+    // First get the state ID from our states table
+    const fetchStateId = async () => {
+      const { data: stateData, error } = await supabase
+        .from('states')
+        .select('id')
+        .eq('name', stateName)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching state ID:', error);
+        return null;
+      }
+      
+      return stateData?.id;
+    };
+
+    fetchStateId().then((stateId) => {
+      setSelectedState({
+        name: stateName,
+        id: stateId || undefined,
+        data: {
+          allowedProducts: []
+        } // Initial empty state, will be updated by the query
+      });
     });
   };
 
@@ -169,6 +191,18 @@ const MapPage = () => {
           </div>
         )}
       </div>
+
+      {/* State Notes Section - Below the map */}
+      {selectedState && selectedState.id && (
+        <div className={`mt-8 transition-all duration-300 ease-in-out ${
+          selectedState && !isMobile ? 'w-1/2' : 'w-full'
+        }`}>
+          <StateNotes 
+            stateName={selectedState.name}
+            stateId={selectedState.id}
+          />
+        </div>
+      )}
     </div>
   );
 };

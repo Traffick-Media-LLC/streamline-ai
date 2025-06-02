@@ -501,6 +501,38 @@ export type Database = {
           },
         ]
       }
+      state_notes: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          state_id: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          state_id: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          state_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "state_notes_state_id_fkey"
+            columns: ["state_id"]
+            isOneToOne: true
+            referencedRelation: "states"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       states: {
         Row: {
           id: number
