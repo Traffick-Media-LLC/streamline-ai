@@ -37,7 +37,7 @@ export const adminNavItems: AdminNavItem[] = [
         icon: Package
       }, 
       {
-        title: "State Permissions",
+        title: "State Management",
         path: "/admin/permissions",
         icon: Map
       },
