@@ -43,8 +43,8 @@ const AdminPage: React.FC = () => {
     verifyPermissions();
   }, [user?.id, isAdmin, isAuthenticated]);
   
-  const showPermissionDiagnostics = process.env.NODE_ENV !== 'production' || 
-                                   (permissionCheckResult && !permissionCheckResult.success);
+  // Hide diagnostics panel
+  const showPermissionDiagnostics = false;
 
   return (
     <>
