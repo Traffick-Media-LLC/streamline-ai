@@ -4,7 +4,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -17,8 +16,7 @@ const employeeSchema = z.object({
   email: z.string().email("Valid email is required"),
   phone: z.string().optional(),
   title: z.string().min(2, "Title is required"),
-  department: z.string().min(2, "Department is required"),
-  manager_id: z.string().nullable()
+  department: z.string().min(2, "Department is required")
 });
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
@@ -26,7 +24,6 @@ type EmployeeFormValues = z.infer<typeof employeeSchema>;
 export interface EmployeeFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  employees: Employee[];
   onSuccess: () => void;
   employeeToEdit?: Employee;
 }
@@ -34,7 +31,6 @@ export interface EmployeeFormDialogProps {
 const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
   open,
   onOpenChange,
-  employees,
   onSuccess,
   employeeToEdit
 }) => {
@@ -49,42 +45,34 @@ const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
       email: employeeToEdit.email,
       phone: employeeToEdit.phone || "",
       title: employeeToEdit.title,
-      department: employeeToEdit.department,
-      manager_id: employeeToEdit.manager_id
+      department: employeeToEdit.department
     } : {
       first_name: "",
       last_name: "",
       email: "",
       phone: "",
       title: "",
-      department: "",
-      manager_id: null
+      department: ""
     }
   });
   
   const onSubmit = async (data: EmployeeFormValues) => {
     try {
-      // Process manager_id to convert "null" string to actual null
-      const processedData = {
-        ...data,
-        manager_id: data.manager_id === "null" ? null : data.manager_id
-      };
-      
       if (isEditing && employeeToEdit) {
         await updateEmployee.mutateAsync({
           id: employeeToEdit.id,
-          ...processedData
+          ...data
         });
       } else {
         // Ensure all required fields are present even if empty
         const employeeData = {
-          first_name: processedData.first_name,
-          last_name: processedData.last_name,
-          email: processedData.email,
-          phone: processedData.phone || null,
-          title: processedData.title,
-          department: processedData.department,
-          manager_id: processedData.manager_id
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone: data.phone || null,
+          title: data.title,
+          department: data.department,
+          manager_id: null
         };
         
         await createEmployee.mutateAsync(employeeData);
@@ -191,37 +179,6 @@ const EmployeeFormDialog: React.FC<EmployeeFormDialogProps> = ({
                 )}
               />
             </div>
-            
-            <FormField
-              control={form.control}
-              name="manager_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Manager</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value || "null"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a manager" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="null">No Manager</SelectItem>
-                      {employees
-                        .filter(e => !isEditing || e.id !== employeeToEdit?.id)
-                        .map((employee) => (
-                          <SelectItem key={employee.id} value={employee.id}>
-                            {employee.first_name} {employee.last_name} ({employee.title})
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             
             <DialogFooter>
               <Button 
