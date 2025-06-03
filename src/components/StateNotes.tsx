@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,7 +54,7 @@ const StateNotes: React.FC<StateNotesProps> = ({ stateName, stateId }) => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Notes for {stateName}</CardTitle>
+          <CardTitle>Notes</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">Loading notes...</p>
@@ -67,7 +66,7 @@ const StateNotes: React.FC<StateNotesProps> = ({ stateName, stateId }) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Notes for {stateName}</CardTitle>
+        <CardTitle>Notes</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="whitespace-pre-wrap text-sm leading-relaxed">{notes}</p>
