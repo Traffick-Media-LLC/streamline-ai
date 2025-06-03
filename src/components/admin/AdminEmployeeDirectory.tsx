@@ -7,6 +7,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Employee } from '@/hooks/useEmployeesData';
 import { useEmployeeOperations } from '@/hooks/useEmployeeOperations';
 import EmployeeFormDialog from '@/components/admin/EmployeeFormDialog';
+
 const AdminEmployeeDirectory = () => {
   const {
     data: employees = [],
@@ -38,6 +39,7 @@ const AdminEmployeeDirectory = () => {
     setIsDialogOpen(false);
     refetch();
   };
+
   return <div className="space-y-6 container py-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -56,8 +58,8 @@ const AdminEmployeeDirectory = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Department</TableHead>
-                    <TableHead className="w-[200px]">Email</TableHead>
-                    <TableHead className="w-[120px]">Phone</TableHead>
+                    <TableHead className="w-[160px]">Email</TableHead>
+                    <TableHead className="w-[140px]">Phone</TableHead>
                     <TableHead className="w-[100px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -66,8 +68,8 @@ const AdminEmployeeDirectory = () => {
                         <TableCell className="font-medium">{employee.first_name} {employee.last_name}</TableCell>
                         <TableCell>{employee.title}</TableCell>
                         <TableCell>{employee.department}</TableCell>
-                        <TableCell className="w-[150px]">{employee.email}</TableCell>
-                        <TableCell className="w-[120px]">{employee.phone || '-'}</TableCell>
+                        <TableCell className="w-[160px]">{employee.email}</TableCell>
+                        <TableCell className="w-[140px] whitespace-nowrap">{employee.phone || '-'}</TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={() => handleEditEmployee(employee)}>
                             <Pencil className="h-4 w-4" />
@@ -93,4 +95,5 @@ const AdminEmployeeDirectory = () => {
       <EmployeeFormDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} onSuccess={handleDialogSuccess} employeeToEdit={employeeToEdit} />
     </div>;
 };
+
 export default AdminEmployeeDirectory;
