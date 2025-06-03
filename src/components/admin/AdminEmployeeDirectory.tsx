@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -113,7 +112,6 @@ const AdminEmployeeDirectory = () => {
       <EmployeeFormDialog
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        employees={employees}
         onSuccess={handleDialogSuccess}
         employeeToEdit={employeeToEdit}
       />

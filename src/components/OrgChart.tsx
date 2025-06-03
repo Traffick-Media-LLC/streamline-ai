@@ -787,7 +787,6 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
         <EmployeeFormDialog
           open={!!editingEmployee}
           onOpenChange={() => setEditingEmployee(null)}
-          employees={employees}
           employeeToEdit={editingEmployee}
           onSuccess={() => {
             setEditingEmployee(null);
@@ -800,7 +799,6 @@ const OrgChartInner = ({ employees, isAdmin = false, editable = false }: OrgChar
         <EmployeeFormDialog
           open={!!addingDirectReportTo}
           onOpenChange={() => setAddingDirectReportTo(null)}
-          employees={employees}
           onSuccess={() => {
             setAddingDirectReportTo(null);
             toast.success("Direct report added successfully");
