@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useEmployeesData } from '@/hooks/useEmployeesData';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -60,8 +61,8 @@ const AdminEmployeeDirectory = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Department</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
+                    <TableHead className="w-[200px]">Email</TableHead>
+                    <TableHead className="w-[120px]">Phone</TableHead>
                     <TableHead className="w-[100px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -72,8 +73,8 @@ const AdminEmployeeDirectory = () => {
                         <TableCell className="font-medium">{employee.first_name} {employee.last_name}</TableCell>
                         <TableCell>{employee.title}</TableCell>
                         <TableCell>{employee.department}</TableCell>
-                        <TableCell>{employee.email}</TableCell>
-                        <TableCell>{employee.phone || '-'}</TableCell>
+                        <TableCell className="w-[200px]">{employee.email}</TableCell>
+                        <TableCell className="w-[120px]">{employee.phone || '-'}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             variant="ghost" 
