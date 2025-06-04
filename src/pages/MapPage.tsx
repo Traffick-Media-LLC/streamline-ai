@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import USAMap from '../components/USAMap';
 import StateNotes from '../components/StateNotes';
+import StateExciseTaxes from '../components/StateExciseTaxes';
 import { supabase } from "@/integrations/supabase/client";
 import { StateData } from '../data/stateData';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -168,10 +170,20 @@ const MapPage = () => {
                 </button>
               </div>
 
-              {/* State Notes Section - Now positioned above the product list */}
+              {/* State Notes Section */}
               {selectedState.id && (
                 <div className="mb-6">
                   <StateNotes 
+                    stateName={selectedState.name}
+                    stateId={selectedState.id}
+                  />
+                </div>
+              )}
+
+              {/* State Excise Taxes Section - NEW */}
+              {selectedState.id && (
+                <div className="mb-6">
+                  <StateExciseTaxes 
                     stateName={selectedState.name}
                     stateId={selectedState.id}
                   />

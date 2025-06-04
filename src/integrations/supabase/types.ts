@@ -501,6 +501,38 @@ export type Database = {
           },
         ]
       }
+      state_excise_taxes: {
+        Row: {
+          created_at: string
+          excise_tax_info: string | null
+          id: string
+          state_id: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          excise_tax_info?: string | null
+          id?: string
+          state_id: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          excise_tax_info?: string | null
+          id?: string
+          state_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_state_excise_taxes_state_id"
+            columns: ["state_id"]
+            isOneToOne: true
+            referencedRelation: "states"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       state_notes: {
         Row: {
           created_at: string
