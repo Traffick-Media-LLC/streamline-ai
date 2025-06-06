@@ -149,8 +149,11 @@ serve(async (req) => {
       conversationHistory
     );
     
+    // Apply cleanup pass to fix file link formatting
+    const fixedResponse = aiResponse.replace(/\-\s*\n\s*(\[[^\]]+\]\([^)]+\))/g, '- $1');
+    
     return new Response(JSON.stringify({ 
-      response: aiResponse,
+      response: fixedResponse,
       sources: contextData.map(item => ({
         type: item.source,
         title: item.title || item.file_name || 'Document',
@@ -1573,3 +1576,5 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
     return 'I apologize, but I encountered an error while processing your request. Please try again or contact support if the issue persists.';
   }
 }
+
+</edits_to_apply>
