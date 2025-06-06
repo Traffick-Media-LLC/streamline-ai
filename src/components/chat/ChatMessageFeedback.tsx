@@ -44,33 +44,33 @@ const ChatMessageFeedback = ({ messageId, chatId, sourceInfo }: ChatMessageFeedb
 
   if (feedback) {
     return (
-      <div className="text-xs text-muted-foreground mt-1">
+      <div className="text-xs text-muted-foreground/60 mt-2">
         Thanks for your feedback
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-1 mt-1">
-      <span className="text-xs text-muted-foreground">Was this response helpful?</span>
+    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-muted/30">
+      <span className="text-xs text-muted-foreground/70">Was this response helpful?</span>
       <Button 
         variant="ghost" 
         size="sm" 
-        className="h-6 w-6 p-0" 
+        className="h-7 w-7 p-0 hover:bg-muted/50" 
         onClick={() => handleFeedback("helpful")}
         disabled={isSubmitting}
       >
-        <ThumbsUp className="h-3.5 w-3.5" />
+        <ThumbsUp className="h-3.5 w-3.5 text-muted-foreground/70 hover:text-foreground" />
         <span className="sr-only">Helpful</span>
       </Button>
       <Button 
         variant="ghost" 
         size="sm" 
-        className="h-6 w-6 p-0" 
+        className="h-7 w-7 p-0 hover:bg-muted/50" 
         onClick={() => handleFeedback("unhelpful")}
         disabled={isSubmitting}
       >
-        <ThumbsDown className="h-3.5 w-3.5" />
+        <ThumbsDown className="h-3.5 w-3.5 text-muted-foreground/70 hover:text-foreground" />
         <span className="sr-only">Not helpful</span>
       </Button>
     </div>

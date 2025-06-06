@@ -87,7 +87,7 @@ const ChatPage = () => {
       {/* Main Chat Area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Chat Header with History Button */}
-        <div className="flex items-center justify-between border-b px-4 py-2 flex-shrink-0">
+        <div className="flex items-center justify-between border-b px-6 py-3 flex-shrink-0 bg-background/95 backdrop-blur">
           <h2 className="text-xl font-semibold">Streamline Assistant</h2>
           <Button 
             variant="ghost" 
@@ -123,25 +123,27 @@ const ChatPage = () => {
             </div>
           )}
           
-          {/* Sticky Input Area with fixed height */}
-          <div className="sticky bottom-0 left-0 right-0 border-t bg-background p-6 min-h-[88px] flex-shrink-0 z-10">
-            <form onSubmit={handleSubmit} className="flex items-center gap-2">
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about product legality, regulations, or request documents..."
-                className="flex-1"
-                disabled={isLoading}
-              />
-              <Button 
-                type="submit" 
-                size="icon"
-                disabled={!input.trim() || isLoading}
-              >
-                <SendHorizontal className="h-5 w-5" />
-              </Button>
-            </form>
+          {/* Sticky Input Area */}
+          <div className="sticky bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur p-6 min-h-[88px] flex-shrink-0 z-10">
+            <div className="max-w-4xl mx-auto">
+              <form onSubmit={handleSubmit} className="flex items-center gap-2">
+                <Input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask about product legality, regulations, or request documents..."
+                  className="flex-1"
+                  disabled={isLoading}
+                />
+                <Button 
+                  type="submit" 
+                  size="icon"
+                  disabled={!input.trim() || isLoading}
+                >
+                  <SendHorizontal className="h-5 w-5" />
+                </Button>
+              </form>
+            </div>
           </div>
         </div>
       </div>
