@@ -1477,7 +1477,7 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
         }
       });
       
-      // Build context text with source grouping and enhanced official source highlighting
+      // Build context text with source grouping and consistent bullet formatting
       const contextSections = [];
       
       if (sourceGroups.state_map.length > 0) {
@@ -1489,15 +1489,15 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
       }
       
       if (sourceGroups.firecrawl_legal.length > 0) {
-        const officialSources = sourceGroups.firecrawl_legal.map((item, index) => {
+        const officialSources = sourceGroups.firecrawl_legal.map(item => {
           const urlInfo = item.url ? ` - Source URL: ${item.url}` : '';
-          return `${index + 1}. **Official Government Source**: ${item.content}${urlInfo}`;
-        }).join('\n\n');
+          return `- **Official Government Source**: ${item.content}${urlInfo}`;
+        }).join('\n');
         contextSections.push(`**Official Government Sources (Recently Crawled):**\n${officialSources}`);
       }
       
       if (sourceGroups.drive_files.length > 0) {
-        const filesList = sourceGroups.drive_files.map((item, index) => {
+        const filesList = sourceGroups.drive_files.map(item => {
           const downloadLink = item.file_url ? `[${item.file_name}](${item.file_url})` : item.file_name;
           const relevanceNote = item.relevanceScore ? ` (Relevance: ${item.relevanceScore})` : '';
           return `- ${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
