@@ -48,69 +48,86 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Enhanced query analysis with intelligent intent detection
-    const queryAnalysis = await analyzeQueryWithEnhancedIntelligence(userMessage, supabase);
+    // Enhanced query analysis with improved contextual awareness
+    const queryAnalysis = await analyzeQueryWithEnhancedContextualAwareness(userMessage, supabase);
     console.log('Enhanced query analysis:', queryAnalysis);
 
     let contextData = [];
-    let searchParams = {};
+    let crawlingNotification = '';
 
-    // Intelligent source routing with priority system
-    const sourceStrategy = determineSourceStrategy(queryAnalysis);
-    console.log('Source strategy:', sourceStrategy);
+    // Intelligent source routing with enhanced decision making
+    const sourceStrategy = determineEnhancedSourceStrategy(queryAnalysis);
+    console.log('Enhanced source strategy:', sourceStrategy);
 
-    // Execute multi-source data gathering with intelligent prioritization
-    for (const source of sourceStrategy.sources) {
-      console.log(`Querying ${source.name} with priority ${source.priority}...`);
+    // Check if we should provide a direct answer from internal sources first
+    if (sourceStrategy.shouldProvideDirectAnswer) {
+      console.log('Providing direct answer from internal sources');
+      
+      // Query internal sources first
+      for (const source of sourceStrategy.internalSources) {
+        console.log(`Querying internal source ${source.name}...`);
+        
+        try {
+          let sourceData = [];
+          
+          switch (source.name) {
+            case 'state_map':
+              sourceData = await queryStateMapEnhanced(supabase, {
+                ...queryAnalysis,
+                query: userMessage
+              });
+              break;
+            case 'drive_files':
+              sourceData = await queryDriveFilesEnhanced(supabase, {
+                query: userMessage,
+                fileType: queryAnalysis.fileType,
+                brand: queryAnalysis.brand,
+                category: queryAnalysis.category
+              });
+              break;
+            case 'knowledge_base':
+              sourceData = await queryKnowledgeBaseEnhanced(supabase, {
+                query: userMessage,
+                tags: queryAnalysis.tags
+              });
+              break;
+            case 'state_excise_taxes':
+              sourceData = await queryStateExciseTaxes(supabase, {
+                state: queryAnalysis.state,
+                query: userMessage
+              });
+              break;
+          }
+          
+          if (sourceData.length > 0) {
+            contextData.push(...sourceData.map(item => ({
+              ...item,
+              source: source.name,
+              priority: source.priority
+            })));
+          }
+        } catch (error) {
+          console.error(`Error querying ${source.name}:`, error);
+        }
+      }
+    }
+
+    // Enhanced Firecrawl logic - only crawl when needed
+    if (sourceStrategy.shouldCrawlOfficialSources && firecrawlApiKey) {
+      console.log('Initiating official source crawling...');
+      crawlingNotification = "Let me pull the latest from official sources to confirm that information...";
       
       try {
-        let sourceData = [];
-        
-        switch (source.name) {
-          case 'state_map':
-            sourceData = await queryStateMapEnhanced(supabase, {
-              ...queryAnalysis,
-              query: userMessage
-            });
-            break;
-          case 'drive_files':
-            sourceData = await queryDriveFilesEnhanced(supabase, {
-              query: userMessage,
-              fileType: queryAnalysis.fileType,
-              brand: queryAnalysis.brand,
-              category: queryAnalysis.category
-            });
-            break;
-          case 'knowledge_base':
-            sourceData = await queryKnowledgeBaseEnhanced(supabase, {
-              query: userMessage,
-              tags: queryAnalysis.tags
-            });
-            break;
-          case 'state_excise_taxes':
-            sourceData = await queryStateExciseTaxes(supabase, {
-              state: queryAnalysis.state,
-              query: userMessage
-            });
-            break;
-          case 'firecrawl_legal':
-            if (queryAnalysis.requiresLegalAnalysis && firecrawlApiKey) {
-              sourceData = await queryFirecrawlLegalSources(firecrawlApiKey, queryAnalysis);
-            }
-            break;
-        }
-        
-        console.log(`${source.name} returned ${sourceData.length} results`);
-        
-        if (sourceData.length > 0) {
-          contextData.push(...sourceData.map(item => ({
+        const crawledData = await queryFirecrawlLegalSources(firecrawlApiKey, queryAnalysis);
+        if (crawledData.length > 0) {
+          contextData.push(...crawledData.map(item => ({
             ...item,
-            source: source.name,
-            priority: source.priority
+            source: 'firecrawl_legal',
+            priority: 10
           })));
         }
       } catch (error) {
-        console.error(`Error querying ${source.name}:`, error);
+        console.error('Error crawling official sources:', error);
       }
     }
 
@@ -118,13 +135,14 @@ serve(async (req) => {
     contextData = contextData.sort((a, b) => (b.priority || 0) - (a.priority || 0));
     console.log('Total context data items:', contextData.length);
 
-    // Generate enhanced AI response with legal reasoning
+    // Generate enhanced AI response with improved formatting and source transparency
     const aiResponse = await generateEnhancedAIResponse(
       openaiApiKey, 
       userMessage, 
       contextData, 
       queryAnalysis,
-      requestBody.userId || 'anonymous'
+      requestBody.userId || 'anonymous',
+      crawlingNotification
     );
     
     return new Response(JSON.stringify({ 
@@ -133,7 +151,8 @@ serve(async (req) => {
         type: item.source,
         title: item.title || item.file_name || 'Document',
         content: item.content || item.summary || 'Content not available',
-        priority: item.priority || 0
+        priority: item.priority || 0,
+        url: item.url || null
       })),
       analysis: queryAnalysis
     }), {
@@ -152,13 +171,17 @@ serve(async (req) => {
   }
 });
 
-async function analyzeQueryWithEnhancedIntelligence(query: string, supabase: any) {
+async function analyzeQueryWithEnhancedContextualAwareness(query: string, supabase: any) {
   if (!query || typeof query !== 'string') {
     console.error('Invalid query provided to analyzeQuery:', query);
     return {
       isProductLegality: false,
       isFileSearch: false,
       requiresLegalAnalysis: false,
+      requiresOfficialCrawling: false,
+      isWhyBannedQuestion: false,
+      isBillTextRequest: false,
+      isEnforcementRequest: false,
       product: null,
       brand: null,
       state: null,
@@ -167,19 +190,28 @@ async function analyzeQueryWithEnhancedIntelligence(query: string, supabase: any
       category: null,
       tags: [],
       legalComplexity: 'basic',
-      intentType: 'general'
+      intentType: 'general',
+      confidenceLevel: 'low'
     };
   }
 
   const lowerQuery = query.toLowerCase();
   
-  // Enhanced legal analysis detection
+  // Enhanced legal analysis detection with specific triggers
   const legalKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited', 'can i', 'available', 'compliance', 'regulation', 'law', 'ruling', 'enforcement', 'court', 'legislation'];
   const complexLegalKeywords = ['why', 'explain', 'ruling', 'court', 'enforcement', 'bulletin', 'legislation', 'recent', 'updated', 'changed'];
+  const officialSourceTriggers = ['why banned', 'why prohibited', 'bill text', 'enforcement action', 'recent ruling', 'updated law', 'latest regulation'];
   
   const hasLegalKeyword = legalKeywords.some(keyword => lowerQuery.includes(keyword));
   const hasComplexLegalKeyword = complexLegalKeywords.some(keyword => lowerQuery.includes(keyword));
   const requiresLegalAnalysis = hasLegalKeyword && (hasComplexLegalKeyword || lowerQuery.includes('why'));
+  
+  // Specific triggers for official source crawling
+  const isWhyBannedQuestion = lowerQuery.includes('why') && (lowerQuery.includes('banned') || lowerQuery.includes('prohibited') || lowerQuery.includes('not legal'));
+  const isBillTextRequest = lowerQuery.includes('bill') || lowerQuery.includes('legislation text') || lowerQuery.includes('law text');
+  const isEnforcementRequest = lowerQuery.includes('enforcement') || lowerQuery.includes('memo') || lowerQuery.includes('bulletin');
+  const requiresOfficialCrawling = isWhyBannedQuestion || isBillTextRequest || isEnforcementRequest || 
+    officialSourceTriggers.some(trigger => lowerQuery.includes(trigger));
   
   // Enhanced file search detection
   const fileKeywords = ['logo', 'document', 'file', 'sheet', 'sales sheet', 'find me', 'download', 'pdf', 'image', 'picture', 'brochure', 'flyer', 'pos kit', 'marketing material'];
@@ -275,16 +307,31 @@ async function analyzeQueryWithEnhancedIntelligence(query: string, supabase: any
   const listKeywords = ['which', 'what', 'list', 'all', 'what are', 'show me'];
   const isListQuery = listKeywords.some(keyword => lowerQuery.includes(keyword));
   
-  // Intent type classification
+  // Intent type classification with enhanced categories
   let intentType = 'general';
   if (hasFileKeyword) intentType = 'file_search';
+  else if (isWhyBannedQuestion) intentType = 'why_banned_inquiry';
+  else if (isBillTextRequest) intentType = 'bill_text_request';
+  else if (isEnforcementRequest) intentType = 'enforcement_inquiry';
   else if (hasLegalKeyword) intentType = 'legal_inquiry';
   else if (isListQuery) intentType = 'list_request';
   
+  // Enhanced confidence level assessment
+  let confidenceLevel = 'low';
+  if ((detectedBrand && detectedProduct && detectedState) || 
+      (hasFileKeyword && detectedBrand && detectedFileType)) {
+    confidenceLevel = 'high';
+  } else if ((detectedBrand && detectedState) || 
+             (hasFileKeyword && detectedFileType) ||
+             (hasLegalKeyword && detectedState)) {
+    confidenceLevel = 'medium';
+  }
+  
   // Legal complexity assessment
   let legalComplexity = 'basic';
-  if (requiresLegalAnalysis) legalComplexity = 'complex';
-  else if (hasLegalKeyword) legalComplexity = 'moderate';
+  if (requiresOfficialCrawling || isWhyBannedQuestion) legalComplexity = 'complex';
+  else if (requiresLegalAnalysis) legalComplexity = 'moderate';
+  else if (hasLegalKeyword) legalComplexity = 'basic';
   
   // Category detection for files
   let detectedCategory = null;
@@ -299,11 +346,16 @@ async function analyzeQueryWithEnhancedIntelligence(query: string, supabase: any
   if (detectedState) tags.push(detectedState.toLowerCase());
   if (hasLegalKeyword) tags.push('legal');
   if (requiresLegalAnalysis) tags.push('compliance');
+  if (requiresOfficialCrawling) tags.push('official_sources');
   
   return {
     isProductLegality: hasLegalKeyword && (detectedProduct || detectedBrand || detectedState),
     isFileSearch: hasFileKeyword,
     requiresLegalAnalysis,
+    requiresOfficialCrawling,
+    isWhyBannedQuestion,
+    isBillTextRequest,
+    isEnforcementRequest,
     product: detectedProduct,
     brand: detectedBrand,
     state: detectedState,
@@ -312,46 +364,56 @@ async function analyzeQueryWithEnhancedIntelligence(query: string, supabase: any
     category: detectedCategory,
     tags,
     legalComplexity,
-    intentType
+    intentType,
+    confidenceLevel
   };
 }
 
-function determineSourceStrategy(queryAnalysis: any) {
-  const sources = [];
+function determineEnhancedSourceStrategy(queryAnalysis: any) {
+  const internalSources = [];
+  const shouldProvideDirectAnswer = queryAnalysis.confidenceLevel === 'high' || 
+    (queryAnalysis.confidenceLevel === 'medium' && !queryAnalysis.requiresOfficialCrawling);
   
-  // Priority-based source selection
+  // Enhanced decision logic for when to crawl official sources
+  const shouldCrawlOfficialSources = queryAnalysis.requiresOfficialCrawling || 
+    (queryAnalysis.isWhyBannedQuestion && queryAnalysis.confidenceLevel === 'low') ||
+    queryAnalysis.isBillTextRequest ||
+    queryAnalysis.isEnforcementRequest ||
+    (queryAnalysis.requiresLegalAnalysis && queryAnalysis.legalComplexity === 'complex');
+  
+  // Priority-based internal source selection
   if (queryAnalysis.isFileSearch) {
-    sources.push({ name: 'drive_files', priority: 10 });
-    sources.push({ name: 'knowledge_base', priority: 7 });
+    internalSources.push({ name: 'drive_files', priority: 10 });
+    internalSources.push({ name: 'knowledge_base', priority: 7 });
   }
   
   if (queryAnalysis.isProductLegality) {
-    sources.push({ name: 'state_map', priority: 10 });
+    internalSources.push({ name: 'state_map', priority: 10 });
     if (queryAnalysis.state) {
-      sources.push({ name: 'state_excise_taxes', priority: 8 });
+      internalSources.push({ name: 'state_excise_taxes', priority: 8 });
     }
-    if (queryAnalysis.requiresLegalAnalysis) {
-      sources.push({ name: 'firecrawl_legal', priority: 9 });
-    }
-    sources.push({ name: 'knowledge_base', priority: 6 });
+    internalSources.push({ name: 'knowledge_base', priority: 6 });
   }
   
-  if (queryAnalysis.intentType === 'general' || sources.length === 0) {
-    sources.push({ name: 'knowledge_base', priority: 8 });
-    sources.push({ name: 'drive_files', priority: 6 });
+  if (queryAnalysis.intentType === 'general' || internalSources.length === 0) {
+    internalSources.push({ name: 'knowledge_base', priority: 8 });
+    internalSources.push({ name: 'drive_files', priority: 6 });
     if (queryAnalysis.state) {
-      sources.push({ name: 'state_map', priority: 7 });
+      internalSources.push({ name: 'state_map', priority: 7 });
     }
   }
   
   // Remove duplicates and sort by priority
-  const uniqueSources = sources.filter((source, index, self) => 
+  const uniqueInternalSources = internalSources.filter((source, index, self) => 
     index === self.findIndex(s => s.name === source.name)
   ).sort((a, b) => b.priority - a.priority);
   
   return {
-    sources: uniqueSources,
-    strategy: queryAnalysis.requiresLegalAnalysis ? 'comprehensive_legal' : 'standard'
+    internalSources: uniqueInternalSources,
+    shouldProvideDirectAnswer,
+    shouldCrawlOfficialSources,
+    strategy: shouldCrawlOfficialSources ? 'comprehensive_legal_with_crawling' : 
+              shouldProvideDirectAnswer ? 'direct_internal_answer' : 'standard'
   };
 }
 
@@ -685,26 +747,46 @@ async function queryStateExciseTaxes(supabase: any, params: any) {
 
 async function queryFirecrawlLegalSources(firecrawlApiKey: string, queryAnalysis: any) {
   try {
-    console.log('Initiating Firecrawl legal source crawling');
+    console.log('Initiating enhanced Firecrawl legal source crawling for official sources');
 
-    const { state, product, brand } = queryAnalysis;
+    const { state, product, brand, isWhyBannedQuestion, isBillTextRequest, isEnforcementRequest } = queryAnalysis;
     
-    // Build targeted government URLs for crawling
+    // Build targeted government URLs for crawling with enhanced focus
     const govUrls = [];
     
     if (state) {
-      // State-specific government sites
+      // State-specific government sites with enhanced targeting
       const stateCode = getStateCode(state);
       if (stateCode) {
+        // Primary state government sites
         govUrls.push(`https://www.${stateCode.toLowerCase()}.gov`);
         govUrls.push(`https://${stateCode.toLowerCase()}.gov`);
+        
+        // State-specific regulatory pages for cannabis/hemp
+        if (product && (product.toLowerCase().includes('hemp') || product.toLowerCase().includes('cbd') || product.toLowerCase().includes('thc'))) {
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/cannabis`);
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/hemp`);
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/marijuana`);
+        }
       }
     }
     
-    // Federal sources for hemp/cannabis regulations
+    // Federal sources for hemp/cannabis regulations with enhanced targeting
     if (product && (product.toLowerCase().includes('hemp') || product.toLowerCase().includes('cbd') || product.toLowerCase().includes('thc'))) {
-      govUrls.push('https://www.fda.gov');
-      govUrls.push('https://www.usda.gov');
+      govUrls.push('https://www.fda.gov/news-events/public-health-focus/fda-regulation-cannabis-and-cannabis-derived-products');
+      govUrls.push('https://www.usda.gov/topics/farming/hemp');
+      govUrls.push('https://www.fda.gov/consumers/consumer-updates/what-you-need-know-and-what-were-working-find-out-about-products-containing-cannabis-or-cannabis');
+    }
+
+    // Enhanced targeting based on query type
+    if (isBillTextRequest || isEnforcementRequest) {
+      if (state) {
+        const stateCode = getStateCode(state);
+        if (stateCode) {
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/legislature`);
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/laws`);
+        }
+      }
     }
 
     if (govUrls.length === 0) {
@@ -714,7 +796,7 @@ async function queryFirecrawlLegalSources(firecrawlApiKey: string, queryAnalysis
 
     const results = [];
     
-    for (const url of govUrls.slice(0, 2)) { // Limit to 2 URLs to avoid rate limits
+    for (const url of govUrls.slice(0, 3)) { // Increased to 3 URLs for better coverage
       try {
         console.log(`Crawling government source: ${url}`);
         
@@ -742,17 +824,18 @@ async function queryFirecrawlLegalSources(firecrawlApiKey: string, queryAnalysis
         if (crawlData.success && crawlData.data) {
           console.log(`Successfully crawled ${url}`);
           
-          // Extract relevant content based on query
+          // Extract relevant content based on query with enhanced filtering
           const content = crawlData.data.markdown || crawlData.data.content || '';
           const relevantContent = extractRelevantLegalContent(content, queryAnalysis);
           
           if (relevantContent) {
             results.push({
-              title: `Government Source: ${url}`,
+              title: `Official Government Source: ${url}`,
               content: relevantContent,
               url: url,
               source: 'firecrawl_legal',
-              crawledAt: new Date().toISOString()
+              crawledAt: new Date().toISOString(),
+              sourceType: 'government'
             });
           }
         }
@@ -761,7 +844,7 @@ async function queryFirecrawlLegalSources(firecrawlApiKey: string, queryAnalysis
       }
     }
 
-    console.log(`Firecrawl returned ${results.length} legal sources`);
+    console.log(`Enhanced Firecrawl returned ${results.length} official government sources`);
     return results;
 
   } catch (error) {
@@ -788,14 +871,27 @@ function getStateCode(stateName: string): string | null {
 }
 
 function extractRelevantLegalContent(content: string, queryAnalysis: any): string | null {
-  const { product, brand, state } = queryAnalysis;
+  const { product, brand, state, isWhyBannedQuestion, isBillTextRequest, isEnforcementRequest } = queryAnalysis;
   const keywords = [];
   
   if (product) keywords.push(product.toLowerCase());
   if (brand) keywords.push(brand.toLowerCase());
   if (state) keywords.push(state.toLowerCase());
   
+  // Enhanced keywords based on query type
   keywords.push('hemp', 'cbd', 'thc', 'cannabis', 'regulation', 'legal', 'law');
+  
+  if (isWhyBannedQuestion) {
+    keywords.push('banned', 'prohibited', 'restriction', 'violation');
+  }
+  
+  if (isBillTextRequest) {
+    keywords.push('bill', 'legislation', 'statute', 'code', 'section');
+  }
+  
+  if (isEnforcementRequest) {
+    keywords.push('enforcement', 'violation', 'penalty', 'compliance', 'inspection');
+  }
   
   const sentences = content.split(/[.!?]+/);
   const relevantSentences = [];
@@ -804,14 +900,17 @@ function extractRelevantLegalContent(content: string, queryAnalysis: any): strin
     const lowerSentence = sentence.toLowerCase();
     const matchCount = keywords.filter(keyword => lowerSentence.includes(keyword)).length;
     
-    if (matchCount >= 2 || (matchCount >= 1 && sentence.length < 200)) {
+    // Enhanced matching criteria
+    if (matchCount >= 2 || (matchCount >= 1 && sentence.length < 300)) {
       relevantSentences.push(sentence.trim());
     }
   }
   
   if (relevantSentences.length === 0) return null;
   
-  return relevantSentences.slice(0, 5).join('. ') + '.';
+  // Return more content for complex queries
+  const maxSentences = queryAnalysis.legalComplexity === 'complex' ? 8 : 5;
+  return relevantSentences.slice(0, maxSentences).join('. ') + '.';
 }
 
 async function queryDriveFilesEnhanced(supabase: any, params: any) {
@@ -1078,13 +1177,13 @@ async function queryKnowledgeBaseEnhanced(supabase: any, params: any) {
   }
 }
 
-async function generateEnhancedAIResponse(openaiApiKey: string, query: string, contextData: any[], queryAnalysis: any, userId: string = 'anonymous') {
+async function generateEnhancedAIResponse(openaiApiKey: string, query: string, contextData: any[], queryAnalysis: any, userId: string = 'anonymous', crawlingNotification: string = '') {
   try {
     console.log('Generating enhanced AI response with', contextData.length, 'context items');
     console.log('Query analysis for AI:', queryAnalysis);
     
-    // Build enhanced system prompt with co-founder communication style
-    let systemPrompt = `You are Streamline AI, a friendly business co-founder and expert assistant for Streamline Group employees. You provide accurate, comprehensive answers using internal company data and authoritative external sources.
+    // Build enhanced system prompt with co-founder communication style and official source awareness
+    let systemPrompt = `You are Streamline AI, a friendly business co-founder and expert assistant for Streamline Group employees. You provide accurate, comprehensive answers using internal company data and authoritative external sources, including official government sources when available.
 
 **TONE AND COMMUNICATION STYLE:**
 - Speak like a friendly, experienced co-founder — confident, concise, and clear
@@ -1129,16 +1228,22 @@ For bullet points, use dashes for consistent formatting:
   - "Let me know if you want templates or tools for this."
   - "Should we dive deeper into any of these areas?"
   - "Would it help if I created a step-by-step plan for this?"
-  - "Need me to check for any recent updates on this?"
+  - "Should I crawl their website to get more current information?"
 - Make conversations feel interactive and supportive
 - Always leave the door open for follow-up questions or clarifications
+
+**OFFICIAL SOURCE CRAWLING CAPABILITIES:**
+- When using information from official government sources (.gov sites, state legislature, FDA, etc.), ALWAYS cite the source transparently
+- Use language like "According to this official government source..." or "Based on current .gov information..."
+- Include the URL when available for government sources
+- When information comes from internal databases vs external crawling, make this distinction clear
 
 **Core Capabilities:**
 - Product legality analysis by state with business reasoning
 - Internal document and file retrieval with download links
 - Regulatory compliance guidance with source citations
 - Sales support with brand-specific materials
-- Real-time legal analysis from government sources
+- Real-time legal analysis from government sources via official website crawling
 
 **Response Format Guidelines by Query Type:**
 
@@ -1147,7 +1252,7 @@ For **Product Legality Questions**:
 - Explain the business reasoning behind the determination
 - Include relevant state regulations or excise tax information
 - Cite both internal data and government sources when available
-- For "why" questions, provide comprehensive background with business context
+- For "why" questions, provide comprehensive background with business context and official source citations
 
 For **File Search Requests**:
 - Present files in numbered lists with clear descriptions
@@ -1162,19 +1267,25 @@ For **List Queries** ("which products", "what products"):
 - Format clearly for easy scanning
 - Cite the specific data sources used
 
-For **Complex Analysis**:
-- Combine internal data with external sources
+For **Complex Analysis with Official Sources**:
+- Combine internal data with external government sources
 - Provide multi-layered explanations with business implications
-- Include recent developments or changes when available
-- Cross-reference multiple authoritative sources
+- Include recent developments or changes when available from official sources
+- Cross-reference multiple authoritative sources with clear attribution
+- Use phrases like "According to official government sources..." when appropriate
 
-**Source Priority**: Internal State Map > Drive Files > Knowledge Base > Government Sources > External Research
+**Source Priority**: Internal State Map > Official Government Sources (when crawled) > Drive Files > Knowledge Base > External Research
 
-**Citation Format**: Always attribute information to specific sources and include confidence levels when appropriate.
+**Citation Format**: Always attribute information to specific sources and include confidence levels when appropriate. For government sources, include "Official Source:" prefix and URL when available.
 
 Always be helpful, accurate, professional, and cite your sources appropriately. When in doubt, recommend contacting the compliance team for verification.`;
 
-    // Build enhanced context with intelligent source blending
+    // Include crawling notification if official sources were accessed
+    if (crawlingNotification) {
+      systemPrompt += `\n\n**CRAWLING NOTIFICATION**: You accessed official government sources for this query. Make sure to mention this and cite the sources appropriately.`;
+    }
+
+    // Build enhanced context with intelligent source blending and official source highlighting
     let contextText = '';
     
     if (contextData.length > 0) {
@@ -1194,15 +1305,23 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
         }
       });
       
-      // Build context text with source grouping
+      // Build context text with source grouping and enhanced official source highlighting
       const contextSections = [];
       
       if (sourceGroups.state_map.length > 0) {
-        contextSections.push(`**Product Legality Data:**\n${sourceGroups.state_map.map(item => `- ${item.content}`).join('\n')}`);
+        contextSections.push(`**Product Legality Data (Internal Database):**\n${sourceGroups.state_map.map(item => `- ${item.content}`).join('\n')}`);
       }
       
       if (sourceGroups.state_excise_taxes.length > 0) {
-        contextSections.push(`**State Excise Tax Information:**\n${sourceGroups.state_excise_taxes.map(item => `- ${item.content}`).join('\n')}`);
+        contextSections.push(`**State Excise Tax Information (Internal Database):**\n${sourceGroups.state_excise_taxes.map(item => `- ${item.content}`).join('\n')}`);
+      }
+      
+      if (sourceGroups.firecrawl_legal.length > 0) {
+        const officialSources = sourceGroups.firecrawl_legal.map((item, index) => {
+          const urlInfo = item.url ? ` - Source URL: ${item.url}` : '';
+          return `${index + 1}. **Official Government Source**: ${item.content}${urlInfo}`;
+        }).join('\n\n');
+        contextSections.push(`**Official Government Sources (Recently Crawled):**\n${officialSources}`);
       }
       
       if (sourceGroups.drive_files.length > 0) {
@@ -1211,20 +1330,21 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
           const relevanceNote = item.relevanceScore ? ` (Relevance: ${item.relevanceScore})` : '';
           return `${index + 1}. ${item.file_name}${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
         }).join('\n');
-        contextSections.push(`**Available Files:**\n${filesList}`);
+        contextSections.push(`**Available Files (Internal Drive):**\n${filesList}`);
       }
       
       if (sourceGroups.knowledge_base.length > 0) {
-        contextSections.push(`**Internal Knowledge:**\n${sourceGroups.knowledge_base.map(item => `- ${item.title}: ${item.content}`).join('\n')}`);
-      }
-      
-      if (sourceGroups.firecrawl_legal.length > 0) {
-        contextSections.push(`**Government Sources:**\n${sourceGroups.firecrawl_legal.map(item => `- ${item.title}: ${item.content}`).join('\n')}`);
+        contextSections.push(`**Internal Knowledge Base:**\n${sourceGroups.knowledge_base.map(item => `- ${item.title}: ${item.content}`).join('\n')}`);
       }
       
       contextText = contextSections.join('\n\n');
     } else {
       contextText = 'No specific information found in internal databases. Providing general guidance based on available knowledge.';
+    }
+
+    // Add crawling notification to context if applicable
+    if (crawlingNotification) {
+      contextText = `${crawlingNotification}\n\n${contextText}`;
     }
 
     console.log('Enhanced context sent to AI:', contextText.substring(0, 500) + '...');
