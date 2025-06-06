@@ -16,12 +16,14 @@ serve(async (req) => {
     const requestBody = await req.json();
     console.log('Full request body:', JSON.stringify(requestBody, null, 2));
 
-    // Extract the user's message from the request
+    // Extract the user's message and conversation history from the request
     let userMessage = '';
+    let conversationHistory = [];
     
     if (requestBody.message) {
       userMessage = requestBody.message;
     } else if (requestBody.messages && Array.isArray(requestBody.messages)) {
+      conversationHistory = requestBody.messages;
       const lastUserMessage = requestBody.messages
         .filter(msg => msg.role === 'user')
         .pop();
@@ -40,6 +42,7 @@ serve(async (req) => {
     }
 
     console.log('Processing user message:', userMessage);
+    console.log('Conversation history length:', conversationHistory.length);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -48,9 +51,9 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Enhanced query analysis with improved contextual awareness
-    const queryAnalysis = await analyzeQueryWithEnhancedContextualAwareness(userMessage, supabase);
-    console.log('Enhanced query analysis:', queryAnalysis);
+    // Enhanced query analysis with conversation context
+    const queryAnalysis = await analyzeQueryWithConversationContext(userMessage, conversationHistory, supabase);
+    console.log('Enhanced contextual query analysis:', queryAnalysis);
 
     let contextData = [];
     let crawlingNotification = '';
@@ -142,7 +145,8 @@ serve(async (req) => {
       contextData, 
       queryAnalysis,
       requestBody.userId || 'anonymous',
-      crawlingNotification
+      crawlingNotification,
+      conversationHistory
     );
     
     return new Response(JSON.stringify({ 
@@ -171,7 +175,7 @@ serve(async (req) => {
   }
 });
 
-async function analyzeQueryWithEnhancedContextualAwareness(query: string, supabase: any) {
+async function analyzeQueryWithConversationContext(query: string, conversationHistory: any[], supabase: any) {
   if (!query || typeof query !== 'string') {
     console.error('Invalid query provided to analyzeQuery:', query);
     return {
@@ -191,9 +195,14 @@ async function analyzeQueryWithEnhancedContextualAwareness(query: string, supaba
       tags: [],
       legalComplexity: 'basic',
       intentType: 'general',
-      confidenceLevel: 'low'
+      confidenceLevel: 'low',
+      inheritedContext: {}
     };
   }
+
+  // Extract context from conversation history
+  const inheritedContext = extractConversationContext(conversationHistory);
+  console.log('Inherited context from conversation:', inheritedContext);
 
   const lowerQuery = query.toLowerCase();
   
@@ -239,73 +248,35 @@ async function analyzeQueryWithEnhancedContextualAwareness(query: string, supaba
     }
   }
   
-  // Enhanced state detection
-  let detectedState = null;
-  try {
-    const { data: states, error } = await supabase
-      .from('states')
-      .select('name');
+  // Enhanced state detection - check current query first, then inherited context
+  let detectedState = await detectStateInText(lowerQuery, supabase) || inheritedContext.state;
+  
+  // Enhanced brand detection - check current query first, then inherited context
+  let detectedBrand = await detectBrandInText(lowerQuery, supabase) || inheritedContext.brand;
+  
+  // Enhanced product detection - check current query first, then inherited context
+  let detectedProduct = detectProductInText(lowerQuery) || inheritedContext.product;
+  
+  // Special handling for contextual follow-up questions
+  if (isContextualFollowUp(query, inheritedContext)) {
+    console.log('Detected contextual follow-up question');
     
-    if (!error && states) {
-      for (const state of states) {
-        const statePattern = new RegExp(`\\b${state.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-        if (statePattern.test(lowerQuery)) {
-          detectedState = state.name;
-          break;
-        }
-      }
+    // For queries like "what about [brand]" inherit the previous state and question type
+    if (inheritedContext.state && !detectedState) {
+      detectedState = inheritedContext.state;
+      console.log(`Inherited state: ${detectedState}`);
     }
-  } catch (error) {
-    console.error('Error fetching states:', error);
-  }
-  
-  // Enhanced brand detection
-  let detectedBrand = null;
-  try {
-    const { data: brands, error } = await supabase
-      .from('brands')
-      .select('name');
     
-    if (!error && brands) {
-      for (const brand of brands) {
-        const brandPattern = new RegExp(`\\b${brand.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-        if (brandPattern.test(lowerQuery)) {
-          detectedBrand = brand.name;
-          break;
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching brands:', error);
-  }
-  
-  // Enhanced product detection
-  let detectedProduct = null;
-  const productMatches = [
-    { pattern: /juice head pouches?/i, name: 'Pouches' },
-    { pattern: /5k disposables?/i, name: '5K Disposable' },
-    { pattern: /galaxy treats disposables?/i, name: 'Disposable' },
-    { pattern: /disposables?/i, name: 'Disposable' },
-    { pattern: /pouches?/i, name: 'Pouches' },
-    { pattern: /gummies/i, name: 'Gummies' },
-    { pattern: /pre-?rolls?/i, name: 'Pre-Roll' },
-    { pattern: /vapes?/i, name: 'Vape' },
-    { pattern: /carts?/i, name: 'Cart' },
-    { pattern: /edibles?/i, name: 'Edible' },
-    { pattern: /kratom/i, name: 'Kratom' },
-    { pattern: /alcohol armor/i, name: 'Alcohol Armor' }
-  ];
-  
-  for (const productMatch of productMatches) {
-    if (productMatch.pattern.test(lowerQuery)) {
-      detectedProduct = productMatch.name;
-      break;
+    // If this is asking about a brand in context of previous legal question
+    if (inheritedContext.wasLegalQuery && detectedBrand && !hasLegalKeyword) {
+      console.log('Adding legal context to brand follow-up');
+      // This becomes a legal query about the new brand in the same state
     }
   }
   
   // List query detection
   const listKeywords = ['which', 'what', 'list', 'all', 'what are', 'show me'];
-  const isListQuery = listKeywords.some(keyword => lowerQuery.includes(keyword));
+  const isListQuery = listKeywords.some(keyword => lowerQuery.includes(keyword)) || inheritedContext.wasListQuery;
   
   // Intent type classification with enhanced categories
   let intentType = 'general';
@@ -313,7 +284,7 @@ async function analyzeQueryWithEnhancedContextualAwareness(query: string, supaba
   else if (isWhyBannedQuestion) intentType = 'why_banned_inquiry';
   else if (isBillTextRequest) intentType = 'bill_text_request';
   else if (isEnforcementRequest) intentType = 'enforcement_inquiry';
-  else if (hasLegalKeyword) intentType = 'legal_inquiry';
+  else if (hasLegalKeyword || inheritedContext.wasLegalQuery) intentType = 'legal_inquiry';
   else if (isListQuery) intentType = 'list_request';
   
   // Enhanced confidence level assessment
@@ -365,8 +336,167 @@ async function analyzeQueryWithEnhancedContextualAwareness(query: string, supaba
     tags,
     legalComplexity,
     intentType,
-    confidenceLevel
+    confidenceLevel,
+    inheritedContext
   };
+}
+
+function extractConversationContext(conversationHistory: any[]) {
+  const context: any = {
+    state: null,
+    brand: null,
+    product: null,
+    wasLegalQuery: false,
+    wasListQuery: false
+  };
+  
+  if (!conversationHistory || conversationHistory.length === 0) {
+    return context;
+  }
+  
+  // Look at the last few messages for context (prioritize recent messages)
+  const recentMessages = conversationHistory.slice(-6); // Last 6 messages
+  
+  for (let i = recentMessages.length - 1; i >= 0; i--) {
+    const message = recentMessages[i];
+    
+    if (message.role === 'user') {
+      const userQuery = message.content.toLowerCase();
+      
+      // Extract state mentions
+      if (!context.state) {
+        const stateMatch = userQuery.match(/\b(florida|california|texas|new york|illinois|pennsylvania|ohio|georgia|north carolina|michigan|new jersey|virginia|washington|arizona|massachusetts|tennessee|indiana|missouri|maryland|wisconsin|colorado|minnesota|south carolina|alabama|louisiana|kentucky|oregon|oklahoma|connecticut|utah|iowa|nevada|arkansas|mississippi|kansas|new mexico|nebraska|west virginia|idaho|hawaii|new hampshire|maine|montana|rhode island|delaware|south dakota|north dakota|alaska|vermont|wyoming)\b/i);
+        if (stateMatch) {
+          context.state = stateMatch[1].charAt(0).toUpperCase() + stateMatch[1].slice(1);
+        }
+      }
+      
+      // Extract brand mentions
+      if (!context.brand) {
+        const brandMatch = userQuery.match(/\b(juice head|galaxy treats|orbital|thca|delta|hemp|cbd)\b/i);
+        if (brandMatch) {
+          context.brand = brandMatch[1];
+        }
+      }
+      
+      // Detect if it was a legal query
+      if (!context.wasLegalQuery) {
+        const legalKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited'];
+        context.wasLegalQuery = legalKeywords.some(keyword => userQuery.includes(keyword));
+      }
+      
+      // Detect if it was a list query
+      if (!context.wasListQuery) {
+        const listKeywords = ['which', 'what', 'list', 'all', 'what are', 'show me'];
+        context.wasListQuery = listKeywords.some(keyword => userQuery.includes(keyword));
+      }
+    } else if (message.role === 'assistant') {
+      // Extract context from AI responses
+      const aiResponse = message.content.toLowerCase();
+      
+      // Look for state mentions in AI responses
+      if (!context.state) {
+        const stateMatch = aiResponse.match(/\bin (florida|california|texas|new york|illinois|pennsylvania|ohio|georgia|north carolina|michigan|new jersey|virginia|washington|arizona|massachusetts|tennessee|indiana|missouri|maryland|wisconsin|colorado|minnesota|south carolina|alabama|louisiana|kentucky|oregon|oklahoma|connecticut|utah|iowa|nevada|arkansas|mississippi|kansas|new mexico|nebraska|west virginia|idaho|hawaii|new hampshire|maine|montana|rhode island|delaware|south dakota|north dakota|alaska|vermont|wyoming)\b/i);
+        if (stateMatch) {
+          context.state = stateMatch[1].charAt(0).toUpperCase() + stateMatch[1].slice(1);
+        }
+      }
+      
+      // Look for brand mentions in AI responses
+      if (!context.brand) {
+        const brandMatch = aiResponse.match(/\b(juice head|galaxy treats|orbital|thca|delta|hemp|cbd)\b/i);
+        if (brandMatch) {
+          context.brand = brandMatch[1];
+        }
+      }
+    }
+  }
+  
+  return context;
+}
+
+function isContextualFollowUp(query: string, inheritedContext: any) {
+  const lowerQuery = query.toLowerCase().trim();
+  
+  // Patterns that indicate a contextual follow-up
+  const followUpPatterns = [
+    /^what about\s+/,
+    /^how about\s+/,
+    /^and\s+/,
+    /^also\s+/
+  ];
+  
+  // Check if the query is short and matches follow-up patterns
+  const isShortFollowUp = lowerQuery.length < 30 && followUpPatterns.some(pattern => pattern.test(lowerQuery));
+  
+  // Check if we have meaningful inherited context
+  const hasInheritedContext = inheritedContext.state || inheritedContext.wasLegalQuery || inheritedContext.wasListQuery;
+  
+  return isShortFollowUp && hasInheritedContext;
+}
+
+async function detectStateInText(text: string, supabase: any) {
+  try {
+    const { data: states, error } = await supabase
+      .from('states')
+      .select('name');
+    
+    if (!error && states) {
+      for (const state of states) {
+        const statePattern = new RegExp(`\\b${state.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (statePattern.test(text)) {
+          return state.name;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching states:', error);
+  }
+  return null;
+}
+
+async function detectBrandInText(text: string, supabase: any) {
+  try {
+    const { data: brands, error } = await supabase
+      .from('brands')
+      .select('name');
+    
+    if (!error && brands) {
+      for (const brand of brands) {
+        const brandPattern = new RegExp(`\\b${brand.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (brandPattern.test(text)) {
+          return brand.name;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+  }
+  return null;
+}
+
+function detectProductInText(text: string) {
+  const productMatches = [
+    { pattern: /juice head pouches?/i, name: 'Pouches' },
+    { pattern: /5k disposables?/i, name: '5K Disposable' },
+    { pattern: /galaxy treats disposables?/i, name: 'Disposable' },
+    { pattern: /disposables?/i, name: 'Disposable' },
+    { pattern: /pouches?/i, name: 'Pouches' },
+    { pattern: /gummies/i, name: 'Gummies' },
+    { pattern: /pre-?rolls?/i, name: 'Pre-Roll' },
+    { pattern: /vapes?/i, name: 'Vape' },
+    { pattern: /carts?/i, name: 'Cart' },
+    { pattern: /edibles?/i, name: 'Edible' },
+    { pattern: /kratom/i, name: 'Kratom' },
+    { pattern: /alcohol armor/i, name: 'Alcohol Armor' }
+  ];
+  
+  for (const productMatch of productMatches) {
+    if (productMatch.pattern.test(text)) {
+      return productMatch.name;
+    }
+  }
+  return null;
 }
 
 function determineEnhancedSourceStrategy(queryAnalysis: any) {
@@ -1177,7 +1307,7 @@ async function queryKnowledgeBaseEnhanced(supabase: any, params: any) {
   }
 }
 
-async function generateEnhancedAIResponse(openaiApiKey: string, query: string, contextData: any[], queryAnalysis: any, userId: string = 'anonymous', crawlingNotification: string = '') {
+async function generateEnhancedAIResponse(openaiApiKey: string, query: string, contextData: any[], queryAnalysis: any, userId: string = 'anonymous', crawlingNotification: string = '', conversationHistory: any[] = []) {
   try {
     console.log('Generating enhanced AI response with', contextData.length, 'context items');
     console.log('Query analysis for AI:', queryAnalysis);
@@ -1191,6 +1321,13 @@ async function generateEnhancedAIResponse(openaiApiKey: string, query: string, c
 - Give practical examples when useful to illustrate your points
 - Show genuine interest in helping their business succeed
 - Use "we" language when appropriate to feel like a true business partner
+
+**CONTEXTUAL AWARENESS:**
+- You have access to the full conversation history and can understand follow-up questions in context
+- When users ask vague follow-ups like "what about [brand]", use context from previous messages to understand the complete question
+- If a previous question was about product legality in a specific state, and the user asks "what about [different brand]", assume they're asking about that brand's legality in the same state
+- Maintain conversation flow naturally without asking redundant clarification questions
+- Reference previous context when relevant to show you understand the ongoing conversation
 
 **RESPONSE FORMATTING REQUIREMENTS (CRITICAL):**
 - ALWAYS use **bold headings** for each major topic or section
@@ -1347,6 +1484,13 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
       contextText = `${crawlingNotification}\n\n${contextText}`;
     }
 
+    // Build conversation context summary for better understanding
+    let conversationContext = '';
+    if (conversationHistory.length > 0) {
+      const recentMessages = conversationHistory.slice(-4); // Last 4 messages for context
+      conversationContext = `\n\n**Recent Conversation Context:**\n${recentMessages.map(msg => `${msg.role}: ${msg.content.substring(0, 200)}...`).join('\n')}`;
+    }
+
     console.log('Enhanced context sent to AI:', contextText.substring(0, 500) + '...');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1361,7 +1505,7 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
           { role: 'system', content: systemPrompt },
           { 
             role: 'user', 
-            content: `User Question: ${query}\n\nQuery Analysis: ${JSON.stringify(queryAnalysis)}\n\nAvailable Information:\n${contextText}\n\nUser ID: ${userId}` 
+            content: `User Question: ${query}\n\nQuery Analysis: ${JSON.stringify(queryAnalysis)}\n\nAvailable Information:\n${contextText}${conversationContext}\n\nUser ID: ${userId}` 
           }
         ],
         temperature: 0.2,
