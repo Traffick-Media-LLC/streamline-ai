@@ -511,7 +511,7 @@ function determineEnhancedSourceStrategy(queryAnalysis: any) {
     queryAnalysis.isEnforcementRequest ||
     (queryAnalysis.requiresLegalAnalysis && queryAnalysis.legalComplexity === 'complex');
   
-  // Priority-based internal source selection
+  // Priority-based internal source selection - only include files when explicitly requested
   if (queryAnalysis.isFileSearch) {
     internalSources.push({ name: 'drive_files', priority: 10 });
     internalSources.push({ name: 'knowledge_base', priority: 7 });
@@ -523,11 +523,22 @@ function determineEnhancedSourceStrategy(queryAnalysis: any) {
       internalSources.push({ name: 'state_excise_taxes', priority: 8 });
     }
     internalSources.push({ name: 'knowledge_base', priority: 6 });
+    // Only include files for legality questions if explicitly requested
+    if (queryAnalysis.isFileSearch) {
+      internalSources.push({ name: 'drive_files', priority: 5 });
+    }
   }
   
+  // For general queries, focus on knowledge base and only include files/state data if contextually relevant
   if (queryAnalysis.intentType === 'general' || internalSources.length === 0) {
     internalSources.push({ name: 'knowledge_base', priority: 8 });
-    internalSources.push({ name: 'drive_files', priority: 6 });
+    
+    // Only include files if this is a file search or has file-related context
+    if (queryAnalysis.isFileSearch) {
+      internalSources.push({ name: 'drive_files', priority: 6 });
+    }
+    
+    // Only include state data if a state is mentioned
     if (queryAnalysis.state) {
       internalSources.push({ name: 'state_map', priority: 7 });
     }
