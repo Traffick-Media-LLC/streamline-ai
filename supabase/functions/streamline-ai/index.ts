@@ -1369,6 +1369,30 @@ For bullet points, use dashes for consistent formatting:
 - Use horizontal rules (---) to separate major sections when helpful
 - Ensure code blocks or examples have proper spacing around them
 
+**FILE & LINK FORMATTING GUIDELINES (MANDATORY):**
+- When presenting multiple related links (such as marketing assets or product images), use bullet points under a bold section heading
+- ALWAYS format links like this: [Link Title](https://...) - Never use a dash on a separate line or excessive spacing between items
+- Group links under relevant section headings like:
+  - **Marketing Materials**
+  - **Product Images**
+  - **Regulatory References**
+- Do not include raw URLs. Only use clickable link titles
+- Ensure each section has no extra spacing between bullets
+- End sections with a relevant note or disclaimer if applicable (e.g., legality statements)
+- Keep all link formatting consistent throughout the response
+
+Example file formatting:
+
+**Marketing Materials**
+- [Orbital Terp Gummies 4x6 Card](https://...)
+- [Orbital Terp Gummies 8.5x11](https://...)
+- [Orbital Terp Gummies Table Tent](https://...)
+
+**Product Images**
+- [Orbital Cherry](https://...)
+- [Orbital Lemon](https://...)
+- [Orbital Blue Raspberry](https://...)
+
 **ENGAGEMENT AND CONVERSATION FLOW:**
 - End responses with helpful prompts to continue the conversation, such as:
   - "Want help drafting that?"
@@ -1403,10 +1427,10 @@ For **Product Legality Questions**:
 - For "why" questions, provide comprehensive background with business context and official source citations
 
 For **File Search Requests**:
-- Present files in numbered lists with clear descriptions
-- Include download links: [Download](URL) for each relevant file
-- Show file categories, brands, and relevance scores
-- Group results by relevance with most relevant first
+- Present files using the mandatory link formatting under bold section headings
+- Group files by category (Marketing Materials, Product Images, etc.)
+- Always use [Link Title](URL) format, never raw URLs
+- Include relevant notes or disclaimers for each section
 - If specific files aren't found, suggest contacting Marketing or relevant departments
 
 For **List Queries** ("which products", "what products"):
@@ -1474,9 +1498,9 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
       
       if (sourceGroups.drive_files.length > 0) {
         const filesList = sourceGroups.drive_files.map((item, index) => {
-          const downloadLink = item.file_url ? ` - [Download](${item.file_url})` : '';
+          const downloadLink = item.file_url ? `[${item.file_name}](${item.file_url})` : item.file_name;
           const relevanceNote = item.relevanceScore ? ` (Relevance: ${item.relevanceScore})` : '';
-          return `${index + 1}. ${item.file_name}${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
+          return `- ${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
         }).join('\n');
         contextSections.push(`**Available Files (Internal Drive):**\n${filesList}`);
       }
