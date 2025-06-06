@@ -149,11 +149,15 @@ serve(async (req) => {
       conversationHistory
     );
     
-    // Apply cleanup pass to fix file link formatting
-    const fixedResponse = aiResponse.replace(/\-\s*\n\s*(\[[^\]]+\]\([^)]+\))/g, '- $1');
+    // Comprehensive file link formatting cleanup with logging
+    console.log('AI response before cleanup (first 500 chars):', aiResponse.substring(0, 500));
+    
+    const cleanedResponse = applyComprehensiveFormatCleanup(aiResponse);
+    
+    console.log('AI response after cleanup (first 500 chars):', cleanedResponse.substring(0, 500));
     
     return new Response(JSON.stringify({ 
-      response: fixedResponse,
+      response: cleanedResponse,
       sources: contextData.map(item => ({
         type: item.source,
         title: item.title || item.file_name || 'Document',
@@ -177,6 +181,49 @@ serve(async (req) => {
     });
   }
 });
+
+function applyComprehensiveFormatCleanup(response: string): string {
+  console.log('Starting comprehensive format cleanup...');
+  
+  let cleaned = response;
+  
+  // Pass 1: Fix standalone dashes followed by links on separate lines
+  // Pattern: "- \n[Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-\s*\n\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 2: Fix dashes with excessive whitespace before links
+  // Pattern: "-     [Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-\s{2,}(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 3: Fix multiple consecutive dashes
+  // Pattern: "- - [Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-\s*-\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 4: Fix missing space after dash
+  // Pattern: "-[Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 5: Fix orphaned dashes (standalone dash lines)
+  // Remove lines that are just dashes with optional whitespace
+  cleaned = cleaned.replace(/^\s*-\s*$/gm, '');
+  
+  // Pass 6: Fix double spacing issues around bullet points
+  cleaned = cleaned.replace(/\n\n-\s+/g, '\n- ');
+  
+  // Pass 7: Ensure consistent bullet point formatting in lists
+  // Fix any remaining malformed bullet points
+  cleaned = cleaned.replace(/^[\s]*[\-\*\+]\s+(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 8: Clean up excessive line breaks around formatted sections
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  // Pass 9: Ensure proper spacing after section headers before bullet points
+  cleaned = cleaned.replace(/(\*\*[^*]+\*\*)\n-\s+/g, '$1\n- ');
+  
+  console.log('Comprehensive format cleanup completed');
+  
+  return cleaned;
+}
 
 async function analyzeQueryWithConversationContext(query: string, conversationHistory: any[], supabase: any) {
   if (!query || typeof query !== 'string') {
