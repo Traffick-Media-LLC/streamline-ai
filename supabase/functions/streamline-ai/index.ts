@@ -1576,5 +1576,3 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
     return 'I apologize, but I encountered an error while processing your request. Please try again or contact support if the issue persists.';
   }
 }
-
-</edits_to_apply>
