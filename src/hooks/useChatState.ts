@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, Message, MessageMetadata } from '@/types/chat';
@@ -260,14 +261,32 @@ export const useChatState = (): ChatState => {
             return thread;
           });
         });
+
+        // Store assistant message in database
+        try {
+          const { error: assistantMessageError } = await supabase
+            .from('chat_messages')
+            .insert({
+              id: assistantMessageId,
+              chat_id: threadId,
+              content: data.response,
+              role: 'assistant',
+              metadata: { sourceInfo: data.sourceInfo }
+            });
+            
+          if (assistantMessageError) throw assistantMessageError;
+        } catch (e) {
+          console.error("Error storing assistant message:", e);
+        }
       }
     } catch (e) {
       console.error("Error calling Streamline AI:", e);
       toast.error("Failed to get a response. Please try again.");
       
       // Add fallback error message
+      const errorMessageId = uuidv4();
       const errorMessage: Message = {
-        id: uuidv4(),
+        id: errorMessageId,
         chatId: threadId,
         content: "I'm sorry, I encountered an error while processing your request. Please try again or contact support.",
         role: "assistant",
@@ -286,6 +305,22 @@ export const useChatState = (): ChatState => {
           return thread;
         });
       });
+
+      // Store error message in database
+      try {
+        const { error: errorMessageError } = await supabase
+          .from('chat_messages')
+          .insert({
+            id: errorMessageId,
+            chat_id: threadId,
+            content: errorMessage.content,
+            role: 'assistant'
+          });
+          
+        if (errorMessageError) throw errorMessageError;
+      } catch (dbError) {
+        console.error("Error storing error message:", dbError);
+      }
     } finally {
       setIsLoading(false);
     }
