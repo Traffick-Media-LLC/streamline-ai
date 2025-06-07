@@ -84,7 +84,7 @@ serve(async (req) => {
               sourceData = await queryDriveFilesEnhanced(supabase, {
                 query: userMessage,
                 fileType: queryAnalysis.fileType,
-                brand: queryAnalysis.brand,
+                brand: queryAnalysis.shouldFilterByBrand ? queryAnalysis.brand : null,
                 category: queryAnalysis.category
               });
               break;
@@ -224,7 +224,8 @@ async function analyzeQueryWithConversationContext(query: string, conversationHi
       legalComplexity: 'basic',
       intentType: 'general',
       confidenceLevel: 'low',
-      inheritedContext: {}
+      inheritedContext: {},
+      shouldFilterByBrand: false
     };
   }
 
@@ -284,6 +285,43 @@ async function analyzeQueryWithConversationContext(query: string, conversationHi
   
   // Enhanced product detection - check current query first, then inherited context
   let detectedProduct = detectProductInText(lowerQuery) || inheritedContext.product;
+  
+  // Determine if brand filtering should be applied
+  const explicitBrandMentions = [
+    /for\s+([a-zA-Z\s]+)/i,
+    /from\s+([a-zA-Z\s]+)/i,
+    /\b([a-zA-Z\s]+)\s+(files|documents|materials)/i,
+    /\b([a-zA-Z\s]+)\s+(sales\s+sheet|pos\s+kit|logo)/i
+  ];
+  
+  const generalFileQueries = [
+    /latest/i,
+    /all/i,
+    /any/i,
+    /available/i,
+    /our/i,
+    /where\s+can\s+i\s+find/i,
+    /show\s+me/i
+  ];
+  
+  const hasExplicitBrandRequest = explicitBrandMentions.some(pattern => pattern.test(lowerQuery));
+  const hasGeneralFileQuery = generalFileQueries.some(pattern => pattern.test(lowerQuery));
+  
+  // Only filter by brand if explicitly requested OR if we have inherited brand context AND no general query indicators
+  const shouldFilterByBrand = hasExplicitBrandRequest || 
+    (detectedBrand && inheritedContext.brand && !hasGeneralFileQuery && !lowerQuery.includes('all') && !lowerQuery.includes('latest'));
+  
+  console.log('Brand filtering decision:', {
+    detectedBrand,
+    hasExplicitBrandRequest,
+    hasGeneralFileQuery,
+    shouldFilterByBrand,
+    queryIndicators: {
+      hasAll: lowerQuery.includes('all'),
+      hasLatest: lowerQuery.includes('latest'),
+      hasOur: lowerQuery.includes('our')
+    }
+  });
   
   // Special handling for contextual follow-up questions
   if (isContextualFollowUp(query, inheritedContext)) {
@@ -365,7 +403,8 @@ async function analyzeQueryWithConversationContext(query: string, conversationHi
     legalComplexity,
     intentType,
     confidenceLevel,
-    inheritedContext
+    inheritedContext,
+    shouldFilterByBrand
   };
 }
 
@@ -1096,11 +1135,11 @@ async function queryDriveFilesEnhanced(supabase: any, params: any) {
       return [];
     }
     
-    // Multi-pass search strategy
+    // Multi-pass search strategy with updated brand filtering logic
     const searchResults = [];
     
-    // Pass 1: Exact category + brand + file type match
-    if (category && brand && fileType) {
+    // Pass 1: Only apply brand filter if explicitly requested
+    if (brand && category && fileType) {
       console.log(`Pass 1: Searching for ${fileType} in ${category} category for ${brand}`);
       const exactResults = await searchWithCriteria(supabase, {
         category: category,
@@ -1114,13 +1153,14 @@ async function queryDriveFilesEnhanced(supabase: any, params: any) {
       }
     }
     
-    // Pass 2: Category + file type match
+    // Pass 2: Category + file type match (no brand filter unless explicitly requested)
     if (category && fileType) {
       console.log(`Pass 2: Searching for ${fileType} in ${category} category`);
       const categoryResults = await searchWithCriteria(supabase, {
         category: category,
         fileNameContains: fileType,
-        keywords: keywords
+        keywords: keywords,
+        brand: brand // Only filter by brand if provided and explicitly requested
       });
       if (categoryResults.length > 0) {
         console.log(`Pass 2 found ${categoryResults.length} category matches`);
@@ -1128,40 +1168,28 @@ async function queryDriveFilesEnhanced(supabase: any, params: any) {
       }
     }
     
-    // Pass 3: Brand + file type match
-    if (brand && fileType) {
-      console.log(`Pass 3: Searching for ${fileType} files from ${brand}`);
-      const brandResults = await searchWithCriteria(supabase, {
-        brand: brand,
-        fileNameContains: fileType,
-        keywords: keywords
-      });
-      if (brandResults.length > 0) {
-        console.log(`Pass 3 found ${brandResults.length} brand + file type matches`);
-        return rankAndSortResults(brandResults, { fileType, brand, category });
-      }
-    }
-    
-    // Pass 4: File type only
+    // Pass 3: File type only (cross-brand search unless brand explicitly requested)
     if (fileType) {
-      console.log(`Pass 4: Searching for ${fileType} files`);
+      console.log(`Pass 3: Searching for ${fileType} files across all brands`);
       const fileTypeResults = await searchWithCriteria(supabase, {
         fileNameContains: fileType,
-        keywords: keywords
+        keywords: keywords,
+        brand: brand // Only apply brand filter if explicitly requested
       });
       if (fileTypeResults.length > 0) {
-        console.log(`Pass 4 found ${fileTypeResults.length} file type matches`);
+        console.log(`Pass 3 found ${fileTypeResults.length} file type matches`);
         return rankAndSortResults(fileTypeResults, { fileType, brand, category });
       }
     }
     
-    // Pass 5: Keyword-based search as fallback
-    console.log('Pass 5: Fallback keyword search');
+    // Pass 4: Keyword-based search as fallback (cross-brand)
+    console.log('Pass 4: Fallback keyword search across all brands');
     const keywordResults = await searchWithCriteria(supabase, {
       keywords: keywords
+      // No brand filter for fallback search to ensure comprehensive results
     });
     
-    console.log(`Pass 5 found ${keywordResults.length} keyword matches`);
+    console.log(`Pass 4 found ${keywordResults.length} keyword matches`);
     return rankAndSortResults(keywordResults, { fileType, brand, category });
     
   } catch (error) {
@@ -1212,7 +1240,7 @@ async function searchWithCriteria(supabase: any, criteria: any) {
       query = query.eq('category', criteria.category);
     }
     
-    // Apply brand filter
+    // Apply brand filter only if provided
     if (criteria.brand) {
       query = query.ilike('brand', `%${criteria.brand}%`);
     }
