@@ -149,10 +149,10 @@ serve(async (req) => {
       conversationHistory
     );
     
-    // Enhanced comprehensive file link formatting cleanup with logging
+    // Simplified link formatting cleanup
     console.log('AI response before cleanup (first 500 chars):', aiResponse.substring(0, 500));
     
-    const cleanedResponse = applyEnhancedComprehensiveFormatCleanup(aiResponse);
+    const cleanedResponse = applySimplifiedFormatCleanup(aiResponse);
     
     console.log('AI response after cleanup (first 500 chars):', cleanedResponse.substring(0, 500));
     
@@ -182,55 +182,25 @@ serve(async (req) => {
   }
 });
 
-function applyEnhancedComprehensiveFormatCleanup(response: string): string {
-  console.log('Starting enhanced comprehensive format cleanup...');
-  
+function applySimplifiedFormatCleanup(response: string): string {
+  console.log('Cleaning up AI response (no dashes)...');
   let cleaned = response;
-  
-  // Pass 1: Fix standalone dashes followed by links on separate lines
-  // Pattern: "- \n[Link](url)" -> "- [Link](url)"
-  cleaned = cleaned.replace(/^-\s*\n\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
-  
-  // Pass 2: Fix dashes with excessive whitespace before links
-  // Pattern: "-     [Link](url)" -> "- [Link](url)"
-  cleaned = cleaned.replace(/^-\s{2,}(\[[^\]]+\]\([^)]+\))/gm, '- $1');
-  
-  // Pass 3: Fix multiple consecutive dashes
-  // Pattern: "- - [Link](url)" -> "- [Link](url)"
-  cleaned = cleaned.replace(/^-\s*-\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
-  
-  // Pass 4: Fix missing space after dash
-  // Pattern: "-[Link](url)" -> "- [Link](url)"
-  cleaned = cleaned.replace(/^-(\[[^\]]+\]\([^)]+\))/gm, '- $1');
-  
-  // Pass 5: Handle bold markers and extra spaces after dash (enhanced fix)
-  // Pattern: "-  ** [Link](url)" -> "- [Link](url)"
-  cleaned = cleaned.replace(/^-\s*\**\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
-  
-  // Pass 6: Fix orphaned dashes (standalone dash lines)
-  // Remove lines that are just dashes with optional whitespace
-  cleaned = cleaned.replace(/^\s*-\s*$/gm, '');
-  
-  // Pass 7: Fix double spacing issues around bullet points
-  cleaned = cleaned.replace(/\n\n-\s+/g, '\n- ');
-  
-  // Pass 8: Ensure consistent bullet point formatting in lists
-  // Fix any remaining malformed bullet points (normalize asterisks, plus signs)
-  cleaned = cleaned.replace(/^[\s]*[\-\*\+]\s+(\[[^\]]+\]\([^)]+\))/gm, '- $1');
-  
-  // Pass 9: Clean up excessive line breaks around formatted sections
+
+  // 1. Remove leading dashes before links
+  cleaned = cleaned.replace(/^[-\*\+]\s*(\[[^\]]+\]\([^)]+\))/gm, '$1');
+
+  // 2. Fix broken links split across lines
+  cleaned = cleaned.replace(/^\s*\n\s*(\[[^\]]+\]\([^)]+\))/gm, '$1');
+
+  // 3. Remove any extra empty lines between links
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+
+  // 4. Normalize section header spacing
+  cleaned = cleaned.replace(/(\*\*[^\*]+\*\*)\s*\n+/g, '$1\n');
+
+  console.log('Simplified format cleanup completed');
   
-  // Pass 10: Ensure proper spacing after section headers before bullet points
-  cleaned = cleaned.replace(/(\*\*[^*]+\*\*)\n-\s+/g, '$1\n- ');
-  
-  // Pass 11: Handle nested markdown blocks (code blocks, quotes) that might contain bullets
-  // Preserve proper formatting within code blocks but fix outside them
-  cleaned = cleaned.replace(/(?<!`{3}[\s\S]*?)^-\s*\n(?![\s\S]*?`{3})/gm, '');
-  
-  console.log('Enhanced comprehensive format cleanup completed');
-  
-  return cleaned;
+  return cleaned.trim();
 }
 
 async function analyzeQueryWithConversationContext(query: string, conversationHistory: any[], supabase: any) {
@@ -1381,7 +1351,7 @@ async function generateEnhancedAIResponse(openaiApiKey: string, query: string, c
     console.log('Generating enhanced AI response with', contextData.length, 'context items');
     console.log('Query analysis for AI:', queryAnalysis);
     
-    // Build enhanced system prompt with real URLs and prominent formatting guidelines
+    // Build enhanced system prompt with real URLs and simplified formatting guidelines
     let systemPrompt = `You are Streamline AI, a friendly business co-founder and expert assistant for Streamline Group employees. You provide accurate, comprehensive answers using internal company data and authoritative external sources, including official government sources when available.
 
 **TONE AND COMMUNICATION STYLE:**
@@ -1413,67 +1383,31 @@ For numbered lists, ensure proper spacing around each point:
 
 3. **Third point** - Maintaining consistency throughout
 
-For bullet points, use dashes for consistent formatting:
-
-- **Clear bullet point** - Explanation with practical value
-
-- **Another bullet point** - Proper spacing and useful information
-
-- **Consistent formatting** - Throughout the entire response
-
 - Use \`backticks\` when mentioning specific tools, technologies, or technical terms
 - Break up long responses into digestible sections with descriptive **bold headers**
 - End complex advice with a clear "**Next Steps**" or "**Key Takeaways**" section
 - Use horizontal rules (---) to separate major sections when helpful
 - Ensure code blocks or examples have proper spacing around them
 
-**FILE & LINK FORMATTING GUIDELINES (MANDATORY AND CRITICAL):**
-When presenting file links, you MUST follow this EXACT format with NO exceptions:
+**FILE & LINK FORMATTING GUIDELINES (SIMPLIFIED):**
 
-**Section Heading**
-- [Exact Link Title](https://drive.google.com/file/d/1abc123/view)
-- [Another Link Title](https://drive.google.com/file/d/1def456/view)
-- [Third Link Title](https://drive.google.com/file/d/1ghi789/view)
+When presenting file links:
+- DO NOT use bullet points or dashes
+- List links directly on their own lines, grouped under bold section headings
+- ALWAYS format like this:
 
-STRICT FORMATTING RULES:
-- NEVER use standalone dashes (-) on separate lines
-- NEVER add extra spacing between bullet points
-- ALWAYS use the format: "- [Link Title](URL)" with the dash directly attached on the same line
-- NEVER format links like this: "- Link Title\n- Download: URL" 
-- NEVER break a bullet point across lines like this:
-
--
-[Link Title](URL)
-
-- Group related links under appropriate **bold section headings** like:
-  - **Marketing Materials**
-  - **Product Images**
-  - **Sales Resources**
-  - **Regulatory Documents**
-- End sections with relevant disclaimers when applicable
-
-CORRECT EXAMPLE:
 **Marketing Materials**
-- [Juice Head Pouches Sales Sheet](https://drive.google.com/file/d/1abc123xyz/view)
-- [Juice Head Logo Package](https://drive.google.com/file/d/1def456abc/view)
-- [Juice Head POS Kit](https://drive.google.com/file/d/1ghi789def/view)
+[Juice Head POS Kit](https://drive.streamlinegroup.io/pos-kit)
+[Juice Head Logo Package](https://drive.streamlinegroup.io/logo.zip)
+[Juice Head Sales Sheet](https://drive.streamlinegroup.io/sales-sheet)
 
-**Product Images**
-- [Juice Head Watermelon Lime](https://drive.google.com/file/d/1jkl012ghi/view)
-- [Juice Head Blueberry Lemon](https://drive.google.com/file/d/1mno345jkl/view)
+- NEVER format like this:
 
-NEVER format like this (WRONG):
-- Juice Head Pouches Sales Sheet
-  - Download: https://drive.google.com/...
-  
-- Juice Head Logo Package
-  - Download: https://drive.google.com/...
+- [POS Kit](...)
+- [Sales Sheet](...)
 
-LINK STYLING RULES (FRONTEND STYLE REQUIREMENTS):
-- Links should appear underlined and black or gray
-- Do not use blue coloring or external link icons
-- Do not add arrows, new tab icons, or special markers
-- All links should match the rest of the response in tone and weight
+- Do not include icons, colors, or extra line breaks between links
+- Use plain black/gray underlined text on the frontend
 
 **ENGAGEMENT AND CONVERSATION FLOW:**
 - End responses with helpful prompts to continue the conversation, such as:
@@ -1509,9 +1443,9 @@ For **Product Legality Questions**:
 - For "why" questions, provide comprehensive background with business context and official source citations
 
 For **File Search Requests**:
-- Present files using the mandatory link formatting under bold section headings
+- Present files using the simplified link formatting under bold section headings
 - Group files by category (Marketing Materials, Product Images, etc.)
-- ALWAYS use [Link Title](URL) format with bullet points, never raw URLs or standalone dashes
+- ALWAYS use direct links without bullet points
 - Include relevant notes or disclaimers for each section
 - If specific files aren't found, suggest contacting Marketing or relevant departments
 
@@ -1559,7 +1493,7 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
         }
       });
       
-      // Build context text with source grouping and consistent bullet formatting
+      // Build context text with source grouping
       const contextSections = [];
       
       if (sourceGroups.state_map.length > 0) {
@@ -1582,7 +1516,7 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
         const filesList = sourceGroups.drive_files.map(item => {
           const downloadLink = item.file_url ? `[${item.file_name}](${item.file_url})` : item.file_name;
           const relevanceNote = item.relevanceScore ? ` (Relevance: ${item.relevanceScore})` : '';
-          return `- ${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
+          return `${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
         }).join('\n');
         contextSections.push(`**Available Files (Internal Drive):**\n${filesList}`);
       }
