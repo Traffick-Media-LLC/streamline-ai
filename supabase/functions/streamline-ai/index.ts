@@ -1370,19 +1370,9 @@ async function generateEnhancedAIResponse(openaiApiKey: string, query: string, c
 
 **RESPONSE FORMATTING REQUIREMENTS (CRITICAL):**
 - ALWAYS use **bold headings** for each major topic or section
-- Break up responses using bullet points or numbered lists for clarity
-- Use proper paragraph spacing between major ideas (double line breaks)
+- Break up responses using clear paragraph spacing between major ideas (double line breaks)
 - Keep responses mobile-optimized — avoid dense blocks of text
 - Highlight action steps clearly (e.g., "Start by doing X, then move to Y")
-
-For numbered lists, ensure proper spacing around each point:
-
-1. **First point** - Clear explanation with actionable details
-
-2. **Second point** - Adequate spacing and concrete guidance  
-
-3. **Third point** - Maintaining consistency throughout
-
 - Use \`backticks\` when mentioning specific tools, technologies, or technical terms
 - Break up long responses into digestible sections with descriptive **bold headers**
 - End complex advice with a clear "**Next Steps**" or "**Key Takeaways**" section
@@ -1448,12 +1438,6 @@ For **File Search Requests**:
 - ALWAYS use direct links without bullet points
 - Include relevant notes or disclaimers for each section
 - If specific files aren't found, suggest contacting Marketing or relevant departments
-
-For **List Queries** ("which products", "what products"):
-- Provide comprehensive numbered or bulleted lists
-- Include product counts and brand information
-- Format clearly for easy scanning
-- Cite the specific data sources used
 
 For **Complex Analysis with Official Sources**:
 - Combine internal data with external government sources
