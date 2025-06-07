@@ -149,10 +149,10 @@ serve(async (req) => {
       conversationHistory
     );
     
-    // Comprehensive file link formatting cleanup with logging
+    // Enhanced comprehensive file link formatting cleanup with logging
     console.log('AI response before cleanup (first 500 chars):', aiResponse.substring(0, 500));
     
-    const cleanedResponse = applyComprehensiveFormatCleanup(aiResponse);
+    const cleanedResponse = applyEnhancedComprehensiveFormatCleanup(aiResponse);
     
     console.log('AI response after cleanup (first 500 chars):', cleanedResponse.substring(0, 500));
     
@@ -182,8 +182,8 @@ serve(async (req) => {
   }
 });
 
-function applyComprehensiveFormatCleanup(response: string): string {
-  console.log('Starting comprehensive format cleanup...');
+function applyEnhancedComprehensiveFormatCleanup(response: string): string {
+  console.log('Starting enhanced comprehensive format cleanup...');
   
   let cleaned = response;
   
@@ -203,24 +203,32 @@ function applyComprehensiveFormatCleanup(response: string): string {
   // Pattern: "-[Link](url)" -> "- [Link](url)"
   cleaned = cleaned.replace(/^-(\[[^\]]+\]\([^)]+\))/gm, '- $1');
   
-  // Pass 5: Fix orphaned dashes (standalone dash lines)
+  // Pass 5: Handle bold markers and extra spaces after dash (enhanced fix)
+  // Pattern: "-  ** [Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-\s*\**\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 6: Fix orphaned dashes (standalone dash lines)
   // Remove lines that are just dashes with optional whitespace
   cleaned = cleaned.replace(/^\s*-\s*$/gm, '');
   
-  // Pass 6: Fix double spacing issues around bullet points
+  // Pass 7: Fix double spacing issues around bullet points
   cleaned = cleaned.replace(/\n\n-\s+/g, '\n- ');
   
-  // Pass 7: Ensure consistent bullet point formatting in lists
-  // Fix any remaining malformed bullet points
+  // Pass 8: Ensure consistent bullet point formatting in lists
+  // Fix any remaining malformed bullet points (normalize asterisks, plus signs)
   cleaned = cleaned.replace(/^[\s]*[\-\*\+]\s+(\[[^\]]+\]\([^)]+\))/gm, '- $1');
   
-  // Pass 8: Clean up excessive line breaks around formatted sections
+  // Pass 9: Clean up excessive line breaks around formatted sections
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   
-  // Pass 9: Ensure proper spacing after section headers before bullet points
+  // Pass 10: Ensure proper spacing after section headers before bullet points
   cleaned = cleaned.replace(/(\*\*[^*]+\*\*)\n-\s+/g, '$1\n- ');
   
-  console.log('Comprehensive format cleanup completed');
+  // Pass 11: Handle nested markdown blocks (code blocks, quotes) that might contain bullets
+  // Preserve proper formatting within code blocks but fix outside them
+  cleaned = cleaned.replace(/(?<!`{3}[\s\S]*?)^-\s*\n(?![\s\S]*?`{3})/gm, '');
+  
+  console.log('Enhanced comprehensive format cleanup completed');
   
   return cleaned;
 }
@@ -1373,7 +1381,7 @@ async function generateEnhancedAIResponse(openaiApiKey: string, query: string, c
     console.log('Generating enhanced AI response with', contextData.length, 'context items');
     console.log('Query analysis for AI:', queryAnalysis);
     
-    // Build enhanced system prompt with co-founder communication style and official source awareness
+    // Build enhanced system prompt with real URLs and prominent formatting guidelines
     let systemPrompt = `You are Streamline AI, a friendly business co-founder and expert assistant for Streamline Group employees. You provide accurate, comprehensive answers using internal company data and authoritative external sources, including official government sources when available.
 
 **TONE AND COMMUNICATION STYLE:**
@@ -1423,15 +1431,20 @@ For bullet points, use dashes for consistent formatting:
 When presenting file links, you MUST follow this EXACT format with NO exceptions:
 
 **Section Heading**
-- [Exact Link Title](https://complete-url-here)
-- [Another Link Title](https://complete-url-here)
-- [Third Link Title](https://complete-url-here)
+- [Exact Link Title](https://drive.google.com/file/d/1abc123/view)
+- [Another Link Title](https://drive.google.com/file/d/1def456/view)
+- [Third Link Title](https://drive.google.com/file/d/1ghi789/view)
 
 STRICT FORMATTING RULES:
 - NEVER use standalone dashes (-) on separate lines
 - NEVER add extra spacing between bullet points
-- ALWAYS use the format: "- [Link Title](URL)" with the dash directly attached
+- ALWAYS use the format: "- [Link Title](URL)" with the dash directly attached on the same line
 - NEVER format links like this: "- Link Title\n- Download: URL" 
+- NEVER break a bullet point across lines like this:
+
+-
+[Link Title](URL)
+
 - Group related links under appropriate **bold section headings** like:
   - **Marketing Materials**
   - **Product Images**
@@ -1441,13 +1454,13 @@ STRICT FORMATTING RULES:
 
 CORRECT EXAMPLE:
 **Marketing Materials**
-- [Juice Head Pouches Sales Sheet](https://drive.google.com/...)
-- [Juice Head Logo Package](https://drive.google.com/...)
-- [Juice Head POS Kit](https://drive.google.com/...)
+- [Juice Head Pouches Sales Sheet](https://drive.google.com/file/d/1abc123xyz/view)
+- [Juice Head Logo Package](https://drive.google.com/file/d/1def456abc/view)
+- [Juice Head POS Kit](https://drive.google.com/file/d/1ghi789def/view)
 
 **Product Images**
-- [Juice Head Watermelon Lime](https://drive.google.com/...)
-- [Juice Head Blueberry Lemon](https://drive.google.com/...)
+- [Juice Head Watermelon Lime](https://drive.google.com/file/d/1jkl012ghi/view)
+- [Juice Head Blueberry Lemon](https://drive.google.com/file/d/1mno345jkl/view)
 
 NEVER format like this (WRONG):
 - Juice Head Pouches Sales Sheet
@@ -1455,6 +1468,12 @@ NEVER format like this (WRONG):
   
 - Juice Head Logo Package
   - Download: https://drive.google.com/...
+
+LINK STYLING RULES (FRONTEND STYLE REQUIREMENTS):
+- Links should appear underlined and black or gray
+- Do not use blue coloring or external link icons
+- Do not add arrows, new tab icons, or special markers
+- All links should match the rest of the response in tone and weight
 
 **ENGAGEMENT AND CONVERSATION FLOW:**
 - End responses with helpful prompts to continue the conversation, such as:
@@ -1598,7 +1617,7 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { 
@@ -1616,6 +1635,18 @@ Always be helpful, accurate, professional, and cite your sources appropriately. 
     }
 
     const data = await response.json();
+    
+    // Enhanced response validation
+    if (!data || !data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+      console.error('Invalid OpenAI response structure:', data);
+      return 'I apologize, but I received an invalid response from the AI service. Please try again or contact support if the issue persists.';
+    }
+    
+    if (!data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+      console.error('Missing content in OpenAI response:', data.choices[0]);
+      return 'I apologize, but I received an incomplete response from the AI service. Please try again or contact support if the issue persists.';
+    }
+    
     return data.choices[0].message.content;
 
   } catch (error) {
