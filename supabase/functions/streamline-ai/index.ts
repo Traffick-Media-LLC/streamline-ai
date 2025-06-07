@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,581 +13,1613 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, chatId, userId } = await req.json();
-    console.log('Full request body:', JSON.stringify({ messages, chatId, userId }));
+    const requestBody = await req.json();
+    console.log('Full request body:', JSON.stringify(requestBody, null, 2));
 
-    const currentMessage = messages[messages.length - 1]?.content || '';
-    console.log('Processing user message:', currentMessage);
+    // Extract the user's message and conversation history from the request
+    let userMessage = '';
+    let conversationHistory = [];
+    
+    if (requestBody.message) {
+      userMessage = requestBody.message;
+    } else if (requestBody.messages && Array.isArray(requestBody.messages)) {
+      conversationHistory = requestBody.messages;
+      const lastUserMessage = requestBody.messages
+        .filter(msg => msg.role === 'user')
+        .pop();
+      userMessage = lastUserMessage?.content || '';
+    }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Analyze conversation context for better filtering
-    const conversationHistory = messages.slice(0, -1);
-    console.log('Conversation history length:', conversationHistory.length);
-
-    const inheritedContext = analyzeConversationContext(conversationHistory);
-    console.log('Inherited context from conversation:', inheritedContext);
-
-    // Enhanced contextual analysis with product category awareness
-    const queryAnalysis = analyzeQuery(currentMessage, inheritedContext);
-    console.log('Enhanced contextual query analysis:', queryAnalysis);
-
-    // Determine source strategy with improved relevance filtering
-    const sourceStrategy = determineSourceStrategy(queryAnalysis);
-    console.log('Enhanced source strategy:', sourceStrategy);
-
-    let contextData: any[] = [];
-
-    if (sourceStrategy.shouldProvideDirectAnswer) {
-      console.log('Providing direct answer from internal sources');
-      
-      // Query internal sources with improved filtering
-      for (const source of sourceStrategy.internalSources) {
-        console.log(`Querying internal source ${source.name}...`);
-        
-        if (source.name === 'knowledge_base') {
-          const knowledgeData = await queryKnowledgeBaseEnhanced(supabase, currentMessage, queryAnalysis);
-          if (knowledgeData) contextData.push(knowledgeData);
-        } else if (source.name === 'state_map') {
-          const stateData = await queryStateProducts(supabase, queryAnalysis);
-          if (stateData) contextData.push(stateData);
-        } else if (source.name === 'state_excise_taxes') {
-          const taxData = await queryExciseTaxes(supabase, queryAnalysis.state);
-          if (taxData) contextData.push(taxData);
-        }
-      }
-
-      console.log('Total context data items:', contextData.length);
-      
-      // Generate enhanced AI response with source validation
-      const aiResponse = await generateEnhancedAIResponse(currentMessage, contextData, queryAnalysis);
-      
-      // Comprehensive format cleanup
-      const cleanedResponse = cleanupResponse(aiResponse);
-      
+    if (!userMessage) {
+      console.error('No message found in request');
       return new Response(JSON.stringify({ 
-        response: cleanedResponse,
-        sources: extractSources(contextData)
+        error: 'No message provided',
+        details: 'Request must include either a message field or messages array with user messages'
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Fallback response for non-matching queries
+    console.log('Processing user message:', userMessage);
+    console.log('Conversation history length:', conversationHistory.length);
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')!;
+    const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY')!;
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Enhanced query analysis with conversation context
+    const queryAnalysis = await analyzeQueryWithConversationContext(userMessage, conversationHistory, supabase);
+    console.log('Enhanced contextual query analysis:', queryAnalysis);
+
+    let contextData = [];
+    let crawlingNotification = '';
+
+    // Intelligent source routing with enhanced decision making
+    const sourceStrategy = determineEnhancedSourceStrategy(queryAnalysis);
+    console.log('Enhanced source strategy:', sourceStrategy);
+
+    // Check if we should provide a direct answer from internal sources first
+    if (sourceStrategy.shouldProvideDirectAnswer) {
+      console.log('Providing direct answer from internal sources');
+      
+      // Query internal sources first
+      for (const source of sourceStrategy.internalSources) {
+        console.log(`Querying internal source ${source.name}...`);
+        
+        try {
+          let sourceData = [];
+          
+          switch (source.name) {
+            case 'state_map':
+              sourceData = await queryStateMapEnhanced(supabase, {
+                ...queryAnalysis,
+                query: userMessage
+              });
+              break;
+            case 'drive_files':
+              sourceData = await queryDriveFilesEnhanced(supabase, {
+                query: userMessage,
+                fileType: queryAnalysis.fileType,
+                brand: queryAnalysis.brand,
+                category: queryAnalysis.category
+              });
+              break;
+            case 'knowledge_base':
+              sourceData = await queryKnowledgeBaseEnhanced(supabase, {
+                query: userMessage,
+                tags: queryAnalysis.tags
+              });
+              break;
+            case 'state_excise_taxes':
+              sourceData = await queryStateExciseTaxes(supabase, {
+                state: queryAnalysis.state,
+                query: userMessage
+              });
+              break;
+          }
+          
+          if (sourceData.length > 0) {
+            contextData.push(...sourceData.map(item => ({
+              ...item,
+              source: source.name,
+              priority: source.priority
+            })));
+          }
+        } catch (error) {
+          console.error(`Error querying ${source.name}:`, error);
+        }
+      }
+    }
+
+    // Enhanced Firecrawl logic - only crawl when needed
+    if (sourceStrategy.shouldCrawlOfficialSources && firecrawlApiKey) {
+      console.log('Initiating official source crawling...');
+      crawlingNotification = "Let me pull the latest from official sources to confirm that information...";
+      
+      try {
+        const crawledData = await queryFirecrawlLegalSources(firecrawlApiKey, queryAnalysis);
+        if (crawledData.length > 0) {
+          contextData.push(...crawledData.map(item => ({
+            ...item,
+            source: 'firecrawl_legal',
+            priority: 10
+          })));
+        }
+      } catch (error) {
+        console.error('Error crawling official sources:', error);
+      }
+    }
+
+    // Sort context data by priority and relevance
+    contextData = contextData.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    console.log('Total context data items:', contextData.length);
+
+    // Generate enhanced AI response with improved formatting and source transparency
+    const aiResponse = await generateEnhancedAIResponse(
+      openaiApiKey, 
+      userMessage, 
+      contextData, 
+      queryAnalysis,
+      requestBody.userId || 'anonymous',
+      crawlingNotification,
+      conversationHistory
+    );
+    
+    // Comprehensive file link formatting cleanup with logging
+    console.log('AI response before cleanup (first 500 chars):', aiResponse.substring(0, 500));
+    
+    const cleanedResponse = applyComprehensiveFormatCleanup(aiResponse);
+    
+    console.log('AI response after cleanup (first 500 chars):', cleanedResponse.substring(0, 500));
+    
     return new Response(JSON.stringify({ 
-      response: "I don't have specific information about that topic in our database. Please contact our compliance team for detailed assistance.",
-      sources: []
+      response: cleanedResponse,
+      sources: contextData.map(item => ({
+        type: item.source,
+        title: item.title || item.file_name || 'Document',
+        content: item.content || item.summary || 'Content not available',
+        priority: item.priority || 0,
+        url: item.url || null
+      })),
+      analysis: queryAnalysis
     }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    console.error('Error in streamline-ai function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Error in enhanced streamline-ai function:', error);
+    return new Response(JSON.stringify({ 
+      error: 'An error occurred processing your request',
+      details: error.message 
+    }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
 
-function analyzeConversationContext(messages: any[]) {
-  // Extract context from previous messages to maintain consistency
-  let context: any = {
+function applyComprehensiveFormatCleanup(response: string): string {
+  console.log('Starting comprehensive format cleanup...');
+  
+  let cleaned = response;
+  
+  // Pass 1: Fix standalone dashes followed by links on separate lines
+  // Pattern: "- \n[Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-\s*\n\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 2: Fix dashes with excessive whitespace before links
+  // Pattern: "-     [Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-\s{2,}(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 3: Fix multiple consecutive dashes
+  // Pattern: "- - [Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-\s*-\s*(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 4: Fix missing space after dash
+  // Pattern: "-[Link](url)" -> "- [Link](url)"
+  cleaned = cleaned.replace(/^-(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 5: Fix orphaned dashes (standalone dash lines)
+  // Remove lines that are just dashes with optional whitespace
+  cleaned = cleaned.replace(/^\s*-\s*$/gm, '');
+  
+  // Pass 6: Fix double spacing issues around bullet points
+  cleaned = cleaned.replace(/\n\n-\s+/g, '\n- ');
+  
+  // Pass 7: Ensure consistent bullet point formatting in lists
+  // Fix any remaining malformed bullet points
+  cleaned = cleaned.replace(/^[\s]*[\-\*\+]\s+(\[[^\]]+\]\([^)]+\))/gm, '- $1');
+  
+  // Pass 8: Clean up excessive line breaks around formatted sections
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  // Pass 9: Ensure proper spacing after section headers before bullet points
+  cleaned = cleaned.replace(/(\*\*[^*]+\*\*)\n-\s+/g, '$1\n- ');
+  
+  console.log('Comprehensive format cleanup completed');
+  
+  return cleaned;
+}
+
+async function analyzeQueryWithConversationContext(query: string, conversationHistory: any[], supabase: any) {
+  if (!query || typeof query !== 'string') {
+    console.error('Invalid query provided to analyzeQuery:', query);
+    return {
+      isProductLegality: false,
+      isFileSearch: false,
+      requiresLegalAnalysis: false,
+      requiresOfficialCrawling: false,
+      isWhyBannedQuestion: false,
+      isBillTextRequest: false,
+      isEnforcementRequest: false,
+      product: null,
+      brand: null,
+      state: null,
+      isListQuery: false,
+      fileType: null,
+      category: null,
+      tags: [],
+      legalComplexity: 'basic',
+      intentType: 'general',
+      confidenceLevel: 'low',
+      inheritedContext: {}
+    };
+  }
+
+  // Extract context from conversation history
+  const inheritedContext = extractConversationContext(conversationHistory);
+  console.log('Inherited context from conversation:', inheritedContext);
+
+  const lowerQuery = query.toLowerCase();
+  
+  // Enhanced legal analysis detection with specific triggers
+  const legalKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited', 'can i', 'available', 'compliance', 'regulation', 'law', 'ruling', 'enforcement', 'court', 'legislation'];
+  const complexLegalKeywords = ['why', 'explain', 'ruling', 'court', 'enforcement', 'bulletin', 'legislation', 'recent', 'updated', 'changed'];
+  const officialSourceTriggers = ['why banned', 'why prohibited', 'bill text', 'enforcement action', 'recent ruling', 'updated law', 'latest regulation'];
+  
+  const hasLegalKeyword = legalKeywords.some(keyword => lowerQuery.includes(keyword));
+  const hasComplexLegalKeyword = complexLegalKeywords.some(keyword => lowerQuery.includes(keyword));
+  const requiresLegalAnalysis = hasLegalKeyword && (hasComplexLegalKeyword || lowerQuery.includes('why'));
+  
+  // Specific triggers for official source crawling
+  const isWhyBannedQuestion = lowerQuery.includes('why') && (lowerQuery.includes('banned') || lowerQuery.includes('prohibited') || lowerQuery.includes('not legal'));
+  const isBillTextRequest = lowerQuery.includes('bill') || lowerQuery.includes('legislation text') || lowerQuery.includes('law text');
+  const isEnforcementRequest = lowerQuery.includes('enforcement') || lowerQuery.includes('memo') || lowerQuery.includes('bulletin');
+  const requiresOfficialCrawling = isWhyBannedQuestion || isBillTextRequest || isEnforcementRequest || 
+    officialSourceTriggers.some(trigger => lowerQuery.includes(trigger));
+  
+  // Enhanced file search detection
+  const fileKeywords = ['logo', 'document', 'file', 'sheet', 'sales sheet', 'find me', 'download', 'pdf', 'image', 'picture', 'brochure', 'flyer', 'pos kit', 'marketing material'];
+  const hasFileKeyword = fileKeywords.some(keyword => lowerQuery.includes(keyword));
+  
+  // File type detection
+  let detectedFileType = null;
+  const fileTypePatterns = [
+    { pattern: /pos kit/i, type: 'pos kit' },
+    { pattern: /sales sheet/i, type: 'sales sheet' },
+    { pattern: /logo/i, type: 'logo' },
+    { pattern: /document/i, type: 'document' },
+    { pattern: /pdf/i, type: 'pdf' },
+    { pattern: /image/i, type: 'image' },
+    { pattern: /picture/i, type: 'image' },
+    { pattern: /brochure/i, type: 'brochure' },
+    { pattern: /flyer/i, type: 'flyer' },
+    { pattern: /marketing material/i, type: 'marketing' }
+  ];
+  
+  for (const fileType of fileTypePatterns) {
+    if (fileType.pattern.test(lowerQuery)) {
+      detectedFileType = fileType.type;
+      break;
+    }
+  }
+  
+  // Enhanced state detection - check current query first, then inherited context
+  let detectedState = await detectStateInText(lowerQuery, supabase) || inheritedContext.state;
+  
+  // Enhanced brand detection - check current query first, then inherited context
+  let detectedBrand = await detectBrandInText(lowerQuery, supabase) || inheritedContext.brand;
+  
+  // Enhanced product detection - check current query first, then inherited context
+  let detectedProduct = detectProductInText(lowerQuery) || inheritedContext.product;
+  
+  // Special handling for contextual follow-up questions
+  if (isContextualFollowUp(query, inheritedContext)) {
+    console.log('Detected contextual follow-up question');
+    
+    // For queries like "what about [brand]" inherit the previous state and question type
+    if (inheritedContext.state && !detectedState) {
+      detectedState = inheritedContext.state;
+      console.log(`Inherited state: ${detectedState}`);
+    }
+    
+    // If this is asking about a brand in context of previous legal question
+    if (inheritedContext.wasLegalQuery && detectedBrand && !hasLegalKeyword) {
+      console.log('Adding legal context to brand follow-up');
+      // This becomes a legal query about the new brand in the same state
+    }
+  }
+  
+  // List query detection
+  const listKeywords = ['which', 'what', 'list', 'all', 'what are', 'show me'];
+  const isListQuery = listKeywords.some(keyword => lowerQuery.includes(keyword)) || inheritedContext.wasListQuery;
+  
+  // Intent type classification with enhanced categories
+  let intentType = 'general';
+  if (hasFileKeyword) intentType = 'file_search';
+  else if (isWhyBannedQuestion) intentType = 'why_banned_inquiry';
+  else if (isBillTextRequest) intentType = 'bill_text_request';
+  else if (isEnforcementRequest) intentType = 'enforcement_inquiry';
+  else if (hasLegalKeyword || inheritedContext.wasLegalQuery) intentType = 'legal_inquiry';
+  else if (isListQuery) intentType = 'list_request';
+  
+  // Enhanced confidence level assessment
+  let confidenceLevel = 'low';
+  if ((detectedBrand && detectedProduct && detectedState) || 
+      (hasFileKeyword && detectedBrand && detectedFileType)) {
+    confidenceLevel = 'high';
+  } else if ((detectedBrand && detectedState) || 
+             (hasFileKeyword && detectedFileType) ||
+             (hasLegalKeyword && detectedState)) {
+    confidenceLevel = 'medium';
+  }
+  
+  // Legal complexity assessment
+  let legalComplexity = 'basic';
+  if (requiresOfficialCrawling || isWhyBannedQuestion) legalComplexity = 'complex';
+  else if (requiresLegalAnalysis) legalComplexity = 'moderate';
+  else if (hasLegalKeyword) legalComplexity = 'basic';
+  
+  // Category detection for files
+  let detectedCategory = null;
+  if (detectedFileType === 'logo') detectedCategory = 'Logos';
+  else if (detectedFileType === 'sales sheet') detectedCategory = 'Sales Sheets';
+  else if (detectedFileType === 'pos kit') detectedCategory = 'POS Kits';
+  
+  // Tag extraction for knowledge base
+  const tags = [];
+  if (detectedBrand) tags.push(detectedBrand.toLowerCase());
+  if (detectedProduct) tags.push(detectedProduct.toLowerCase());
+  if (detectedState) tags.push(detectedState.toLowerCase());
+  if (hasLegalKeyword) tags.push('legal');
+  if (requiresLegalAnalysis) tags.push('compliance');
+  if (requiresOfficialCrawling) tags.push('official_sources');
+  
+  return {
+    isProductLegality: hasLegalKeyword && (detectedProduct || detectedBrand || detectedState),
+    isFileSearch: hasFileKeyword,
+    requiresLegalAnalysis,
+    requiresOfficialCrawling,
+    isWhyBannedQuestion,
+    isBillTextRequest,
+    isEnforcementRequest,
+    product: detectedProduct,
+    brand: detectedBrand,
+    state: detectedState,
+    isListQuery,
+    fileType: detectedFileType,
+    category: detectedCategory,
+    tags,
+    legalComplexity,
+    intentType,
+    confidenceLevel,
+    inheritedContext
+  };
+}
+
+function extractConversationContext(conversationHistory: any[]) {
+  const context: any = {
     state: null,
     brand: null,
     product: null,
     wasLegalQuery: false,
     wasListQuery: false
   };
-
-  for (const message of messages) {
+  
+  if (!conversationHistory || conversationHistory.length === 0) {
+    return context;
+  }
+  
+  // Look at the last few messages for context (prioritize recent messages)
+  const recentMessages = conversationHistory.slice(-6); // Last 6 messages
+  
+  for (let i = recentMessages.length - 1; i >= 0; i--) {
+    const message = recentMessages[i];
+    
     if (message.role === 'user') {
-      const content = message.content.toLowerCase();
+      const userQuery = message.content.toLowerCase();
       
       // Extract state mentions
-      const stateMatches = content.match(/\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b/i);
-      if (stateMatches) context.state = stateMatches[0];
+      if (!context.state) {
+        const stateMatch = userQuery.match(/\b(florida|california|texas|new york|illinois|pennsylvania|ohio|georgia|north carolina|michigan|new jersey|virginia|washington|arizona|massachusetts|tennessee|indiana|missouri|maryland|wisconsin|colorado|minnesota|south carolina|alabama|louisiana|kentucky|oregon|oklahoma|connecticut|utah|iowa|nevada|arkansas|mississippi|kansas|new mexico|nebraska|west virginia|idaho|hawaii|new hampshire|maine|montana|rhode island|delaware|south dakota|north dakota|alaska|vermont|wyoming)\b/i);
+        if (stateMatch) {
+          context.state = stateMatch[1].charAt(0).toUpperCase() + stateMatch[1].slice(1);
+        }
+      }
       
-      // Extract product/brand mentions
-      const productMatches = content.match(/\b(delta-?8|delta-?9|cbd|thc|nicotine|vape|juice|head|streamline)\b/i);
-      if (productMatches) context.brand = productMatches[0].replace('-', '');
+      // Extract brand mentions
+      if (!context.brand) {
+        const brandMatch = userQuery.match(/\b(juice head|galaxy treats|orbital|thca|delta|hemp|cbd)\b/i);
+        if (brandMatch) {
+          context.brand = brandMatch[1];
+        }
+      }
       
-      // Identify query types
-      if (content.includes('legal') || content.includes('allow')) context.wasLegalQuery = true;
-      if (content.includes('list') || content.includes('what products')) context.wasListQuery = true;
+      // Detect if it was a legal query
+      if (!context.wasLegalQuery) {
+        const legalKeywords = ['legal', 'legality', 'allowed', 'permitted', 'banned', 'prohibited'];
+        context.wasLegalQuery = legalKeywords.some(keyword => userQuery.includes(keyword));
+      }
+      
+      // Detect if it was a list query
+      if (!context.wasListQuery) {
+        const listKeywords = ['which', 'what', 'list', 'all', 'what are', 'show me'];
+        context.wasListQuery = listKeywords.some(keyword => userQuery.includes(keyword));
+      }
+    } else if (message.role === 'assistant') {
+      // Extract context from AI responses
+      const aiResponse = message.content.toLowerCase();
+      
+      // Look for state mentions in AI responses
+      if (!context.state) {
+        const stateMatch = aiResponse.match(/\bin (florida|california|texas|new york|illinois|pennsylvania|ohio|georgia|north carolina|michigan|new jersey|virginia|washington|arizona|massachusetts|tennessee|indiana|missouri|maryland|wisconsin|colorado|minnesota|south carolina|alabama|louisiana|kentucky|oregon|oklahoma|connecticut|utah|iowa|nevada|arkansas|mississippi|kansas|new mexico|nebraska|west virginia|idaho|hawaii|new hampshire|maine|montana|rhode island|delaware|south dakota|north dakota|alaska|vermont|wyoming)\b/i);
+        if (stateMatch) {
+          context.state = stateMatch[1].charAt(0).toUpperCase() + stateMatch[1].slice(1);
+        }
+      }
+      
+      // Look for brand mentions in AI responses
+      if (!context.brand) {
+        const brandMatch = aiResponse.match(/\b(juice head|galaxy treats|orbital|thca|delta|hemp|cbd)\b/i);
+        if (brandMatch) {
+          context.brand = brandMatch[1];
+        }
+      }
     }
   }
-
+  
   return context;
 }
 
-function analyzeQuery(query: string, inheritedContext: any) {
-  const lowercaseQuery = query.toLowerCase();
+function isContextualFollowUp(query: string, inheritedContext: any) {
+  const lowerQuery = query.toLowerCase().trim();
   
-  // Enhanced product category detection
-  const productCategories = {
-    cannabis: ['delta-8', 'delta-9', 'thc', 'cbd', 'cannabis', 'hemp'],
-    nicotine: ['nicotine', 'vape', 'tobacco', 'cigarette', 'e-cig'],
-    general: ['juice', 'head', 'streamline']
-  };
-
-  let detectedCategory = null;
-  for (const [category, keywords] of Object.entries(productCategories)) {
-    if (keywords.some(keyword => lowercaseQuery.includes(keyword))) {
-      detectedCategory = category;
-      break;
-    }
-  }
-
-  return {
-    isProductLegality: lowercaseQuery.includes('legal') || lowercaseQuery.includes('allow') || inheritedContext.brand,
-    isFileSearch: lowercaseQuery.includes('file') || lowercaseQuery.includes('document') || lowercaseQuery.includes('brochure'),
-    requiresLegalAnalysis: lowercaseQuery.includes('legal') || lowercaseQuery.includes('regulation') || lowercaseQuery.includes('compliance'),
-    requiresOfficialCrawling: false,
-    isWhyBannedQuestion: lowercaseQuery.includes('why') && (lowercaseQuery.includes('banned') || lowercaseQuery.includes('illegal')),
-    isBillTextRequest: lowercaseQuery.includes('bill text') || lowercaseQuery.includes('legislation'),
-    isEnforcementRequest: lowercaseQuery.includes('enforce') || lowercaseQuery.includes('penalty'),
-    product: inheritedContext.product,
-    brand: inheritedContext.brand || extractBrandFromQuery(lowercaseQuery),
-    state: inheritedContext.state || extractStateFromQuery(lowercaseQuery),
-    isListQuery: lowercaseQuery.includes('list') || lowercaseQuery.includes('what products'),
-    fileType: extractFileType(lowercaseQuery),
-    category: detectedCategory,
-    tags: extractRelevantTags(lowercaseQuery, inheritedContext),
-    legalComplexity: determineLegalComplexity(lowercaseQuery),
-    intentType: determineIntentType(lowercaseQuery),
-    confidenceLevel: 'medium',
-    inheritedContext
-  };
-}
-
-function extractBrandFromQuery(query: string): string | null {
-  const brandPatterns = [
-    /\b(delta-?8|delta-?9)\b/i,
-    /\b(juice\s+head|juicehead)\b/i,
-    /\bstreamline\b/i,
-    /\bcbd\b/i,
-    /\bthc\b/i
+  // Patterns that indicate a contextual follow-up
+  const followUpPatterns = [
+    /^what about\s+/,
+    /^how about\s+/,
+    /^and\s+/,
+    /^also\s+/
   ];
-
-  for (const pattern of brandPatterns) {
-    const match = query.match(pattern);
-    if (match) return match[0].toLowerCase().replace('-', '');
-  }
-  return null;
-}
-
-function extractStateFromQuery(query: string): string | null {
-  const statePattern = /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b/i;
-  const match = query.match(statePattern);
-  return match ? match[0] : null;
-}
-
-function extractFileType(query: string): string | null {
-  const fileTypes = ['pdf', 'brochure', 'document', 'file', 'report'];
-  for (const type of fileTypes) {
-    if (query.includes(type)) return type;
-  }
-  return null;
-}
-
-function extractRelevantTags(query: string, context: any): string[] {
-  const tags = [];
   
-  // Add context-based tags
-  if (context.brand) tags.push(context.brand);
-  if (context.state) tags.push(context.state.toLowerCase());
-  if (context.product) tags.push(context.product);
+  // Check if the query is short and matches follow-up patterns
+  const isShortFollowUp = lowerQuery.length < 30 && followUpPatterns.some(pattern => pattern.test(lowerQuery));
   
-  // Add query-based tags
-  const queryWords = query.toLowerCase().split(/\s+/);
-  const relevantWords = queryWords.filter(word => 
-    word.length > 2 && 
-    !['the', 'and', 'for', 'are', 'can', 'our', 'you', 'what', 'how', 'where', 'when', 'why'].includes(word)
-  );
+  // Check if we have meaningful inherited context
+  const hasInheritedContext = inheritedContext.state || inheritedContext.wasLegalQuery || inheritedContext.wasListQuery;
   
-  tags.push(...relevantWords.slice(0, 5)); // Limit to 5 most relevant words
-  
-  return [...new Set(tags)]; // Remove duplicates
+  return isShortFollowUp && hasInheritedContext;
 }
 
-function determineLegalComplexity(query: string): string {
-  if (query.includes('regulation') || query.includes('compliance') || query.includes('enforcement')) {
-    return 'complex';
-  } else if (query.includes('legal') || query.includes('allow')) {
-    return 'moderate';
-  }
-  return 'basic';
-}
-
-function determineIntentType(query: string): string {
-  if (query.includes('legal') || query.includes('allow') || query.includes('regulation')) {
-    return 'legal_inquiry';
-  } else if (query.includes('file') || query.includes('document') || query.includes('brochure')) {
-    return 'document_search';
-  } else if (query.includes('list') || query.includes('what products')) {
-    return 'product_listing';
-  }
-  return 'general_inquiry';
-}
-
-function determineSourceStrategy(analysis: any) {
-  const strategy = {
-    internalSources: [] as any[],
-    shouldProvideDirectAnswer: true,
-    shouldCrawlOfficialSources: false,
-    strategy: 'direct_internal_answer'
-  };
-
-  // Prioritize sources based on query type and product category
-  if (analysis.isProductLegality || analysis.requiresLegalAnalysis) {
-    strategy.internalSources.push({ name: 'state_map', priority: 10 });
-    strategy.internalSources.push({ name: 'state_excise_taxes', priority: 8 });
-  }
-  
-  // Only include knowledge base if it's relevant to the detected category
-  if (analysis.category) {
-    strategy.internalSources.push({ name: 'knowledge_base', priority: 6 });
-  }
-
-  return strategy;
-}
-
-async function queryKnowledgeBaseEnhanced(supabase: any, query: string, analysis: any) {
-  // Enhanced knowledge base query with category filtering
-  const keywords = query.toLowerCase()
-    .split(/\s+/)
-    .filter(word => word.length > 2 && !['the', 'and', 'for', 'are', 'can', 'our', 'you'].includes(word))
-    .slice(0, 8);
-
-  console.log('Knowledge base keywords:', keywords);
-
-  const enhancedParams = {
-    query: query,
-    tags: analysis.tags,
-    category: analysis.category // Add category filter
-  };
-
-  console.log('Enhanced knowledge base query with params:', enhancedParams);
-
+async function detectStateInText(text: string, supabase: any) {
   try {
-    const { data, error } = await supabase
-      .from('knowledge_entries')
-      .select('*')
-      .eq('is_active', true)
-      .or(
-        keywords.map(keyword => `content.ilike.%${keyword}%`).join(',') + ',' +
-        keywords.map(keyword => `title.ilike.%${keyword}%`).join(',')
-      )
-      .limit(5);
+    const { data: states, error } = await supabase
+      .from('states')
+      .select('name');
+    
+    if (!error && states) {
+      for (const state of states) {
+        const statePattern = new RegExp(`\\b${state.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (statePattern.test(text)) {
+          return state.name;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching states:', error);
+  }
+  return null;
+}
 
-    if (error) {
-      console.error('Knowledge base query error:', error);
-      return null;
+async function detectBrandInText(text: string, supabase: any) {
+  try {
+    const { data: brands, error } = await supabase
+      .from('brands')
+      .select('name');
+    
+    if (!error && brands) {
+      for (const brand of brands) {
+        const brandPattern = new RegExp(`\\b${brand.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (brandPattern.test(text)) {
+          return brand.name;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+  }
+  return null;
+}
+
+function detectProductInText(text: string) {
+  const productMatches = [
+    { pattern: /juice head pouches?/i, name: 'Pouches' },
+    { pattern: /5k disposables?/i, name: '5K Disposable' },
+    { pattern: /galaxy treats disposables?/i, name: 'Disposable' },
+    { pattern: /disposables?/i, name: 'Disposable' },
+    { pattern: /pouches?/i, name: 'Pouches' },
+    { pattern: /gummies/i, name: 'Gummies' },
+    { pattern: /pre-?rolls?/i, name: 'Pre-Roll' },
+    { pattern: /vapes?/i, name: 'Vape' },
+    { pattern: /carts?/i, name: 'Cart' },
+    { pattern: /edibles?/i, name: 'Edible' },
+    { pattern: /kratom/i, name: 'Kratom' },
+    { pattern: /alcohol armor/i, name: 'Alcohol Armor' }
+  ];
+  
+  for (const productMatch of productMatches) {
+    if (productMatch.pattern.test(text)) {
+      return productMatch.name;
+    }
+  }
+  return null;
+}
+
+function determineEnhancedSourceStrategy(queryAnalysis: any) {
+  const internalSources = [];
+  const shouldProvideDirectAnswer = queryAnalysis.confidenceLevel === 'high' || 
+    (queryAnalysis.confidenceLevel === 'medium' && !queryAnalysis.requiresOfficialCrawling);
+  
+  // Enhanced decision logic for when to crawl official sources
+  const shouldCrawlOfficialSources = queryAnalysis.requiresOfficialCrawling || 
+    (queryAnalysis.isWhyBannedQuestion && queryAnalysis.confidenceLevel === 'low') ||
+    queryAnalysis.isBillTextRequest ||
+    queryAnalysis.isEnforcementRequest ||
+    (queryAnalysis.requiresLegalAnalysis && queryAnalysis.legalComplexity === 'complex');
+  
+  // Priority-based internal source selection - only include files when explicitly requested
+  if (queryAnalysis.isFileSearch) {
+    internalSources.push({ name: 'drive_files', priority: 10 });
+    internalSources.push({ name: 'knowledge_base', priority: 7 });
+  }
+  
+  if (queryAnalysis.isProductLegality) {
+    internalSources.push({ name: 'state_map', priority: 10 });
+    if (queryAnalysis.state) {
+      internalSources.push({ name: 'state_excise_taxes', priority: 8 });
+    }
+    internalSources.push({ name: 'knowledge_base', priority: 6 });
+    // Only include files for legality questions if explicitly requested
+    if (queryAnalysis.isFileSearch) {
+      internalSources.push({ name: 'drive_files', priority: 5 });
+    }
+  }
+  
+  // For general queries, focus on knowledge base and only include files/state data if contextually relevant
+  if (queryAnalysis.intentType === 'general' || internalSources.length === 0) {
+    internalSources.push({ name: 'knowledge_base', priority: 8 });
+    
+    // Only include files if this is a file search or has file-related context
+    if (queryAnalysis.isFileSearch) {
+      internalSources.push({ name: 'drive_files', priority: 6 });
+    }
+    
+    // Only include state data if a state is mentioned
+    if (queryAnalysis.state) {
+      internalSources.push({ name: 'state_map', priority: 7 });
+    }
+  }
+  
+  // Remove duplicates and sort by priority
+  const uniqueInternalSources = internalSources.filter((source, index, self) => 
+    index === self.findIndex(s => s.name === source.name)
+  ).sort((a, b) => b.priority - a.priority);
+  
+  return {
+    internalSources: uniqueInternalSources,
+    shouldProvideDirectAnswer,
+    shouldCrawlOfficialSources,
+    strategy: shouldCrawlOfficialSources ? 'comprehensive_legal_with_crawling' : 
+              shouldProvideDirectAnswer ? 'direct_internal_answer' : 'standard'
+  };
+}
+
+async function queryStateMapEnhanced(supabase: any, params: any) {
+  return await queryStateMap(supabase, params);
+}
+
+async function queryStateMap(supabase: any, params: any) {
+  try {
+    const { product, brand, state, isListQuery } = params;
+    
+    if (!state) {
+      console.log('No state detected, cannot query state map');
+      return [];
     }
 
-    // Filter results by category relevance
-    const filteredData = data?.filter(entry => {
-      if (!analysis.category) return true;
-      
-      const content = (entry.content + ' ' + entry.title).toLowerCase();
-      
-      // Category-specific filtering
-      if (analysis.category === 'cannabis') {
-        return content.includes('delta') || content.includes('thc') || content.includes('cbd') || content.includes('cannabis') || content.includes('hemp');
-      } else if (analysis.category === 'nicotine') {
-        return content.includes('nicotine') || content.includes('tobacco') || content.includes('vape');
-      }
-      
-      return true;
-    }) || [];
-
-    console.log('Enhanced knowledge base query returned', filteredData.length, 'results');
-
-    if (filteredData.length === 0) return null;
-
-    return {
-      source: 'Internal Knowledge Base',
-      type: 'knowledge_base',
-      data: filteredData.map(entry => `${entry.title}: ${entry.content}`).join('\n\n'),
-      found: true,
-      relevance: 'high'
-    };
-  } catch (error) {
-    console.error('Error querying knowledge base:', error);
-    return null;
-  }
-}
-
-async function queryStateProducts(supabase: any, analysis: any) {
-  console.log('Querying internal source state_map...');
-  
-  if (!analysis.state) return null;
-
-  try {
-    console.log('Searching for state:', analysis.state);
-    
+    // Step 1: Find the state
+    console.log(`Searching for state: ${state}`);
     const { data: stateData, error: stateError } = await supabase
       .from('states')
       .select('id, name')
-      .ilike('name', `%${analysis.state}%`)
-      .single();
-
-    if (stateError || !stateData) {
-      console.error('State not found:', analysis.state);
-      return null;
-    }
-
-    console.log('Found state:', stateData.name, 'with ID:', stateData.id);
-
-    // Query for products with category filtering
-    let productsQuery = supabase
-      .from('state_allowed_products')
-      .select(`
-        product_id,
-        products!inner(id, name, brand:brands(id, name))
-      `)
-      .eq('state_id', stateData.id);
-
-    // Apply brand/product filtering if specified
-    if (analysis.brand) {
-      console.log('Searching for brand only:', analysis.brand);
-      productsQuery = productsQuery.or(`products.brands.name.ilike.%${analysis.brand}%,products.name.ilike.%${analysis.brand}%`);
-    }
-
-    const { data: productData, error: productError } = await productsQuery;
-
-    if (productError) {
-      console.error('Error querying products:', productError);
-    }
-
-    if (!productData || productData.length === 0) {
-      console.log('No products found, returning general state info');
-      return {
-        source: 'Product Legality Data (Internal Database)',
-        type: 'state_products',
-        data: `No specific product information found for "${analysis.brand || 'specified products'}" in ${stateData.name}. Please check the product name or contact compliance for verification.`,
-        found: false,
-        state: stateData.name,
-        relevance: 'medium'
-      };
-    }
-
-    const productList = productData.map(item => 
-      `${item.products.brand?.name || 'Unknown Brand'} - ${item.products.name}`
-    ).join('\n- ');
-
-    return {
-      source: 'Product Legality Data (Internal Database)',
-      type: 'state_products',
-      data: `Allowed products in ${stateData.name}:\n- ${productList}`,
-      found: true,
-      state: stateData.name,
-      relevance: 'high'
-    };
-  } catch (error) {
-    console.error('Error in queryStateProducts:', error);
-    return null;
-  }
-}
-
-async function queryExciseTaxes(supabase: any, state: string | null) {
-  if (!state) return null;
-  
-  console.log('Querying excise taxes for state:', state);
-  
-  try {
-    const { data: stateData } = await supabase
-      .from('states')
-      .select('id')
       .ilike('name', `%${state}%`)
-      .single();
-
-    if (!stateData) return null;
-
-    const { data: taxData } = await supabase
-      .from('state_excise_taxes')
-      .select('excise_tax_info')
-      .eq('state_id', stateData.id)
-      .single();
-
-    if (!taxData?.excise_tax_info) {
-      return {
-        source: 'State Excise Tax Information (Internal Database)',
-        type: 'excise_taxes',
-        data: `No excise tax information is currently available for ${state}. Please contact compliance for the latest tax requirements.`,
-        found: false,
-        relevance: 'low'
-      };
+      .limit(1);
+    
+    if (stateError) {
+      console.error('Error finding state:', stateError);
+      return [];
     }
-
-    return {
-      source: 'State Excise Tax Information (Internal Database)',
-      type: 'excise_taxes',
-      data: taxData.excise_tax_info,
-      found: true,
-      relevance: 'high'
-    };
+    
+    if (!stateData || stateData.length === 0) {
+      console.log('State not found:', state);
+      return [];
+    }
+    
+    const foundState = stateData[0];
+    console.log(`Found state: ${foundState.name} with ID: ${foundState.id}`);
+    
+    // Step 2: Handle list queries vs specific product queries differently
+    if (isListQuery && brand) {
+      console.log(`List query detected for brand: ${brand}`);
+      
+      // Find the brand
+      const { data: brandData, error: brandError } = await supabase
+        .from('brands')
+        .select('id, name')
+        .ilike('name', `%${brand}%`)
+        .limit(1);
+      
+      if (!brandError && brandData && brandData.length > 0) {
+        const foundBrand = brandData[0];
+        console.log(`Found brand: ${foundBrand.name} with ID: ${foundBrand.id}`);
+        
+        // Get all products from this brand that are legal in this state
+        const { data: legalProducts, error: legalError } = await supabase
+          .from('state_allowed_products')
+          .select(`
+            products (
+              id,
+              name,
+              brands (
+                id,
+                name
+              )
+            )
+          `)
+          .eq('state_id', foundState.id)
+          .eq('products.brand_id', foundBrand.id);
+        
+        if (!legalError && legalProducts && legalProducts.length > 0) {
+          console.log(`Found ${legalProducts.length} legal products for ${foundBrand.name} in ${foundState.name}`);
+          
+          const productList = legalProducts
+            .map(item => item.products)
+            .filter(product => product !== null)
+            .map(product => product.name);
+          
+          return [{
+            title: `${foundBrand.name} Products Legal in ${foundState.name}`,
+            content: `The following ${foundBrand.name} products are legal in ${foundState.name}:\n\n${productList.map(name => `• ${name}`).join('\n')}\n\nTotal: ${productList.length} products`,
+            state: foundState.name,
+            brand: foundBrand.name,
+            productCount: productList.length,
+            productList: productList,
+            isLegal: true,
+            source: 'state_map'
+          }];
+        } else {
+          console.log(`No legal products found for ${foundBrand.name} in ${foundState.name}`);
+          return [{
+            title: `${foundBrand.name} Products in ${foundState.name}`,
+            content: `No ${foundBrand.name} products are currently legal in ${foundState.name}. Please check with compliance for the latest regulations.`,
+            state: foundState.name,
+            brand: foundBrand.name,
+            productCount: 0,
+            isLegal: false,
+            source: 'state_map'
+          }];
+        }
+      }
+    }
+    
+    // Enhanced product search with brand + product combination (existing logic)
+    let productResults = [];
+    
+    if (brand && product) {
+      console.log(`Searching for brand: ${brand} and product: ${product}`);
+      
+      // Step 2a: Find the brand
+      const { data: brandData, error: brandError } = await supabase
+        .from('brands')
+        .select('id, name')
+        .ilike('name', `%${brand}%`)
+        .limit(1);
+      
+      if (!brandError && brandData && brandData.length > 0) {
+        const foundBrand = brandData[0];
+        console.log(`Found brand: ${foundBrand.name} with ID: ${foundBrand.id}`);
+        
+        // Step 2b: Search for products from this brand matching the product type
+        const { data: brandProducts, error: brandProductsError } = await supabase
+          .from('products')
+          .select(`
+            id,
+            name,
+            brands (
+              id,
+              name
+            )
+          `)
+          .eq('brand_id', foundBrand.id)
+          .ilike('name', `%${product}%`);
+        
+        if (!brandProductsError && brandProducts && brandProducts.length > 0) {
+          console.log(`Found ${brandProducts.length} products for brand ${foundBrand.name} matching "${product}"`);
+          
+          // Prioritize exact matches
+          const exactMatch = brandProducts.find(p => 
+            p.name.toLowerCase() === product.toLowerCase()
+          );
+          
+          if (exactMatch) {
+            productResults = [exactMatch];
+            console.log(`Found exact product match: ${exactMatch.name}`);
+          } else {
+            productResults = brandProducts;
+            console.log(`Using closest product matches for ${product}`);
+          }
+        }
+      }
+    } else if (product) {
+      // Fallback: search by product only
+      console.log(`Searching for product only: ${product}`);
+      
+      const { data: exactProducts, error: exactError } = await supabase
+        .from('products')
+        .select(`
+          id,
+          name,
+          brands (
+            id,
+            name
+          )
+        `)
+        .ilike('name', `%${product}%`);
+      
+      if (!exactError && exactProducts && exactProducts.length > 0) {
+        console.log(`Found ${exactProducts.length} products matching "${product}"`);
+        
+        // If we have a brand preference, filter by it
+        if (brand) {
+          const brandFiltered = exactProducts.filter(p => 
+            p.brands?.name && p.brands.name.toLowerCase().includes(brand.toLowerCase())
+          );
+          if (brandFiltered.length > 0) {
+            productResults = brandFiltered;
+            console.log(`Filtered to ${brandFiltered.length} products matching brand preference`);
+          } else {
+            productResults = exactProducts;
+          }
+        } else {
+          // Prioritize exact name matches
+          const exactMatch = exactProducts.find(p => 
+            p.name.toLowerCase() === product.toLowerCase()
+          );
+          productResults = exactMatch ? [exactMatch] : exactProducts;
+        }
+      }
+    } else if (brand) {
+      // Search by brand only
+      console.log(`Searching for brand only: ${brand}`);
+      
+      const { data: brandData, error: brandError } = await supabase
+        .from('brands')
+        .select('id, name')
+        .ilike('name', `%${brand}%`)
+        .limit(1);
+      
+      if (!brandError && brandData && brandData.length > 0) {
+        const foundBrand = brandData[0];
+        console.log(`Found brand: ${foundBrand.name}`);
+        
+        const { data: brandProducts, error: brandProductsError } = await supabase
+          .from('products')
+          .select(`
+            id,
+            name,
+            brands (
+              id,
+              name
+            )
+          `)
+          .eq('brand_id', foundBrand.id);
+        
+        if (!brandProductsError && brandProducts) {
+          productResults = brandProducts;
+          console.log(`Found ${productResults.length} products for brand ${foundBrand.name}`);
+        }
+      }
+    }
+    
+    // Step 3: Check product legality in the state
+    if (productResults.length > 0) {
+      console.log(`Checking legality for ${productResults.length} products`);
+      
+      // Check the first (most relevant) product
+      const productItem = productResults[0];
+      console.log(`Checking legality for product ID ${productItem.id} (${productItem.name}) in state ID ${foundState.id}`);
+      
+      const { data: legalityData, error: legalityError } = await supabase
+        .from('state_allowed_products')
+        .select('*')
+        .eq('state_id', foundState.id)
+        .eq('product_id', productItem.id);
+      
+      if (legalityError) {
+        console.error('Error checking legality:', legalityError);
+        return [];
+      }
+      
+      const isLegal = legalityData && legalityData.length > 0;
+      console.log(`Product ${productItem.name} is ${isLegal ? 'LEGAL' : 'NOT LEGAL'} in ${foundState.name}`);
+      
+      return [{
+        title: `${productItem.name} Legality in ${foundState.name}`,
+        content: `${productItem.name} from ${productItem.brands?.name || 'Unknown Brand'} is ${isLegal ? 'legal' : 'not legal'} in ${foundState.name}.`,
+        state: foundState.name,
+        product: productItem.name,
+        brand: productItem.brands?.name,
+        isLegal,
+        source: 'state_map'
+      }];
+    } else {
+      console.log('No products found, returning general state info');
+      const searchTerm = brand && product ? `${brand} ${product}` : (product || brand || 'the specified product');
+      return [{
+        title: `Product Information for ${foundState.name}`,
+        content: `No specific product information found for "${searchTerm}" in ${foundState.name}. Please check the product name or contact compliance for verification.`,
+        state: foundState.name,
+        product: product,
+        brand: brand,
+        isLegal: null,
+        source: 'state_map'
+      }];
+    }
+    
   } catch (error) {
-    console.error('Error querying excise taxes:', error);
-    return null;
+    console.error('Error in queryStateMap:', error);
+    return [];
   }
 }
 
-async function generateEnhancedAIResponse(message: string, contextData: any[], analysis: any) {
-  console.log('Generating enhanced AI response with', contextData.length, 'context items');
-  console.log('Query analysis for AI:', analysis);
+async function queryStateExciseTaxes(supabase: any, params: any) {
+  try {
+    const { state, query } = params;
+    
+    if (!state) {
+      console.log('No state provided for excise tax query');
+      return [];
+    }
 
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    console.log(`Querying excise taxes for state: ${state}`);
+
+    // Find the state ID
+    const { data: stateData, error: stateError } = await supabase
+      .from('states')
+      .select('id, name')
+      .ilike('name', `%${state}%`)
+      .limit(1);
+
+    if (stateError || !stateData || stateData.length === 0) {
+      console.log('State not found for excise tax query');
+      return [];
+    }
+
+    const foundState = stateData[0];
+
+    // Query excise tax information
+    const { data: exciseTaxData, error: exciseTaxError } = await supabase
+      .from('state_excise_taxes')
+      .select('*')
+      .eq('state_id', foundState.id);
+
+    if (exciseTaxError) {
+      console.error('Error querying excise taxes:', exciseTaxError);
+      return [];
+    }
+
+    if (!exciseTaxData || exciseTaxData.length === 0) {
+      return [{
+        title: `No Excise Tax Information for ${foundState.name}`,
+        content: `No excise tax information is currently available for ${foundState.name}. Please contact compliance for the latest tax requirements.`,
+        state: foundState.name,
+        source: 'state_excise_taxes'
+      }];
+    }
+
+    const exciseTaxInfo = exciseTaxData[0];
+    return [{
+      title: `Excise Tax Information for ${foundState.name}`,
+      content: exciseTaxInfo.excise_tax_info || `Excise tax information is available for ${foundState.name} but content is not accessible.`,
+      state: foundState.name,
+      lastUpdated: exciseTaxInfo.updated_at,
+      source: 'state_excise_taxes'
+    }];
+
+  } catch (error) {
+    console.error('Error in queryStateExciseTaxes:', error);
+    return [];
+  }
+}
+
+async function queryFirecrawlLegalSources(firecrawlApiKey: string, queryAnalysis: any) {
+  try {
+    console.log('Initiating enhanced Firecrawl legal source crawling for official sources');
+
+    const { state, product, brand, isWhyBannedQuestion, isBillTextRequest, isEnforcementRequest } = queryAnalysis;
+    
+    // Build targeted government URLs for crawling with enhanced focus
+    const govUrls = [];
+    
+    if (state) {
+      // State-specific government sites with enhanced targeting
+      const stateCode = getStateCode(state);
+      if (stateCode) {
+        // Primary state government sites
+        govUrls.push(`https://www.${stateCode.toLowerCase()}.gov`);
+        govUrls.push(`https://${stateCode.toLowerCase()}.gov`);
+        
+        // State-specific regulatory pages for cannabis/hemp
+        if (product && (product.toLowerCase().includes('hemp') || product.toLowerCase().includes('cbd') || product.toLowerCase().includes('thc'))) {
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/cannabis`);
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/hemp`);
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/marijuana`);
+        }
+      }
+    }
+    
+    // Federal sources for hemp/cannabis regulations with enhanced targeting
+    if (product && (product.toLowerCase().includes('hemp') || product.toLowerCase().includes('cbd') || product.toLowerCase().includes('thc'))) {
+      govUrls.push('https://www.fda.gov/news-events/public-health-focus/fda-regulation-cannabis-and-cannabis-derived-products');
+      govUrls.push('https://www.usda.gov/topics/farming/hemp');
+      govUrls.push('https://www.fda.gov/consumers/consumer-updates/what-you-need-know-and-what-were-working-find-out-about-products-containing-cannabis-or-cannabis');
+    }
+
+    // Enhanced targeting based on query type
+    if (isBillTextRequest || isEnforcementRequest) {
+      if (state) {
+        const stateCode = getStateCode(state);
+        if (stateCode) {
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/legislature`);
+          govUrls.push(`https://www.${stateCode.toLowerCase()}.gov/laws`);
+        }
+      }
+    }
+
+    if (govUrls.length === 0) {
+      console.log('No relevant government URLs identified for crawling');
+      return [];
+    }
+
+    const results = [];
+    
+    for (const url of govUrls.slice(0, 3)) { // Increased to 3 URLs for better coverage
+      try {
+        console.log(`Crawling government source: ${url}`);
+        
+        const crawlResponse = await fetch('https://api.firecrawl.dev/v0/scrape', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${firecrawlApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            url: url,
+            formats: ['markdown'],
+            onlyMainContent: true,
+            limit: 1
+          }),
+        });
+
+        if (!crawlResponse.ok) {
+          console.error(`Firecrawl API error for ${url}:`, crawlResponse.status);
+          continue;
+        }
+
+        const crawlData = await crawlResponse.json();
+        
+        if (crawlData.success && crawlData.data) {
+          console.log(`Successfully crawled ${url}`);
+          
+          // Extract relevant content based on query with enhanced filtering
+          const content = crawlData.data.markdown || crawlData.data.content || '';
+          const relevantContent = extractRelevantLegalContent(content, queryAnalysis);
+          
+          if (relevantContent) {
+            results.push({
+              title: `Official Government Source: ${url}`,
+              content: relevantContent,
+              url: url,
+              source: 'firecrawl_legal',
+              crawledAt: new Date().toISOString(),
+              sourceType: 'government'
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`Error crawling ${url}:`, error);
+      }
+    }
+
+    console.log(`Enhanced Firecrawl returned ${results.length} official government sources`);
+    return results;
+
+  } catch (error) {
+    console.error('Error in queryFirecrawlLegalSources:', error);
+    return [];
+  }
+}
+
+function getStateCode(stateName: string): string | null {
+  const stateCodes: { [key: string]: string } = {
+    'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+    'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
+    'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+    'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+    'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+    'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+    'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+    'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+    'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+    'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'
+  };
   
-  if (!openAIApiKey) {
-    console.error('OpenAI API key not found');
-    return generateFallbackResponse(message, contextData, analysis);
+  return stateCodes[stateName] || null;
+}
+
+function extractRelevantLegalContent(content: string, queryAnalysis: any): string | null {
+  const { product, brand, state, isWhyBannedQuestion, isBillTextRequest, isEnforcementRequest } = queryAnalysis;
+  const keywords = [];
+  
+  if (product) keywords.push(product.toLowerCase());
+  if (brand) keywords.push(brand.toLowerCase());
+  if (state) keywords.push(state.toLowerCase());
+  
+  // Enhanced keywords based on query type
+  keywords.push('hemp', 'cbd', 'thc', 'cannabis', 'regulation', 'legal', 'law');
+  
+  if (isWhyBannedQuestion) {
+    keywords.push('banned', 'prohibited', 'restriction', 'violation');
   }
   
-  // Build enhanced context with source attribution
-  const enhancedContext = contextData.map(item => {
-    return `**${item.source}:**\n${item.data}`;
-  }).join('\n\n');
+  if (isBillTextRequest) {
+    keywords.push('bill', 'legislation', 'statute', 'code', 'section');
+  }
+  
+  if (isEnforcementRequest) {
+    keywords.push('enforcement', 'violation', 'penalty', 'compliance', 'inspection');
+  }
+  
+  const sentences = content.split(/[.!?]+/);
+  const relevantSentences = [];
+  
+  for (const sentence of sentences) {
+    const lowerSentence = sentence.toLowerCase();
+    const matchCount = keywords.filter(keyword => lowerSentence.includes(keyword)).length;
+    
+    // Enhanced matching criteria
+    if (matchCount >= 2 || (matchCount >= 1 && sentence.length < 300)) {
+      relevantSentences.push(sentence.trim());
+    }
+  }
+  
+  if (relevantSentences.length === 0) return null;
+  
+  // Return more content for complex queries
+  const maxSentences = queryAnalysis.legalComplexity === 'complex' ? 8 : 5;
+  return relevantSentences.slice(0, maxSentences).join('. ') + '.';
+}
 
-  console.log('Enhanced context sent to AI:', enhancedContext.substring(0, 500) + '...');
-
-  // Enhanced system prompt with strict source citation requirements
-  const systemPrompt = `You are a compliance assistant for the Streamline Group, specializing in product legality and regulatory information.
-
-CRITICAL REQUIREMENTS:
-1. **MANDATORY SOURCE CITATION**: You MUST cite the specific source for every piece of information you provide. Use the exact source names provided in the context.
-
-2. **PRODUCT CATEGORY CONSISTENCY**: Stay strictly within the product category being discussed. Do NOT mix different product categories (e.g., if asked about cannabis/Delta-8, do NOT discuss nicotine products or tobacco regulations).
-
-3. **ACCURACY FIRST**: Only provide information that is explicitly supported by the provided context. If information is missing or unclear, clearly state this limitation.
-
-4. **CLEAR SOURCE ATTRIBUTION**: Format your response with clear sections showing:
-   - **Source**: [Exact source name from context]
-   - **Information**: [Specific details from that source]
-
-5. **CONTEXT VALIDATION**: Before including any information, verify it's relevant to the specific product/topic being discussed.
-
-RESPONSE FORMAT:
-- Start with a clear, direct answer
-- Provide supporting details with explicit source citations
-- Use bullet points for clarity
-- End with next steps or recommendations if appropriate
-- If sources cite government websites or official documents, include those references
-
-DO NOT:
-- Mix information from different product categories
-- Provide information without proper source attribution
-- Include irrelevant regulatory content
-- Make assumptions beyond what's explicitly stated in the sources
-
-Current query context: ${analysis.category ? `Product Category: ${analysis.category}` : 'General inquiry'}
-${analysis.state ? `State: ${analysis.state}` : ''}
-${analysis.brand ? `Brand/Product: ${analysis.brand}` : ''}`;
-
+async function queryDriveFilesEnhanced(supabase: any, params: any) {
   try {
+    const { query, fileType, brand, category } = params;
+    console.log('Enhanced drive files search with params:', params);
+    
+    // Enhanced keyword extraction that preserves important short words
+    const keywords = extractEnhancedKeywords(query);
+    console.log('Enhanced keywords extracted:', keywords);
+    
+    if (keywords.length === 0) {
+      console.log('No valid keywords found');
+      return [];
+    }
+    
+    // Multi-pass search strategy
+    const searchResults = [];
+    
+    // Pass 1: Exact category + brand + file type match
+    if (category && brand && fileType) {
+      console.log(`Pass 1: Searching for ${fileType} in ${category} category for ${brand}`);
+      const exactResults = await searchWithCriteria(supabase, {
+        category: category,
+        brand: brand,
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (exactResults.length > 0) {
+        console.log(`Pass 1 found ${exactResults.length} exact matches`);
+        return rankAndSortResults(exactResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 2: Category + file type match
+    if (category && fileType) {
+      console.log(`Pass 2: Searching for ${fileType} in ${category} category`);
+      const categoryResults = await searchWithCriteria(supabase, {
+        category: category,
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (categoryResults.length > 0) {
+        console.log(`Pass 2 found ${categoryResults.length} category matches`);
+        return rankAndSortResults(categoryResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 3: Brand + file type match
+    if (brand && fileType) {
+      console.log(`Pass 3: Searching for ${fileType} files from ${brand}`);
+      const brandResults = await searchWithCriteria(supabase, {
+        brand: brand,
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (brandResults.length > 0) {
+        console.log(`Pass 3 found ${brandResults.length} brand + file type matches`);
+        return rankAndSortResults(brandResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 4: File type only
+    if (fileType) {
+      console.log(`Pass 4: Searching for ${fileType} files`);
+      const fileTypeResults = await searchWithCriteria(supabase, {
+        fileNameContains: fileType,
+        keywords: keywords
+      });
+      if (fileTypeResults.length > 0) {
+        console.log(`Pass 4 found ${fileTypeResults.length} file type matches`);
+        return rankAndSortResults(fileTypeResults, { fileType, brand, category });
+      }
+    }
+    
+    // Pass 5: Keyword-based search as fallback
+    console.log('Pass 5: Fallback keyword search');
+    const keywordResults = await searchWithCriteria(supabase, {
+      keywords: keywords
+    });
+    
+    console.log(`Pass 5 found ${keywordResults.length} keyword matches`);
+    return rankAndSortResults(keywordResults, { fileType, brand, category });
+    
+  } catch (error) {
+    console.error('Error in queryDriveFilesEnhanced:', error);
+    return [];
+  }
+}
+
+function extractEnhancedKeywords(query: string): string[] {
+  // Preserve important file-related short words
+  const importantShortWords = new Set(['logo', 'pdf', 'doc', 'img', 'pic', 'pos']);
+  const stopWords = new Set(['the', 'is', 'are', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an', 'me', 'find']);
+  
+  return query
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => {
+      // Keep important short words even if they're normally filtered
+      if (importantShortWords.has(word)) return true;
+      // Filter out stop words and very short words
+      return word.length > 2 && !stopWords.has(word);
+    })
+    .slice(0, 8); // Increase limit to capture more context
+}
+
+async function searchWithCriteria(supabase: any, criteria: any) {
+  try {
+    console.log('Searching with criteria:', criteria);
+    
+    let query = supabase
+      .from('drive_files')
+      .select(`
+        id,
+        file_name,
+        file_url,
+        category,
+        brand,
+        subcategory_1,
+        subcategory_2,
+        file_content (
+          content
+        )
+      `);
+    
+    // Apply category filter
+    if (criteria.category) {
+      query = query.eq('category', criteria.category);
+    }
+    
+    // Apply brand filter
+    if (criteria.brand) {
+      query = query.ilike('brand', `%${criteria.brand}%`);
+    }
+    
+    // Apply file name contains filter
+    if (criteria.fileNameContains) {
+      query = query.ilike('file_name', `%${criteria.fileNameContains}%`);
+    }
+    
+    // Apply keyword filters
+    if (criteria.keywords && criteria.keywords.length > 0) {
+      const keywordConditions = criteria.keywords.map(keyword => `file_name.ilike.%${keyword}%`);
+      const orCondition = keywordConditions.join(',');
+      query = query.or(orCondition);
+    }
+    
+    const { data: files, error } = await query.limit(15);
+    
+    if (error) {
+      console.error('Search query error:', error);
+      return [];
+    }
+    
+    console.log(`Search criteria returned ${files?.length || 0} results`);
+    return files || [];
+    
+  } catch (error) {
+    console.error('Error in searchWithCriteria:', error);
+    return [];
+  }
+}
+
+function rankAndSortResults(results: any[], searchContext: any) {
+  const { fileType, brand, category } = searchContext;
+  
+  return results
+    .map(file => {
+      let score = 0;
+      const fileName = file.file_name.toLowerCase();
+      
+      // Score based on file type match
+      if (fileType && fileName.includes(fileType.toLowerCase())) {
+        score += 100;
+      }
+      
+      // Score based on category match
+      if (category && file.category === category) {
+        score += 50;
+      }
+      
+      // Score based on brand match
+      if (brand && file.brand && file.brand.toLowerCase().includes(brand.toLowerCase())) {
+        score += 75;
+      }
+      
+      // Boost exact matches
+      if (fileType && brand && fileName.includes(fileType.toLowerCase()) && file.brand && file.brand.toLowerCase().includes(brand.toLowerCase())) {
+        score += 200;
+      }
+      
+      return { ...file, relevanceScore: score };
+    })
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .map(file => ({
+      title: file.file_name,
+      content: file.file_content?.[0]?.content || `File: ${file.file_name}`,
+      category: file.category,
+      brand: file.brand,
+      file_name: file.file_name,
+      file_url: file.file_url,
+      download_url: file.file_url,
+      relevanceScore: file.relevanceScore
+    }));
+}
+
+async function queryKnowledgeBaseEnhanced(supabase: any, params: any) {
+  try {
+    const { query, tags } = params;
+    console.log('Enhanced knowledge base query with params:', params);
+    
+    const keywords = extractEnhancedKeywords(query);
+    console.log('Knowledge base keywords:', keywords);
+    
+    if (keywords.length === 0 && (!tags || tags.length === 0)) {
+      return [];
+    }
+    
+    let queryBuilder = supabase
+      .from('knowledge_entries')
+      .select('*')
+      .eq('is_active', true);
+    
+    // Build search conditions
+    const conditions = [];
+    
+    // Content-based search
+    if (keywords.length > 0) {
+      const contentConditions = keywords.map(keyword => `content.ilike.%${keyword}%`);
+      conditions.push(contentConditions.join(','));
+    }
+    
+    // Tag-based search
+    if (tags && tags.length > 0) {
+      const tagConditions = tags.map(tag => `tags.cs.{${tag}}`);
+      conditions.push(tagConditions.join(','));
+    }
+    
+    if (conditions.length > 0) {
+      queryBuilder = queryBuilder.or(conditions.join(','));
+    }
+    
+    const { data: entries, error } = await queryBuilder.limit(10);
+    
+    if (error) {
+      console.error('Enhanced knowledge base query error:', error);
+      return [];
+    }
+    
+    console.log(`Enhanced knowledge base query returned ${entries?.length || 0} results`);
+    
+    return (entries || []).map(entry => ({
+      title: entry.title,
+      content: entry.content,
+      tags: entry.tags,
+      lastUpdated: entry.updated_at
+    }));
+    
+  } catch (error) {
+    console.error('Error in queryKnowledgeBaseEnhanced:', error);
+    return [];
+  }
+}
+
+async function generateEnhancedAIResponse(openaiApiKey: string, query: string, contextData: any[], queryAnalysis: any, userId: string = 'anonymous', crawlingNotification: string = '', conversationHistory: any[] = []) {
+  try {
+    console.log('Generating enhanced AI response with', contextData.length, 'context items');
+    console.log('Query analysis for AI:', queryAnalysis);
+    
+    // Build enhanced system prompt with co-founder communication style and official source awareness
+    let systemPrompt = `You are Streamline AI, a friendly business co-founder and expert assistant for Streamline Group employees. You provide accurate, comprehensive answers using internal company data and authoritative external sources, including official government sources when available.
+
+**TONE AND COMMUNICATION STYLE:**
+- Speak like a friendly, experienced co-founder — confident, concise, and clear
+- Avoid robotic or overly formal language - be conversational and personable  
+- Give practical examples when useful to illustrate your points
+- Show genuine interest in helping their business succeed
+- Use "we" language when appropriate to feel like a true business partner
+
+**CONTEXTUAL AWARENESS:**
+- You have access to the full conversation history and can understand follow-up questions in context
+- When users ask vague follow-ups like "what about [brand]", use context from previous messages to understand the complete question
+- If a previous question was about product legality in a specific state, and the user asks "what about [different brand]", assume they're asking about that brand's legality in the same state
+- Maintain conversation flow naturally without asking redundant clarification questions
+- Reference previous context when relevant to show you understand the ongoing conversation
+
+**RESPONSE FORMATTING REQUIREMENTS (CRITICAL):**
+- ALWAYS use **bold headings** for each major topic or section
+- Break up responses using bullet points or numbered lists for clarity
+- Use proper paragraph spacing between major ideas (double line breaks)
+- Keep responses mobile-optimized — avoid dense blocks of text
+- Highlight action steps clearly (e.g., "Start by doing X, then move to Y")
+
+For numbered lists, ensure proper spacing around each point:
+
+1. **First point** - Clear explanation with actionable details
+
+2. **Second point** - Adequate spacing and concrete guidance  
+
+3. **Third point** - Maintaining consistency throughout
+
+For bullet points, use dashes for consistent formatting:
+
+- **Clear bullet point** - Explanation with practical value
+
+- **Another bullet point** - Proper spacing and useful information
+
+- **Consistent formatting** - Throughout the entire response
+
+- Use \`backticks\` when mentioning specific tools, technologies, or technical terms
+- Break up long responses into digestible sections with descriptive **bold headers**
+- End complex advice with a clear "**Next Steps**" or "**Key Takeaways**" section
+- Use horizontal rules (---) to separate major sections when helpful
+- Ensure code blocks or examples have proper spacing around them
+
+**FILE & LINK FORMATTING GUIDELINES (MANDATORY AND CRITICAL):**
+When presenting file links, you MUST follow this EXACT format with NO exceptions:
+
+**Section Heading**
+- [Exact Link Title](https://complete-url-here)
+- [Another Link Title](https://complete-url-here)
+- [Third Link Title](https://complete-url-here)
+
+STRICT FORMATTING RULES:
+- NEVER use standalone dashes (-) on separate lines
+- NEVER add extra spacing between bullet points
+- ALWAYS use the format: "- [Link Title](URL)" with the dash directly attached
+- NEVER format links like this: "- Link Title\n- Download: URL" 
+- Group related links under appropriate **bold section headings** like:
+  - **Marketing Materials**
+  - **Product Images**
+  - **Sales Resources**
+  - **Regulatory Documents**
+- End sections with relevant disclaimers when applicable
+
+CORRECT EXAMPLE:
+**Marketing Materials**
+- [Juice Head Pouches Sales Sheet](https://drive.google.com/...)
+- [Juice Head Logo Package](https://drive.google.com/...)
+- [Juice Head POS Kit](https://drive.google.com/...)
+
+**Product Images**
+- [Juice Head Watermelon Lime](https://drive.google.com/...)
+- [Juice Head Blueberry Lemon](https://drive.google.com/...)
+
+NEVER format like this (WRONG):
+- Juice Head Pouches Sales Sheet
+  - Download: https://drive.google.com/...
+  
+- Juice Head Logo Package
+  - Download: https://drive.google.com/...
+
+**ENGAGEMENT AND CONVERSATION FLOW:**
+- End responses with helpful prompts to continue the conversation, such as:
+  - "Want help drafting that?"
+  - "Would you like a quick framework for that?"
+  - "Let me know if you want templates or tools for this."
+  - "Should we dive deeper into any of these areas?"
+  - "Would it help if I created a step-by-step plan for this?"
+  - "Should I crawl their website to get more current information?"
+- Make conversations feel interactive and supportive
+- Always leave the door open for follow-up questions or clarifications
+
+**OFFICIAL SOURCE CRAWLING CAPABILITIES:**
+- When using information from official government sources (.gov sites, state legislature, FDA, etc.), ALWAYS cite the source transparently
+- Use language like "According to this official government source..." or "Based on current .gov information..."
+- Include the URL when available for government sources
+- When information comes from internal databases vs external crawling, make this distinction clear
+
+**Core Capabilities:**
+- Product legality analysis by state with business reasoning
+- Internal document and file retrieval with download links
+- Regulatory compliance guidance with source citations
+- Sales support with brand-specific materials
+- Real-time legal analysis from government sources via official website crawling
+
+**Response Format Guidelines by Query Type:**
+
+For **Product Legality Questions**:
+- Give clear YES/NO answers when asking about specific products
+- Explain the business reasoning behind the determination
+- Include relevant state regulations or excise tax information
+- Cite both internal data and government sources when available
+- For "why" questions, provide comprehensive background with business context and official source citations
+
+For **File Search Requests**:
+- Present files using the mandatory link formatting under bold section headings
+- Group files by category (Marketing Materials, Product Images, etc.)
+- ALWAYS use [Link Title](URL) format with bullet points, never raw URLs or standalone dashes
+- Include relevant notes or disclaimers for each section
+- If specific files aren't found, suggest contacting Marketing or relevant departments
+
+For **List Queries** ("which products", "what products"):
+- Provide comprehensive numbered or bulleted lists
+- Include product counts and brand information
+- Format clearly for easy scanning
+- Cite the specific data sources used
+
+For **Complex Analysis with Official Sources**:
+- Combine internal data with external government sources
+- Provide multi-layered explanations with business implications
+- Include recent developments or changes when available from official sources
+- Cross-reference multiple authoritative sources with clear attribution
+- Use phrases like "According to official government sources..." when appropriate
+
+**Source Priority**: Internal State Map > Official Government Sources (when crawled) > Drive Files > Knowledge Base > External Research
+
+**Citation Format**: Always attribute information to specific sources and include confidence levels when appropriate. For government sources, include "Official Source:" prefix and URL when available.
+
+Always be helpful, accurate, professional, and cite your sources appropriately. When in doubt, recommend contacting the compliance team for verification.`;
+
+    // Include crawling notification if official sources were accessed
+    if (crawlingNotification) {
+      systemPrompt += `\n\n**CRAWLING NOTIFICATION**: You accessed official government sources for this query. Make sure to mention this and cite the sources appropriately.`;
+    }
+
+    // Build enhanced context with intelligent source blending and official source highlighting
+    let contextText = '';
+    
+    if (contextData.length > 0) {
+      // Group sources by type for better organization
+      const sourceGroups = {
+        state_map: [],
+        state_excise_taxes: [],
+        drive_files: [],
+        knowledge_base: [],
+        firecrawl_legal: []
+      };
+      
+      contextData.forEach(item => {
+        const sourceType = item.source || 'unknown';
+        if (sourceGroups[sourceType]) {
+          sourceGroups[sourceType].push(item);
+        }
+      });
+      
+      // Build context text with source grouping and consistent bullet formatting
+      const contextSections = [];
+      
+      if (sourceGroups.state_map.length > 0) {
+        contextSections.push(`**Product Legality Data (Internal Database):**\n${sourceGroups.state_map.map(item => `- ${item.content}`).join('\n')}`);
+      }
+      
+      if (sourceGroups.state_excise_taxes.length > 0) {
+        contextSections.push(`**State Excise Tax Information (Internal Database):**\n${sourceGroups.state_excise_taxes.map(item => `- ${item.content}`).join('\n')}`);
+      }
+      
+      if (sourceGroups.firecrawl_legal.length > 0) {
+        const officialSources = sourceGroups.firecrawl_legal.map(item => {
+          const urlInfo = item.url ? ` - Source URL: ${item.url}` : '';
+          return `- **Official Government Source**: ${item.content}${urlInfo}`;
+        }).join('\n');
+        contextSections.push(`**Official Government Sources (Recently Crawled):**\n${officialSources}`);
+      }
+      
+      if (sourceGroups.drive_files.length > 0) {
+        const filesList = sourceGroups.drive_files.map(item => {
+          const downloadLink = item.file_url ? `[${item.file_name}](${item.file_url})` : item.file_name;
+          const relevanceNote = item.relevanceScore ? ` (Relevance: ${item.relevanceScore})` : '';
+          return `- ${downloadLink}${item.category ? ` (Category: ${item.category})` : ''}${item.brand ? ` (Brand: ${item.brand})` : ''}${relevanceNote}`;
+        }).join('\n');
+        contextSections.push(`**Available Files (Internal Drive):**\n${filesList}`);
+      }
+      
+      if (sourceGroups.knowledge_base.length > 0) {
+        contextSections.push(`**Internal Knowledge Base:**\n${sourceGroups.knowledge_base.map(item => `- ${item.title}: ${item.content}`).join('\n')}`);
+      }
+      
+      contextText = contextSections.join('\n\n');
+    } else {
+      contextText = 'No specific information found in internal databases. Providing general guidance based on available knowledge.';
+    }
+
+    // Add crawling notification to context if applicable
+    if (crawlingNotification) {
+      contextText = `${crawlingNotification}\n\n${contextText}`;
+    }
+
+    // Build conversation context summary for better understanding
+    let conversationContext = '';
+    if (conversationHistory.length > 0) {
+      const recentMessages = conversationHistory.slice(-4); // Last 4 messages for context
+      conversationContext = `\n\n**Recent Conversation Context:**\n${recentMessages.map(msg => `${msg.role}: ${msg.content.substring(0, 200)}...`).join('\n')}`;
+    }
+
+    console.log('Enhanced context sent to AI:', contextText.substring(0, 500) + '...');
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
+        'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `${message}\n\nAvailable Information:\n${enhancedContext}` }
+          { 
+            role: 'user', 
+            content: `User Question: ${query}\n\nQuery Analysis: ${JSON.stringify(queryAnalysis)}\n\nAvailable Information:\n${contextText}${conversationContext}\n\nUser ID: ${userId}` 
+          }
         ],
-        temperature: 0.1,
-        max_tokens: 2000,
-        stream: false
+        temperature: 0.2,
+        max_tokens: 1500
       }),
     });
 
-    console.log('OpenAI API response status:', response.status);
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API error response:', errorText);
-      return generateFallbackResponse(message, contextData, analysis);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('OpenAI API response structure:', Object.keys(data));
-
-    // Validate response structure
-    if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-      console.error('Invalid OpenAI response structure:', data);
-      return generateFallbackResponse(message, contextData, analysis);
-    }
-
-    if (!data.choices[0].message || !data.choices[0].message.content) {
-      console.error('Missing message content in OpenAI response:', data.choices[0]);
-      return generateFallbackResponse(message, contextData, analysis);
-    }
-
     return data.choices[0].message.content;
+
   } catch (error) {
-    console.error('Error calling OpenAI API:', error);
-    return generateFallbackResponse(message, contextData, analysis);
+    console.error('Error generating enhanced AI response:', error);
+    return 'I apologize, but I encountered an error while processing your request. Please try again or contact support if the issue persists.';
   }
-}
-
-function generateFallbackResponse(message: string, contextData: any[], analysis: any): string {
-  console.log('Generating fallback response with available context data');
-  
-  if (contextData.length === 0) {
-    return "I don't have specific information about that topic in our database. Please contact our compliance team for detailed assistance.";
-  }
-
-  // Build a response from available context data
-  let response = `Based on the information available in our internal databases:\n\n`;
-  
-  contextData.forEach(item => {
-    response += `**${item.source}:**\n${item.data}\n\n`;
-  });
-
-  response += `\nFor more detailed information or clarification, please contact our compliance team.`;
-  
-  return response;
-}
-
-function extractSources(contextData: any[]): string[] {
-  return contextData.map(item => item.source).filter(Boolean);
-}
-
-function cleanupResponse(response: string): string {
-  console.log('Starting comprehensive format cleanup...');
-  console.log('AI response before cleanup (first 500 chars):', response.substring(0, 500));
-  
-  let cleaned = response;
-  
-  // Remove excessive whitespace and normalize formatting
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
-  cleaned = cleaned.replace(/[ \t]+\n/g, '\n');
-  cleaned = cleaned.replace(/\n[ \t]+/g, '\n');
-  
-  // Fix markdown formatting issues
-  cleaned = cleaned.replace(/\*\*([^*]+)\*\*:/g, '**$1**:');
-  cleaned = cleaned.replace(/\*\*([^*]+)\*\*\n-/g, '**$1**\n-');
-  
-  // Ensure proper spacing around sections
-  cleaned = cleaned.replace(/(\*\*[^*]+\*\*)\n([^-\n])/g, '$1\n\n$2');
-  cleaned = cleaned.replace(/([^:\n])\n(\*\*[^*]+\*\*)/g, '$1\n\n$2');
-  
-  // Clean up bullet point formatting
-  cleaned = cleaned.replace(/^[\s]*-[\s]*/gm, '- ');
-  cleaned = cleaned.replace(/\n[\s]*-/g, '\n- ');
-  
-  // Remove trailing whitespace
-  cleaned = cleaned.split('\n').map(line => line.trimEnd()).join('\n');
-  cleaned = cleaned.trim();
-  
-  console.log('Comprehensive format cleanup completed');
-  console.log('AI response after cleanup (first 500 chars):', cleaned.substring(0, 500));
-  
-  return cleaned;
 }
