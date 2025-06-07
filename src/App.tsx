@@ -86,69 +86,83 @@ const App = () => {
                     <Route path="knowledge" element={<KnowledgePage />} />
                   </Route>
                   
-                  {/* Regular routes with Header */}
-                  <Route
-                    path="*"
+                  {/* Regular routes with Header - Fixed routing structure */}
+                  <Route 
+                    path="/" 
                     element={
-                      <>
-                        <ProtectedRoute>
-                          <Header />
-                        </ProtectedRoute>
+                      <ProtectedRoute>
+                        <Header />
                         <main className="flex-1">
                           <Suspense fallback={<PageLoader />}>
-                            <Routes>
-                              <Route 
-                                path="/" 
-                                element={
-                                  <ProtectedRoute>
-                                    <HomePage />
-                                  </ProtectedRoute>
-                                }
-                              />
-                              <Route 
-                                path="/map" 
-                                element={
-                                  <ProtectedRoute>
-                                    <MapPage />
-                                  </ProtectedRoute>
-                                }
-                              />
-                              <Route 
-                                path="/chat" 
-                                element={
-                                  <ProtectedRoute>
-                                    <ChatPage />
-                                  </ProtectedRoute>
-                                }
-                              />
-                              <Route 
-                                path="/knowledge" 
-                                element={
-                                  <ProtectedRoute>
-                                    <KnowledgeManager />
-                                  </ProtectedRoute>
-                                }
-                              />
-                              <Route 
-                                path="/employees" 
-                                element={
-                                  <ProtectedRoute>
-                                    <EmployeeDirectory />
-                                  </ProtectedRoute>
-                                }
-                              />
-                              <Route 
-                                path="*" 
-                                element={
-                                  <ProtectedRoute>
-                                    <NotFound />
-                                  </ProtectedRoute>
-                                }
-                              />
-                            </Routes>
+                            <HomePage />
                           </Suspense>
                         </main>
-                      </>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="/map" 
+                    element={
+                      <ProtectedRoute>
+                        <Header />
+                        <main className="flex-1">
+                          <Suspense fallback={<PageLoader />}>
+                            <MapPage />
+                          </Suspense>
+                        </main>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="/chat" 
+                    element={
+                      <ProtectedRoute>
+                        <Header />
+                        <main className="flex-1">
+                          <Suspense fallback={<PageLoader />}>
+                            <ChatPage />
+                          </Suspense>
+                        </main>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="/knowledge" 
+                    element={
+                      <ProtectedRoute>
+                        <Header />
+                        <main className="flex-1">
+                          <Suspense fallback={<PageLoader />}>
+                            <KnowledgeManager />
+                          </Suspense>
+                        </main>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="/employees" 
+                    element={
+                      <ProtectedRoute>
+                        <Header />
+                        <main className="flex-1">
+                          <Suspense fallback={<PageLoader />}>
+                            <EmployeeDirectory />
+                          </Suspense>
+                        </main>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route 
+                    path="*" 
+                    element={
+                      <ProtectedRoute>
+                        <Header />
+                        <main className="flex-1">
+                          <Suspense fallback={<PageLoader />}>
+                            <NotFound />
+                          </Suspense>
+                        </main>
+                      </ProtectedRoute>
                     }
                   />
                 </Routes>
