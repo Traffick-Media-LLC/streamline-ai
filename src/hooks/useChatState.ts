@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, Message, MessageMetadata } from '@/types/chat';
@@ -26,6 +25,20 @@ export const useChatState = (): ChatState => {
 
   // Find current thread
   const currentThread = threads.find(t => t.id === currentThreadId) || null;
+
+  // Extract user display information
+  const getUserDisplayInfo = () => {
+    if (!user) return { firstName: '', fullName: '' };
+    
+    const fullName = user.user_metadata?.full_name || '';
+    const firstName = fullName ? fullName.split(' ')[0] : '';
+    
+    return {
+      firstName,
+      fullName,
+      email: user.email || ''
+    };
+  };
 
   // Load threads from Supabase on component mount
   useEffect(() => {
@@ -224,13 +237,17 @@ export const useChatState = (): ChatState => {
         ...conversationHistory,
         userMessage
       ];
+
+      // Get user display information
+      const userInfo = getUserDisplayInfo();
       
       // Call the edge function
       const { data, error } = await supabase.functions.invoke('streamline-ai', {
         body: {
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           chatId: threadId,
-          userId: user.id
+          userId: user.id,
+          userInfo: userInfo // Pass user display information
         }
       });
       
