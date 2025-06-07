@@ -39,7 +39,7 @@ serve(async (req) => {
       throw new Error('OpenAI API key not found');
     }
 
-    // Enhanced system prompt with user personalization instructions
+    // Enhanced system prompt with proper formatting and confidence instructions
     const createSystemPrompt = (userInfo: any) => {
       const nameInstructions = userInfo?.firstName 
         ? `The user's name is ${userInfo.firstName}${userInfo.fullName ? ` (full name: ${userInfo.fullName})` : ''}. Use their first name naturally in conversation when appropriate - for greetings, follow-ups, and when asking clarifying questions. Don't overuse it, but make the conversation feel personal and friendly.` 
@@ -54,7 +54,17 @@ Your primary functions are:
 4. Provide ingredient information and product details
 5. Offer guidance on compliance and regulatory matters
 
-Always be helpful, professional, and accurate in your responses. When you don't have specific information, acknowledge this and suggest alternative resources or next steps.`;
+FORMATTING INSTRUCTIONS:
+- Use **Bold Text** for headers and emphasis, never use ### markdown headers
+- When listing products, use clean bullet points or numbered lists
+- Format responses clearly and professionally
+
+CONFIDENCE GUIDELINES:
+- When products are found in the state_allowed_products database, they are DEFINITIVELY legal - state this confidently without disclaimers
+- Only add compliance disclaimers when you lack specific data or when dealing with general regulatory questions
+- Products in our database have already undergone due diligence - trust this data
+
+Always be helpful, professional, and accurate in your responses. When you have specific information from our databases, present it confidently.`;
     };
 
     const systemPrompt = createSystemPrompt(userInfo);
@@ -73,10 +83,10 @@ Always be helpful, professional, and accurate in your responses. When you don't 
       message: 'No relevant information found.'
     };
 
-    // Search strategy based on query type
+    // Search strategy based on query type - prioritize state_allowed_products for legality
     if (queryAnalysis.needsSearch) {
       try {
-        // Search state allowed products first for definitive legality questions
+        // PRIORITY: Search state allowed products first for definitive legality questions
         if (queryAnalysis.isLegalityQuery && queryAnalysis.stateFilter) {
           const stateResults = await searchStateAllowedProducts(supabase, queryAnalysis);
           if (stateResults.length > 0) {
@@ -84,7 +94,7 @@ Always be helpful, professional, and accurate in your responses. When you don't 
             sourceInfo = {
               found: true,
               source: 'state_allowed_products' as const,
-              message: `Found ${stateResults.length} product(s) definitively legal in the specified state.`
+              message: `Found ${stateResults.length} product(s) definitively legal in ${queryAnalysis.stateFilter}.`
             };
           }
         }
@@ -208,7 +218,7 @@ Always be helpful, professional, and accurate in your responses. When you don't 
   }
 });
 
-// Enhanced helper function to analyze user queries with brand detection
+// Enhanced helper function to analyze user queries with improved brand detection
 async function analyzeQuery(query: string, supabase: any) {
   const lowerQuery = query.toLowerCase();
   
@@ -241,13 +251,31 @@ async function analyzeQuery(query: string, supabase: any) {
       .select('name');
     
     if (!error && brands) {
-      // Check if any brand name is mentioned in the query
+      // Check each word in the query against brand names
+      const queryWords = lowerQuery.split(/\s+/);
+      
       for (const brand of brands) {
         const brandName = brand.name.toLowerCase();
+        
+        // Direct brand name match
         if (lowerQuery.includes(brandName)) {
           brandFilter = brand.name;
           break;
         }
+        
+        // Check individual words for partial matches
+        for (const word of queryWords) {
+          if (word === 'mcro' && brandName === 'mcro') {
+            brandFilter = 'MCRO';
+            break;
+          }
+          if (brandName.includes(word) && word.length > 2) {
+            brandFilter = brand.name;
+            break;
+          }
+        }
+        
+        if (brandFilter) break;
       }
       
       // Special handling for common brand name variations
@@ -292,7 +320,7 @@ async function analyzeQuery(query: string, supabase: any) {
   };
 }
 
-// New function to search state allowed products for definitive legality
+// Fixed function to search state allowed products with proper query structure
 async function searchStateAllowedProducts(supabase: any, queryAnalysis: any) {
   try {
     console.log('Searching state allowed products with analysis:', queryAnalysis);
@@ -311,26 +339,32 @@ async function searchStateAllowedProducts(supabase: any, queryAnalysis: any) {
     
     const stateId = stateData[0].id;
     
+    // Build the query with proper joins
     let query = supabase
       .from('state_allowed_products')
       .select(`
-        *,
-        products:product_id(
-          *,
-          brands:brand_id(name, logo_url)
+        id,
+        products!inner (
+          id,
+          name,
+          brands!inner (
+            name,
+            logo_url
+          )
         ),
-        states:state_id(name)
+        states!inner (
+          name
+        )
       `)
-      .eq('state_id', stateId)
-      .limit(20);
+      .eq('state_id', stateId);
 
-    // Apply brand filter if specified
+    // Apply brand filter if specified - filter on the joined brands table
     if (queryAnalysis.brandFilter) {
       console.log('Applying brand filter to state allowed products:', queryAnalysis.brandFilter);
       query = query.eq('products.brands.name', queryAnalysis.brandFilter);
     }
 
-    const { data: allowedProducts, error } = await query;
+    const { data: allowedProducts, error } = await query.limit(20);
 
     if (error) {
       console.error('State allowed products search error:', error);
@@ -344,9 +378,14 @@ async function searchStateAllowedProducts(supabase: any, queryAnalysis: any) {
 
     console.log(`Found ${allowedProducts.length} state allowed products`);
 
-    return allowedProducts.map(item => 
-      `${item.products?.name || 'Unknown Product'} by ${item.products?.brands?.name || 'Unknown Brand'} - Legal in ${item.states?.name}`
-    );
+    // Format the results cleanly with proper brand attribution
+    return allowedProducts.map(item => {
+      const product = item.products;
+      const brand = product?.brands;
+      const state = item.states;
+      
+      return `${brand?.name || 'Unknown Brand'} - ${product?.name || 'Unknown Product'} (Legal in ${state?.name || 'Unknown State'})`;
+    });
 
   } catch (error) {
     console.error('State allowed products search error:', error);
@@ -388,7 +427,7 @@ async function searchProducts(supabase: any, queryAnalysis: any) {
     console.log(`Found ${products.length} products`);
 
     return products.map(product => 
-      `${product.name} by ${product.brands?.name || 'Unknown Brand'}`
+      `${product.brands?.name || 'Unknown Brand'} - ${product.name}`
     );
 
   } catch (error) {
