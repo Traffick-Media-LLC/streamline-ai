@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -442,7 +441,12 @@ async function generateEnhancedAIResponse(message: string, contextData: any[], a
   console.log('Generating enhanced AI response with', contextData.length, 'context items');
   console.log('Query analysis for AI:', analysis);
 
-  const openAIApiKey = Deno.env.get('XAI_API_KEY') || Deno.env.get('OPENAI_API_KEY');
+  const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+  
+  if (!openAIApiKey) {
+    console.error('OpenAI API key not found');
+    return generateFallbackResponse(message, contextData, analysis);
+  }
   
   // Build enhanced context with source attribution
   const enhancedContext = contextData.map(item => {
@@ -485,14 +489,14 @@ ${analysis.state ? `State: ${analysis.state}` : ''}
 ${analysis.brand ? `Brand/Product: ${analysis.brand}` : ''}`;
 
   try {
-    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openAIApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'grok-beta',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `${message}\n\nAvailable Information:\n${enhancedContext}` }
@@ -503,12 +507,52 @@ ${analysis.brand ? `Brand/Product: ${analysis.brand}` : ''}`;
       }),
     });
 
+    console.log('OpenAI API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error response:', errorText);
+      return generateFallbackResponse(message, contextData, analysis);
+    }
+
     const data = await response.json();
+    console.log('OpenAI API response structure:', Object.keys(data));
+
+    // Validate response structure
+    if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+      console.error('Invalid OpenAI response structure:', data);
+      return generateFallbackResponse(message, contextData, analysis);
+    }
+
+    if (!data.choices[0].message || !data.choices[0].message.content) {
+      console.error('Missing message content in OpenAI response:', data.choices[0]);
+      return generateFallbackResponse(message, contextData, analysis);
+    }
+
     return data.choices[0].message.content;
   } catch (error) {
-    console.error('Error calling AI API:', error);
-    return 'I apologize, but I encountered an error while processing your request. Please try again or contact our compliance team for assistance.';
+    console.error('Error calling OpenAI API:', error);
+    return generateFallbackResponse(message, contextData, analysis);
   }
+}
+
+function generateFallbackResponse(message: string, contextData: any[], analysis: any): string {
+  console.log('Generating fallback response with available context data');
+  
+  if (contextData.length === 0) {
+    return "I don't have specific information about that topic in our database. Please contact our compliance team for detailed assistance.";
+  }
+
+  // Build a response from available context data
+  let response = `Based on the information available in our internal databases:\n\n`;
+  
+  contextData.forEach(item => {
+    response += `**${item.source}:**\n${item.data}\n\n`;
+  });
+
+  response += `\nFor more detailed information or clarification, please contact our compliance team.`;
+  
+  return response;
 }
 
 function extractSources(contextData: any[]): string[] {
