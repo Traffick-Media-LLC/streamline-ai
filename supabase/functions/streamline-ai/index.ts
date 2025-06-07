@@ -99,7 +99,20 @@ Always be helpful, professional, and accurate in your responses. When you have s
           }
         }
 
-        // Search products database if query seems product-related and no state results
+        // Search Drive files for documents - HIGH PRIORITY for document queries
+        if (queryAnalysis.isDocumentQuery) {
+          const driveResults = await searchDriveFiles(supabase, queryAnalysis);
+          if (driveResults.length > 0) {
+            searchResults.push(...driveResults);
+            sourceInfo = {
+              found: true,
+              source: 'drive_files' as const,
+              message: `Found ${driveResults.length} relevant document(s).`
+            };
+          }
+        }
+
+        // Search products database if query seems product-related and no results yet
         if (queryAnalysis.isProductQuery && searchResults.length === 0) {
           const productResults = await searchProducts(supabase, queryAnalysis);
           if (productResults.length > 0) {
@@ -112,7 +125,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
           }
         }
 
-        // Search brand database if query seems brand-related
+        // Search brand database if query seems brand-related and no results yet
         if (queryAnalysis.isBrandQuery && searchResults.length === 0) {
           const brandResults = await searchBrands(supabase, queryAnalysis);
           if (brandResults.length > 0) {
@@ -125,8 +138,8 @@ Always be helpful, professional, and accurate in your responses. When you have s
           }
         }
 
-        // Search Drive files for documents and additional information
-        if (queryAnalysis.isDocumentQuery || searchResults.length === 0) {
+        // Search Drive files as fallback for any query if no other results found
+        if (searchResults.length === 0) {
           const driveResults = await searchDriveFiles(supabase, queryAnalysis);
           if (driveResults.length > 0) {
             searchResults.push(...driveResults);
@@ -218,7 +231,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
   }
 });
 
-// Enhanced helper function to analyze user queries with improved brand detection
+// Enhanced helper function to analyze user queries with improved document and brand detection
 async function analyzeQuery(query: string, supabase: any) {
   const lowerQuery = query.toLowerCase();
   
@@ -237,8 +250,12 @@ async function analyzeQuery(query: string, supabase: any) {
   const brandKeywords = ['brand', 'company', 'manufacturer', 'producer'];
   const isBrandQuery = brandKeywords.some(keyword => lowerQuery.includes(keyword));
   
-  // Detect document/file queries
-  const documentKeywords = ['document', 'file', 'pdf', 'report', 'certificate', 'lab', 'test', 'coa', 'compliance'];
+  // EXPANDED: Detect document/file queries with more keywords
+  const documentKeywords = [
+    'document', 'file', 'pdf', 'report', 'certificate', 'lab', 'test', 'coa', 'compliance',
+    'brochure', 'brochures', 'sales', 'sheet', 'sheets', 'material', 'materials', 
+    'marketing', 'flyer', 'flyers', 'catalog', 'spec', 'specs', 'datasheet'
+  ];
   const isDocumentQuery = documentKeywords.some(keyword => lowerQuery.includes(keyword));
 
   // Enhanced brand detection - check against actual brand names in database
@@ -283,7 +300,9 @@ async function analyzeQuery(query: string, supabase: any) {
         const brandVariations = {
           'mcro': 'MCRO',
           'galaxy treats': 'Galaxy Treats',
-          'galazy treats': 'Galaxy Treats' // Common typo
+          'galazy treats': 'Galaxy Treats', // Common typo
+          'juice head': 'Juice Head',
+          'juicehead': 'Juice Head'
         };
         
         for (const [variation, actualName] of Object.entries(brandVariations)) {
@@ -307,6 +326,17 @@ async function analyzeQuery(query: string, supabase: any) {
       break;
     }
   }
+
+  console.log('Enhanced query analysis:', {
+    needsSearch,
+    isLegalityQuery,
+    isProductQuery,
+    isBrandQuery, 
+    isDocumentQuery,
+    brandFilter,
+    stateFilter,
+    searchTerms: lowerQuery.split(' ').filter(term => term.length > 2)
+  });
 
   return {
     needsSearch,
@@ -476,7 +506,7 @@ async function searchBrands(supabase: any, queryAnalysis: any) {
   }
 }
 
-// Search Drive files
+// ENHANCED: Search Drive files with improved brand filtering and document searching
 async function searchDriveFiles(supabase: any, queryAnalysis: any) {
   try {
     console.log('Searching drive files with analysis:', queryAnalysis);
@@ -486,10 +516,15 @@ async function searchDriveFiles(supabase: any, queryAnalysis: any) {
       .select('*')
       .limit(20);
 
-    // Apply brand filter if specified
+    // Apply brand filter if specified - search in both file_name and brand columns
     if (queryAnalysis.brandFilter) {
       console.log('Applying brand filter to drive files:', queryAnalysis.brandFilter);
       query = query.or(`file_name.ilike.%${queryAnalysis.brandFilter}%,brand.ilike.%${queryAnalysis.brandFilter}%`);
+    } else if (queryAnalysis.isDocumentQuery) {
+      // For document queries without specific brand, search for common document terms
+      const docTerms = ['brochure', 'sales', 'sheet', 'spec', 'catalog', 'flyer', 'marketing'];
+      const orConditions = docTerms.map(term => `file_name.ilike.%${term}%`).join(',');
+      query = query.or(orConditions);
     }
 
     const { data: files, error } = await query;
