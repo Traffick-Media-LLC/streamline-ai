@@ -40,36 +40,16 @@ export const renderTextWithLinks = (text: string) => {
       continue;
     }
     
-    // Determine if this is likely a file link
-    const isFileLink = fileExtensionRegex.test(url);
-    
-    // Add the link with just the link text showing
+    // Add the link with clean styling - underlined and inheriting text color
     parts.push(
       <a 
         key={`ml-${match.index}`}
         href={url} 
         target="_blank" 
         rel="noopener noreferrer" 
-        className={`${isFileLink ? 'text-green-600' : 'text-blue-600'} hover:underline hover:text-blue-800 font-medium transition-colors flex items-center`}
+        className="underline hover:no-underline transition-colors"
       >
         {linkText}
-        <span className="inline-block ml-1">
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            width="12" 
-            height="12" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          >
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
-          </svg>
-        </span>
       </a>
     );
     
@@ -99,35 +79,15 @@ function processTextSegment(text: string) {
         return null;
       }
       
-      // Determine if this is likely a file link
-      const isFileLink = fileExtensionRegex.test(part);
-      
       return (
         <a 
           key={`url-${index}`}
           href={part} 
           target="_blank" 
           rel="noopener noreferrer" 
-          className={`${isFileLink ? 'text-green-600' : 'text-blue-600'} hover:underline hover:text-blue-800 font-medium transition-colors flex items-center`}
+          className="underline hover:no-underline transition-colors"
         >
           {part}
-          <span className="inline-block ml-1">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              width="12" 
-              height="12" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
-            >
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-          </span>
         </a>
       );
     }
