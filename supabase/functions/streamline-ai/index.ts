@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -62,7 +63,7 @@ Always be helpful, professional, and accurate in your responses. When you don't 
     const lastUserMessage = messages[messages.length - 1]?.content || '';
     
     // Analyze the query to determine search strategy
-    const queryAnalysis = analyzeQuery(lastUserMessage);
+    const queryAnalysis = await analyzeQuery(lastUserMessage, supabase);
     console.log('Query analysis:', queryAnalysis);
 
     let searchResults = [];
@@ -75,8 +76,21 @@ Always be helpful, professional, and accurate in your responses. When you don't 
     // Search strategy based on query type
     if (queryAnalysis.needsSearch) {
       try {
-        // Search products database first if query seems product-related
-        if (queryAnalysis.isProductQuery) {
+        // Search state allowed products first for definitive legality questions
+        if (queryAnalysis.isLegalityQuery && queryAnalysis.stateFilter) {
+          const stateResults = await searchStateAllowedProducts(supabase, queryAnalysis);
+          if (stateResults.length > 0) {
+            searchResults.push(...stateResults);
+            sourceInfo = {
+              found: true,
+              source: 'state_allowed_products' as const,
+              message: `Found ${stateResults.length} product(s) definitively legal in the specified state.`
+            };
+          }
+        }
+
+        // Search products database if query seems product-related and no state results
+        if (queryAnalysis.isProductQuery && searchResults.length === 0) {
           const productResults = await searchProducts(supabase, queryAnalysis);
           if (productResults.length > 0) {
             searchResults.push(...productResults);
@@ -89,7 +103,7 @@ Always be helpful, professional, and accurate in your responses. When you don't 
         }
 
         // Search brand database if query seems brand-related
-        if (queryAnalysis.isBrandQuery) {
+        if (queryAnalysis.isBrandQuery && searchResults.length === 0) {
           const brandResults = await searchBrands(supabase, queryAnalysis);
           if (brandResults.length > 0) {
             searchResults.push(...brandResults);
@@ -194,15 +208,19 @@ Always be helpful, professional, and accurate in your responses. When you don't 
   }
 });
 
-// Helper function to analyze user queries
-function analyzeQuery(query: string) {
+// Enhanced helper function to analyze user queries with brand detection
+async function analyzeQuery(query: string, supabase: any) {
   const lowerQuery = query.toLowerCase();
   
   // Detect search intent
   const needsSearch = true; // Always search for now
   
+  // Detect legality-related queries
+  const legalityKeywords = ['legal', 'legality', 'allowed', 'permitted', 'can sell', 'can i sell'];
+  const isLegalityQuery = legalityKeywords.some(keyword => lowerQuery.includes(keyword));
+  
   // Detect product-related queries
-  const productKeywords = ['product', 'strain', 'flower', 'edible', 'vape', 'cartridge', 'concentrate', 'legal', 'legality', 'thc', 'cbd', 'mg'];
+  const productKeywords = ['product', 'strain', 'flower', 'edible', 'vape', 'cartridge', 'concentrate', 'thc', 'cbd', 'mg'];
   const isProductQuery = productKeywords.some(keyword => lowerQuery.includes(keyword));
   
   // Detect brand-related queries  
@@ -213,22 +231,127 @@ function analyzeQuery(query: string) {
   const documentKeywords = ['document', 'file', 'pdf', 'report', 'certificate', 'lab', 'test', 'coa', 'compliance'];
   const isDocumentQuery = documentKeywords.some(keyword => lowerQuery.includes(keyword));
 
-  // Extract brand filter - only apply if explicitly mentioned
+  // Enhanced brand detection - check against actual brand names in database
   let brandFilter = null;
-  const brandMentionRegex = /(?:for|from|by|about)\s+([a-zA-Z][a-zA-Z\s&]+?)(?:\s|$|[,.!?])/i;
-  const brandMatch = query.match(brandMentionRegex);
-  if (brandMatch) {
-    brandFilter = brandMatch[1].trim();
+  
+  try {
+    // Get all brand names from database
+    const { data: brands, error } = await supabase
+      .from('brands')
+      .select('name');
+    
+    if (!error && brands) {
+      // Check if any brand name is mentioned in the query
+      for (const brand of brands) {
+        const brandName = brand.name.toLowerCase();
+        if (lowerQuery.includes(brandName)) {
+          brandFilter = brand.name;
+          break;
+        }
+      }
+      
+      // Special handling for common brand name variations
+      if (!brandFilter) {
+        const brandVariations = {
+          'mcro': 'MCRO',
+          'galaxy treats': 'Galaxy Treats',
+          'galazy treats': 'Galaxy Treats' // Common typo
+        };
+        
+        for (const [variation, actualName] of Object.entries(brandVariations)) {
+          if (lowerQuery.includes(variation)) {
+            brandFilter = actualName;
+            break;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching brands for analysis:', error);
+  }
+
+  // Extract state filter
+  let stateFilter = null;
+  const stateKeywords = ['florida', 'california', 'texas', 'new york', 'colorado', 'oregon', 'washington'];
+  for (const state of stateKeywords) {
+    if (lowerQuery.includes(state)) {
+      stateFilter = state.charAt(0).toUpperCase() + state.slice(1);
+      break;
+    }
   }
 
   return {
     needsSearch,
+    isLegalityQuery,
     isProductQuery,
     isBrandQuery, 
     isDocumentQuery,
     brandFilter,
+    stateFilter,
     searchTerms: lowerQuery.split(' ').filter(term => term.length > 2)
   };
+}
+
+// New function to search state allowed products for definitive legality
+async function searchStateAllowedProducts(supabase: any, queryAnalysis: any) {
+  try {
+    console.log('Searching state allowed products with analysis:', queryAnalysis);
+    
+    // Get the state ID first
+    const { data: stateData, error: stateError } = await supabase
+      .from('states')
+      .select('id')
+      .ilike('name', `%${queryAnalysis.stateFilter}%`)
+      .limit(1);
+    
+    if (stateError || !stateData || stateData.length === 0) {
+      console.log('State not found:', queryAnalysis.stateFilter);
+      return [];
+    }
+    
+    const stateId = stateData[0].id;
+    
+    let query = supabase
+      .from('state_allowed_products')
+      .select(`
+        *,
+        products:product_id(
+          *,
+          brands:brand_id(name, logo_url)
+        ),
+        states:state_id(name)
+      `)
+      .eq('state_id', stateId)
+      .limit(20);
+
+    // Apply brand filter if specified
+    if (queryAnalysis.brandFilter) {
+      console.log('Applying brand filter to state allowed products:', queryAnalysis.brandFilter);
+      query = query.eq('products.brands.name', queryAnalysis.brandFilter);
+    }
+
+    const { data: allowedProducts, error } = await query;
+
+    if (error) {
+      console.error('State allowed products search error:', error);
+      return [];
+    }
+
+    if (!allowedProducts || allowedProducts.length === 0) {
+      console.log('No state allowed products found');
+      return [];
+    }
+
+    console.log(`Found ${allowedProducts.length} state allowed products`);
+
+    return allowedProducts.map(item => 
+      `${item.products?.name || 'Unknown Product'} by ${item.products?.brands?.name || 'Unknown Brand'} - Legal in ${item.states?.name}`
+    );
+
+  } catch (error) {
+    console.error('State allowed products search error:', error);
+    return [];
+  }
 }
 
 // Search products database
@@ -240,14 +363,14 @@ async function searchProducts(supabase: any, queryAnalysis: any) {
       .from('products')
       .select(`
         *,
-        brand:brands(name, logo_url)
+        brands:brand_id(name, logo_url)
       `)
       .limit(10);
 
-    // Apply brand filter only if explicitly mentioned
+    // Apply brand filter if specified
     if (queryAnalysis.brandFilter) {
-      console.log('Applying brand filter:', queryAnalysis.brandFilter);
-      query = query.ilike('brands.name', `%${queryAnalysis.brandFilter}%`);
+      console.log('Applying brand filter to products:', queryAnalysis.brandFilter);
+      query = query.eq('brands.name', queryAnalysis.brandFilter);
     }
 
     const { data: products, error } = await query;
@@ -265,7 +388,7 @@ async function searchProducts(supabase: any, queryAnalysis: any) {
     console.log(`Found ${products.length} products`);
 
     return products.map(product => 
-      `Product: ${product.name} by ${product.brand?.name || 'Unknown'} - Type: ${product.type || 'Unknown'}, THC: ${product.thc_content || 'Unknown'}, CBD: ${product.cbd_content || 'Unknown'}`
+      `${product.name} by ${product.brands?.name || 'Unknown Brand'}`
     );
 
   } catch (error) {
@@ -284,7 +407,7 @@ async function searchBrands(supabase: any, queryAnalysis: any) {
       .select('*')
       .limit(10);
 
-    // Apply brand filter only if explicitly mentioned
+    // Apply brand filter if specified
     if (queryAnalysis.brandFilter) {
       console.log('Applying brand filter to brands search:', queryAnalysis.brandFilter);
       query = query.ilike('name', `%${queryAnalysis.brandFilter}%`);
@@ -324,10 +447,10 @@ async function searchDriveFiles(supabase: any, queryAnalysis: any) {
       .select('*')
       .limit(20);
 
-    // Apply brand filter only if explicitly mentioned
+    // Apply brand filter if specified
     if (queryAnalysis.brandFilter) {
       console.log('Applying brand filter to drive files:', queryAnalysis.brandFilter);
-      query = query.or(`name.ilike.%${queryAnalysis.brandFilter}%,folder_name.ilike.%${queryAnalysis.brandFilter}%`);
+      query = query.or(`file_name.ilike.%${queryAnalysis.brandFilter}%,brand.ilike.%${queryAnalysis.brandFilter}%`);
     }
 
     const { data: files, error } = await query;
@@ -345,7 +468,7 @@ async function searchDriveFiles(supabase: any, queryAnalysis: any) {
     console.log(`Found ${files.length} drive files`);
 
     return files.map(file => 
-      `Document: ${file.name}${file.folder_name ? ` (from ${file.folder_name})` : ''} - ${file.web_view_link || 'No link available'}`
+      `Document: ${file.file_name}${file.brand ? ` (${file.brand})` : ''} - ${file.file_url || 'No link available'}`
     );
 
   } catch (error) {
