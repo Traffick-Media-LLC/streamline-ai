@@ -1,459 +1,221 @@
-import { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { Chat, Message, MessageMetadata } from '@/types/chat';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { generateChatTitle } from '@/utils/chatUtils';
-import { toast } from '@/components/ui/sonner';
 
-export interface ChatState {
-  threads: Chat[];
-  currentThreadId: string | null;
-  currentThread: Chat | null;
-  isLoading: boolean;
-  sendMessage: (content: string) => void;
-  createNewThread: () => void;
-  selectThread: (threadId: string) => void;
-  deleteThread: (threadId: string) => void;
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Chat, Message } from "@/types/chat";
+import { useChatModeDetection } from "./useChatModeDetection";
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-export const useChatState = (): ChatState => {
+export const useChatState = () => {
   const { user } = useAuth();
-  const [threads, setThreads] = useState<Chat[]>([]);
+  const { detectMode } = useChatModeDetection();
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Find current thread
-  const currentThread = threads.find(t => t.id === currentThreadId) || null;
-
-  // Extract user display information
-  const getUserDisplayInfo = () => {
-    if (!user) return { firstName: '', fullName: '' };
-    
-    const fullName = user.user_metadata?.full_name || '';
-    const firstName = fullName ? fullName.split(' ')[0] : '';
-    
-    return {
-      firstName,
-      fullName,
-      email: user.email || ''
-    };
-  };
-
-  // Load threads from Supabase on component mount
+  // Load threads on mount
   useEffect(() => {
-    if (!user) return;
-    
-    const fetchChats = async () => {
-      try {
-        const { data: chats, error } = await supabase
-          .from('chats')
-          .select('*')
-          .order('updated_at', { ascending: false });
-          
-        if (error) throw error;
-        
-        if (chats && chats.length > 0) {
-          // For each chat, fetch its messages
-          const threadsWithMessages = await Promise.all(
-            chats.map(async (chat) => {
-              const { data: messages, error: messagesError } = await supabase
-                .from('chat_messages')
-                .select('*')
-                .eq('chat_id', chat.id)
-                .order('timestamp', { ascending: true });
-                
-              if (messagesError) {
-                console.error("Error fetching messages:", messagesError);
-                return {
-                  id: chat.id,
-                  title: chat.title,
-                  messages: [],
-                  createdAt: chat.created_at,
-                  updatedAt: chat.updated_at,
-                  user_id: chat.user_id
-                };
-              }
-              
-              // Transform messages to match our Message type
-              const formattedMessages = messages?.map(msg => ({
-                id: msg.id,
-                chatId: msg.chat_id,
-                content: msg.content,
-                role: msg.role as "system" | "assistant" | "user",
-                createdAt: msg.timestamp,
-                metadata: msg.metadata as unknown as MessageMetadata
-              })) || [];
-              
-              return {
-                id: chat.id,
-                title: chat.title,
-                messages: formattedMessages,
-                createdAt: chat.created_at,
-                updatedAt: chat.updated_at,
-                user_id: chat.user_id
-              };
-            })
-          );
-          
-          setThreads(threadsWithMessages as Chat[]);
-          
-          // Only auto-select the most recent thread if it has messages
-          const mostRecentWithMessages = threadsWithMessages.find(thread => thread.messages.length > 0);
-          if (mostRecentWithMessages && !currentThreadId) {
-            setCurrentThreadId(mostRecentWithMessages.id);
-          }
-          
-          // Clean up empty conversations older than 5 minutes
-          cleanupEmptyConversations(threadsWithMessages as Chat[]);
-        }
-      } catch (e) {
-        console.error("Error fetching chats:", e);
-        toast.error("Failed to load chat history");
-      }
-    };
-    
-    fetchChats();
+    if (user) {
+      loadThreads();
+    }
   }, [user]);
 
-  // Clean up empty conversations
-  const cleanupEmptyConversations = async (allThreads: Chat[]) => {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const emptyOldThreads = allThreads.filter(thread => 
-      thread.messages.length === 0 && 
-      thread.title === "New Conversation" &&
-      new Date(thread.createdAt) < fiveMinutesAgo
-    );
+  const loadThreads = async () => {
+    if (!user) return;
 
-    for (const thread of emptyOldThreads) {
-      try {
-        await supabase
-          .from('chats')
-          .delete()
-          .eq('id', thread.id);
-      } catch (e) {
-        console.error("Error cleaning up empty conversation:", e);
-      }
-    }
+    try {
+      const { data: chats, error } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
 
-    if (emptyOldThreads.length > 0) {
-      setThreads(prev => prev.filter(thread => !emptyOldThreads.includes(thread)));
+      if (error) throw error;
+
+      const threadsWithMessages = await Promise.all(
+        (chats || []).map(async (chat) => {
+          const { data: messages, error: messagesError } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('chat_id', chat.id)
+            .order('timestamp', { ascending: true });
+
+          if (messagesError) throw messagesError;
+
+          return {
+            id: chat.id,
+            title: chat.title,
+            messages: messages || [],
+            createdAt: chat.created_at,
+            updatedAt: chat.updated_at,
+          };
+        })
+      );
+
+      setThreads(threadsWithMessages);
+    } catch (error) {
+      console.error('Error loading threads:', error);
     }
   };
 
-  // Send a new message
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || !user) return;
-    
-    // Create a new thread if there isn't one or reuse an empty one
-    let threadId = currentThreadId;
-    if (!threadId) {
-      // Look for an existing empty conversation to reuse
-      const emptyThread = threads.find(thread => 
-        thread.messages.length === 0 && thread.title === "New Conversation"
-      );
-      
-      if (emptyThread) {
-        threadId = emptyThread.id;
-        setCurrentThreadId(threadId);
-      } else {
-        threadId = await createNewChatInDb("New Conversation");
-        if (!threadId) return;
-        
-        const newThread: Chat = {
-          id: threadId,
-          title: "New Conversation",
-          messages: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          user_id: user.id
-        };
-        
-        setThreads(prev => [newThread, ...prev]);
-        setCurrentThreadId(threadId);
-      }
-    }
-    
-    // Add user message to local state first for immediate feedback
-    const userMessageId = uuidv4();
-    const userMessage: Message = {
-      id: userMessageId,
-      chatId: threadId,
-      content,
-      role: "user",
-      createdAt: new Date().toISOString()
-    };
-    
-    // Update local state with the user message
-    setThreads(prev => {
-      return prev.map(thread => {
-        if (thread.id === threadId) {
-          const updatedMessages = [...thread.messages, userMessage];
-          
-          return {
-            ...thread,
-            messages: updatedMessages,
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return thread;
-      });
-    });
-    
-    // Store user message in database
+  const createNewThread = useCallback(async () => {
+    if (!user) return;
+
     try {
-      const { error: messageError } = await supabase
-        .from('chat_messages')
-        .insert({
-          id: userMessageId,
-          chat_id: threadId,
-          content,
-          role: 'user'
-        });
-        
-      if (messageError) throw messageError;
-    } catch (e) {
-      console.error("Error storing user message:", e);
+      const { data: chat, error } = await supabase
+        .from('chats')
+        .insert([{
+          title: 'New Chat',
+          user_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newThread: ChatThread = {
+        id: chat.id,
+        title: chat.title,
+        messages: [],
+        createdAt: chat.created_at,
+        updatedAt: chat.updated_at,
+      };
+
+      setThreads(prev => [newThread, ...prev]);
+      setCurrentThreadId(chat.id);
+    } catch (error) {
+      console.error('Error creating thread:', error);
     }
-    
-    // If this is the first message, generate a title
-    if (currentThread && currentThread.messages.length === 0) {
-      generateChatTitle(content).then(title => {
-        updateChatTitle(threadId!, title);
-      });
-    }
-    
-    // Send to Streamline AI edge function
+  }, [user]);
+
+  const selectThread = useCallback((threadId: string) => {
+    setCurrentThreadId(threadId);
+  }, []);
+
+  const sendMessage = useCallback(async (content: string) => {
+    if (!user || !currentThreadId || isLoading) return;
+
     setIsLoading(true);
     
     try {
-      // Get the conversation history (last few messages) for context
-      const conversationHistory = currentThread 
-        ? currentThread.messages.slice(-5) // Last 5 messages 
-        : [];
-        
-      // Add the new user message to the history
-      const messages = [
-        ...conversationHistory,
-        userMessage
-      ];
+      // Detect the mode for this query
+      const mode = detectMode(content);
+      console.log('Detected mode:', mode, 'for query:', content);
 
-      // Get user display information
-      const userInfo = getUserDisplayInfo();
-      
-      // Call the edge function
+      // Add user message
+      const userMessage = {
+        id: crypto.randomUUID(),
+        chatId: currentThreadId,
+        content,
+        role: 'user' as const,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Insert user message to database
+      await supabase.from('chat_messages').insert([{
+        id: userMessage.id,
+        chat_id: currentThreadId,
+        content: userMessage.content,
+        role: userMessage.role,
+      }]);
+
+      // Update thread state
+      setThreads(prev => prev.map(thread => 
+        thread.id === currentThreadId 
+          ? { ...thread, messages: [...thread.messages, userMessage] }
+          : thread
+      ));
+
+      // Get all messages for context
+      const currentThread = threads.find(t => t.id === currentThreadId);
+      const allMessages = currentThread ? [...currentThread.messages, userMessage] : [userMessage];
+
+      // Extract user info for personalization
+      const userInfo = {
+        firstName: user.user_metadata?.full_name?.split(' ')[0] || '',
+        fullName: user.user_metadata?.full_name || '',
+        email: user.email || ''
+      };
+
+      // Call AI with mode parameter
       const { data, error } = await supabase.functions.invoke('streamline-ai', {
         body: {
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          chatId: threadId,
+          messages: allMessages,
+          chatId: currentThreadId,
           userId: user.id,
-          userInfo: userInfo // Pass user display information
+          userInfo,
+          mode // Pass the detected mode
         }
       });
-      
+
       if (error) throw error;
-      
-      if (data?.response) {
-        // Create assistant message
-        const assistantMessageId = uuidv4();
-        const assistantMessage: Message = {
-          id: assistantMessageId,
-          chatId: threadId,
-          content: data.response,
-          role: "assistant",
-          createdAt: new Date().toISOString(),
-          metadata: { sourceInfo: data.sourceInfo }
-        };
-        
-        // Update local state with the assistant message
-        setThreads(prev => {
-          return prev.map(thread => {
-            if (thread.id === threadId) {
-              return {
-                ...thread,
-                messages: [...thread.messages, assistantMessage],
-                updatedAt: new Date().toISOString()
-              };
-            }
-            return thread;
-          });
-        });
 
-        // Store assistant message in database
-        try {
-          const { error: assistantMessageError } = await supabase
-            .from('chat_messages')
-            .insert({
-              id: assistantMessageId,
-              chat_id: threadId,
-              content: data.response,
-              role: 'assistant',
-              metadata: { sourceInfo: data.sourceInfo }
-            });
-            
-          if (assistantMessageError) throw assistantMessageError;
-        } catch (e) {
-          console.error("Error storing assistant message:", e);
+      // Add AI response
+      const aiMessage = {
+        id: crypto.randomUUID(),
+        chatId: currentThreadId,
+        content: data.response,
+        role: 'assistant' as const,
+        createdAt: new Date().toISOString(),
+        metadata: {
+          sourceInfo: data.sourceInfo
         }
-      }
-    } catch (e) {
-      console.error("Error calling Streamline AI:", e);
-      toast.error("Failed to get a response. Please try again.");
-      
-      // Add fallback error message
-      const errorMessageId = uuidv4();
-      const errorMessage: Message = {
-        id: errorMessageId,
-        chatId: threadId,
-        content: "I'm sorry, I encountered an error while processing your request. Please try again or contact support.",
-        role: "assistant",
-        createdAt: new Date().toISOString()
       };
-      
-      setThreads(prev => {
-        return prev.map(thread => {
-          if (thread.id === threadId) {
-            return {
-              ...thread,
-              messages: [...thread.messages, errorMessage],
-              updatedAt: new Date().toISOString()
-            };
-          }
-          return thread;
-        });
-      });
 
-      // Store error message in database
-      try {
-        const { error: errorMessageError } = await supabase
-          .from('chat_messages')
-          .insert({
-            id: errorMessageId,
-            chat_id: threadId,
-            content: errorMessage.content,
-            role: 'assistant'
-          });
-          
-        if (errorMessageError) throw errorMessageError;
-      } catch (dbError) {
-        console.error("Error storing error message:", dbError);
+      // Insert AI message to database
+      await supabase.from('chat_messages').insert([{
+        id: aiMessage.id,
+        chat_id: currentThreadId,
+        content: aiMessage.content,
+        role: aiMessage.role,
+        metadata: aiMessage.metadata
+      }]);
+
+      // Update thread state
+      setThreads(prev => prev.map(thread => 
+        thread.id === currentThreadId 
+          ? { ...thread, messages: [...thread.messages, aiMessage] }
+          : thread
+      ));
+
+      // Update chat title if it's the first message
+      if (allMessages.length === 1) {
+        const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
+        await supabase
+          .from('chats')
+          .update({ title })
+          .eq('id', currentThreadId);
+
+        setThreads(prev => prev.map(thread => 
+          thread.id === currentThreadId 
+            ? { ...thread, title }
+            : thread
+        ));
       }
+
+    } catch (error) {
+      console.error('Error sending message:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, currentThreadId, isLoading, threads, detectMode]);
 
-  // Create a new chat in the database
-  const createNewChatInDb = async (title: string): Promise<string | null> => {
-    if (!user) return null;
-    
-    try {
-      const newChatId = uuidv4();
-      const { error } = await supabase
-        .from('chats')
-        .insert({
-          id: newChatId,
-          user_id: user.id,
-          title
-        });
-        
-      if (error) throw error;
-      
-      return newChatId;
-    } catch (e) {
-      console.error("Error creating new chat:", e);
-      toast.error("Failed to create new conversation");
-      return null;
-    }
-  };
-
-  // Update chat title in database
-  const updateChatTitle = async (chatId: string, title: string) => {
-    try {
-      const { error } = await supabase
-        .from('chats')
-        .update({ title })
-        .eq('id', chatId);
-        
-      if (error) throw error;
-      
-      // Update local state
-      setThreads(prev => {
-        return prev.map(thread => {
-          if (thread.id === chatId) {
-            return {
-              ...thread,
-              title
-            };
-          }
-          return thread;
-        });
-      });
-    } catch (e) {
-      console.error("Error updating chat title:", e);
-    }
-  };
-
-  // Create a new empty thread
-  const createNewThread = async () => {
-    if (!user) return;
-    
-    const newThreadId = await createNewChatInDb("New Conversation");
-    if (!newThreadId) return;
-    
-    const newThread: Chat = {
-      id: newThreadId,
-      title: "New Conversation",
-      messages: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      user_id: user.id
-    };
-    
-    setThreads(prev => [newThread, ...prev]);
-    setCurrentThreadId(newThreadId);
-  };
-
-  // Select an existing thread
-  const selectThread = (threadId: string) => {
-    setCurrentThreadId(threadId);
-  };
-
-  // Delete a thread
-  const deleteThread = async (threadId: string) => {
-    if (!user) return;
-    
-    try {
-      // Delete from database
-      const { error } = await supabase
-        .from('chats')
-        .delete()
-        .eq('id', threadId);
-        
-      if (error) throw error;
-      
-      // Update local state
-      setThreads(prev => prev.filter(thread => thread.id !== threadId));
-      
-      // If we're deleting the current thread, select another one or none
-      if (threadId === currentThreadId) {
-        const remainingThreads = threads.filter(thread => thread.id !== threadId);
-        setCurrentThreadId(remainingThreads.length > 0 ? remainingThreads[0].id : null);
-      }
-    } catch (e) {
-      console.error("Error deleting thread:", e);
-      toast.error("Failed to delete conversation");
-    }
-  };
+  const currentThread = threads.find(t => t.id === currentThreadId);
 
   return {
-    threads,
-    currentThreadId,
     currentThread,
+    currentThreadId,
+    threads,
     isLoading,
     sendMessage,
     createNewThread,
-    selectThread,
-    deleteThread
+    selectThread
   };
 };

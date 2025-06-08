@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -13,13 +14,14 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, chatId, userId, userInfo } = await req.json();
+    const { messages, chatId, userId, userInfo, mode } = await req.json();
     
     console.log('Received request:', { 
       messageCount: messages?.length, 
       chatId, 
       userId, 
-      userInfo: userInfo ? `${userInfo.firstName} (${userInfo.email})` : 'No user info'
+      userInfo: userInfo ? `${userInfo.firstName} (${userInfo.email})` : 'No user info',
+      mode: mode || 'no mode specified'
     });
 
     // Validate required inputs
@@ -38,53 +40,10 @@ serve(async (req) => {
       throw new Error('OpenAI API key not found');
     }
 
-    // Enhanced system prompt with proper formatting and confidence instructions
-    const createSystemPrompt = (userInfo: any) => {
-      const nameInstructions = userInfo?.firstName 
-        ? `The user's name is ${userInfo.firstName}${userInfo.fullName ? ` (full name: ${userInfo.fullName})` : ''}. Use their first name naturally in conversation when appropriate - for greetings, follow-ups, and when asking clarifying questions. Don't overuse it, but make the conversation feel personal and friendly.` 
-        : '';
-
-      return `You are Streamline AI, a knowledgeable assistant specializing in cannabis industry regulations, product legality, and company information. ${nameInstructions}
-
-Your primary functions are:
-1. Answer questions about cannabis product legality across different states
-2. Provide information about state-specific regulations and requirements
-3. Search and retrieve company files and documents when requested
-4. Provide ingredient information and product details
-5. Offer guidance on compliance and regulatory matters
-
-FORMATTING INSTRUCTIONS:
-- Use **Bold Text** for headers and emphasis, never use ### markdown headers
-- When listing products, use clean bullet points or numbered lists
-- Format responses clearly and professionally
-
-DOCUMENT HANDLING INSTRUCTIONS:
-- When presenting documents from our drive, preserve the EXACT original file names
-- Present each document with its actual name and direct download link
-- Use this format: "**[Original File Name]** - [Direct Link]"
-- Do NOT create arbitrary numbering systems or rename files
-- Do NOT use generic descriptions like "Document 1", "Sales Sheet A", etc.
-- Always provide the actual Google Drive links for immediate access
-- When users ask for specific document types (like "sales sheets"), prioritize files that match that exact type
-
-CONFIDENCE GUIDELINES:
-- When products are found in the state_allowed_products database, they are DEFINITIVELY legal - state this confidently without disclaimers
-- Only add compliance disclaimers when you lack specific data or when dealing with general regulatory questions
-- Products in our database have already undergone due diligence - trust this data
-- When documents are found in our drive, present them as authoritative company materials
-
-Always be helpful, professional, and accurate in your responses. When you have specific information from our databases, present it confidently.`;
-    };
-
-    const systemPrompt = createSystemPrompt(userInfo);
-
-    // Get the last user message for analysis
+    // Get the last user message for processing
     const lastUserMessage = messages[messages.length - 1]?.content || '';
     
-    // Analyze the query to determine search strategy
-    const queryAnalysis = await analyzeQuery(lastUserMessage, supabase);
-    console.log('Query analysis:', queryAnalysis);
-
+    // Mode-based processing
     let searchResults = [];
     let sourceInfo = {
       found: false,
@@ -92,82 +51,98 @@ Always be helpful, professional, and accurate in your responses. When you have s
       message: 'No relevant information found.'
     };
 
-    // Search strategy based on query type - prioritize drive files for document queries
-    if (queryAnalysis.needsSearch) {
-      try {
-        // PRIORITY 1: Search Drive files first for document queries (especially with brand filter)
-        if (queryAnalysis.isDocumentQuery) {
-          console.log('Document query detected, searching drive files...');
-          const driveResults = await searchDriveFiles(supabase, queryAnalysis);
-          if (driveResults.length > 0) {
-            searchResults = driveResults;
-            sourceInfo = {
-              found: true,
-              source: 'drive_files' as const,
-              message: `Found ${driveResults.length} relevant document(s).`
-            };
-          }
-        }
+    // Extract user info for system prompt
+    const nameInstructions = userInfo?.firstName 
+      ? `The user's name is ${userInfo.firstName}${userInfo.fullName ? ` (full name: ${userInfo.fullName})` : ''}. Use their first name naturally in conversation when appropriate.` 
+      : '';
 
-        // PRIORITY 2: Search state allowed products for definitive legality questions
-        if (queryAnalysis.isLegalityQuery && queryAnalysis.stateFilter && searchResults.length === 0) {
-          const stateResults = await searchStateAllowedProducts(supabase, queryAnalysis);
-          if (stateResults.length > 0) {
-            searchResults.push(...stateResults);
-            sourceInfo = {
-              found: true,
-              source: 'state_allowed_products' as const,
-              message: `Found ${stateResults.length} product(s) definitively legal in ${queryAnalysis.stateFilter}.`
-            };
-          }
-        }
+    let systemPrompt = '';
+    
+    // MODE-BASED PROCESSING
+    if (mode === 'document-search') {
+      console.log('DOCUMENT SEARCH MODE: Processing document query');
+      
+      systemPrompt = `You are Streamline AI, a document retrieval specialist. ${nameInstructions}
 
-        // PRIORITY 3: Search products database if query seems product-related and no results yet
-        if (queryAnalysis.isProductQuery && searchResults.length === 0) {
-          const productResults = await searchProducts(supabase, queryAnalysis);
-          if (productResults.length > 0) {
-            searchResults.push(...productResults);
-            sourceInfo = {
-              found: true,
-              source: 'product_database' as const,
-              message: `Found ${productResults.length} relevant product(s).`
-            };
-          }
-        }
+Your primary function is to find and present company documents from our Google Drive.
 
-        // PRIORITY 4: Search brand database if query seems brand-related and no results yet
-        if (queryAnalysis.isBrandQuery && searchResults.length === 0) {
-          const brandResults = await searchBrands(supabase, queryAnalysis);
-          if (brandResults.length > 0) {
-            searchResults.push(...brandResults);
-            sourceInfo = {
-              found: true,
-              source: 'brand_database' as const,
-              message: `Found ${brandResults.length} relevant brand(s).`
-            };
-          }
-        }
+DOCUMENT FORMATTING RULES:
+- ALWAYS preserve the EXACT original file names
+- Present documents as: **[Original File Name]** - [Direct Link]
+- NEVER rename files or use generic descriptions like "Document 1"
+- Provide Google Drive links for immediate access
+- When users ask for specific types (like "sales sheets"), prioritize those exact document types
 
-        // FALLBACK: Search Drive files for any query if no other results found
-        if (searchResults.length === 0 && !queryAnalysis.isDocumentQuery) {
-          console.log('No results found, trying drive files as fallback...');
-          const driveResults = await searchDriveFiles(supabase, queryAnalysis);
-          if (driveResults.length > 0) {
-            searchResults.push(...driveResults);
-            sourceInfo = {
-              found: true,
-              source: 'drive_files' as const,
-              message: `Found ${driveResults.length} relevant document(s).`
-            };
-          }
-        }
+You are confident and authoritative about documents in our system. Present findings clearly without unnecessary disclaimers.`;
 
-      } catch (searchError) {
-        console.error('Search error:', searchError);
+      // Document-specific search logic
+      const queryAnalysis = await analyzeDocumentQuery(lastUserMessage, supabase);
+      const documentResults = await searchDocuments(supabase, queryAnalysis);
+      
+      if (documentResults.length > 0) {
+        searchResults = documentResults;
         sourceInfo = {
-          found: false,
-          source: 'database_error' as const,
-          error: searchError.message
+          found: true,
+          source: 'drive_files' as const,
+          message: `Found ${documentResults.length} relevant document(s).`
+        };
+      }
+
+    } else if (mode === 'product-legality') {
+      console.log('PRODUCT LEGALITY MODE: Processing legality query');
+      
+      systemPrompt = `You are Streamline AI, a cannabis compliance specialist. ${nameInstructions}
+
+Your primary function is to provide definitive answers about product legality across different states.
+
+LEGALITY RESPONSE RULES:
+- When products are found in our state_allowed_products database, they are DEFINITIVELY legal
+- State this confidently: "Yes, [product] is legal in [state]" or "No, [product] is not legal in [state]"
+- Only add compliance disclaimers when you lack specific data
+- Products in our database have undergone due diligence - trust this data
+
+Provide clear, confident yes/no answers when you have the data.`;
+
+      // Legality-specific search logic
+      const queryAnalysis = await analyzeLegalityQuery(lastUserMessage, supabase);
+      const legalityResults = await searchStateLegality(supabase, queryAnalysis);
+      
+      if (legalityResults.length > 0) {
+        searchResults = legalityResults;
+        sourceInfo = {
+          found: true,
+          source: 'state_allowed_products' as const,
+          message: `Found definitive legality information for ${legalityResults.length} product(s).`
+        };
+      }
+
+    } else {
+      console.log('GENERAL MODE: Processing general query');
+      
+      systemPrompt = `You are Streamline AI, a knowledgeable assistant specializing in cannabis industry information. ${nameInstructions}
+
+Your functions include:
+- Answering general questions about the cannabis industry
+- Providing company information and guidance
+- Offering general compliance and regulatory guidance
+
+FORMATTING:
+- Use **Bold Text** for headers and emphasis
+- Format responses clearly and professionally
+- Provide helpful, accurate information based on your knowledge
+
+Be helpful, professional, and accurate in your responses.`;
+
+      // General search across multiple sources
+      const queryAnalysis = await analyzeGeneralQuery(lastUserMessage, supabase);
+      const generalResults = await searchGeneral(supabase, queryAnalysis);
+      
+      if (generalResults.length > 0) {
+        searchResults = generalResults;
+        sourceInfo = {
+          found: true,
+          source: 'product_database' as const,
+          message: `Found ${generalResults.length} relevant result(s).`
         };
       }
     }
@@ -175,7 +150,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
     // Prepare context for AI
     let contextInfo = '';
     if (searchResults.length > 0) {
-      if (sourceInfo.source === 'drive_files') {
+      if (mode === 'document-search') {
         contextInfo = `\n\nAvailable Documents:\n${searchResults.join('\n')}`;
       } else {
         contextInfo = `\n\nRelevant information found:\n${searchResults.map(result => `- ${result}`).join('\n')}`;
@@ -196,7 +171,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
       aiMessages[aiMessages.length - 1].content += contextInfo;
     }
 
-    console.log('Calling OpenAI with messages:', aiMessages.length);
+    console.log('Calling OpenAI with messages:', aiMessages.length, 'Mode:', mode);
 
     // Call OpenAI API
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -246,91 +221,90 @@ Always be helpful, professional, and accurate in your responses. When you have s
   }
 });
 
-// Enhanced helper function to analyze user queries with improved sales sheet detection
-async function analyzeQuery(query: string, supabase: any) {
+// DOCUMENT SEARCH FUNCTIONS
+async function analyzeDocumentQuery(query: string, supabase: any) {
   const lowerQuery = query.toLowerCase();
   
-  // Detect search intent
-  const needsSearch = true; // Always search for now
+  // Detect specific document types
+  const isSalesSheetQuery = ['sales sheet', 'sales sheets', 'salessheet'].some(term => lowerQuery.includes(term));
   
-  // Detect legality-related queries
-  const legalityKeywords = ['legal', 'legality', 'allowed', 'permitted', 'can sell', 'can i sell'];
-  const isLegalityQuery = legalityKeywords.some(keyword => lowerQuery.includes(keyword));
-  
-  // Detect product-related queries
-  const productKeywords = ['product', 'strain', 'flower', 'edible', 'vape', 'cartridge', 'concentrate', 'thc', 'cbd', 'mg'];
-  const isProductQuery = productKeywords.some(keyword => lowerQuery.includes(keyword));
-  
-  // Detect brand-related queries  
-  const brandKeywords = ['brand', 'company', 'manufacturer', 'producer'];
-  const isBrandQuery = brandKeywords.some(keyword => lowerQuery.includes(keyword));
-  
-  // ENHANCED: Detect document/file queries with sales sheet priority
-  const documentKeywords = [
-    'document', 'file', 'pdf', 'report', 'certificate', 'lab', 'test', 'coa', 'compliance',
-    'brochure', 'brochures', 'sales', 'sheet', 'sheets', 'material', 'materials', 
-    'marketing', 'flyer', 'flyers', 'catalog', 'spec', 'specs', 'datasheet',
-    'sales sheet', 'sales sheets' // Added specific multi-word terms
-  ];
-  const isDocumentQuery = documentKeywords.some(keyword => lowerQuery.includes(keyword));
-
-  // ENHANCED: Detect specific sales sheet requests
-  const salesSheetKeywords = ['sales sheet', 'sales sheets', 'sales sheet', 'salessheet', 'salessheets'];
-  const isSalesSheetQuery = salesSheetKeywords.some(keyword => lowerQuery.includes(keyword));
-
-  console.log('Document query analysis:', {
-    query: lowerQuery,
-    isDocumentQuery,
-    isSalesSheetQuery,
-    matchedKeywords: documentKeywords.filter(keyword => lowerQuery.includes(keyword))
-  });
-
-  // Enhanced brand detection - check against actual brand names in database
+  // Extract brand name
   let brandFilter = null;
-  
   try {
-    // Get all brand names from database
-    const { data: brands, error } = await supabase
-      .from('brands')
-      .select('name');
-    
+    const { data: brands, error } = await supabase.from('brands').select('name');
     if (!error && brands) {
-      // Check for exact brand matches first (case insensitive)
       for (const brand of brands) {
-        const brandName = brand.name.toLowerCase();
-        
-        // Direct brand name match (case insensitive)
-        if (lowerQuery.includes(brandName)) {
+        if (lowerQuery.includes(brand.name.toLowerCase())) {
           brandFilter = brand.name;
-          console.log(`Found exact brand match: ${brand.name}`);
           break;
-        }
-      }
-      
-      // Special handling for common brand name variations if no exact match
-      if (!brandFilter) {
-        const brandVariations = {
-          'juice head': 'Juice Head',
-          'juicehead': 'Juice Head', 
-          'mcro': 'MCRO',
-          'galaxy treats': 'Galaxy Treats',
-          'galazy treats': 'Galaxy Treats', // Common typo
-        };
-        
-        for (const [variation, actualName] of Object.entries(brandVariations)) {
-          if (lowerQuery.includes(variation)) {
-            brandFilter = actualName;
-            console.log(`Found brand variation match: ${variation} -> ${actualName}`);
-            break;
-          }
         }
       }
     }
   } catch (error) {
-    console.error('Error fetching brands for analysis:', error);
+    console.error('Error fetching brands:', error);
   }
 
-  // Extract state filter
+  return {
+    isSalesSheetQuery,
+    brandFilter,
+    searchTerms: lowerQuery.split(' ').filter(term => term.length > 2)
+  };
+}
+
+async function searchDocuments(supabase: any, queryAnalysis: any) {
+  try {
+    console.log('Document search with analysis:', queryAnalysis);
+
+    let query = supabase.from('drive_files').select('*').limit(20);
+
+    // PRIORITIZE SALES SHEETS when specifically requested
+    if (queryAnalysis.isSalesSheetQuery && queryAnalysis.brandFilter) {
+      console.log('Searching for sales sheets for brand:', queryAnalysis.brandFilter);
+      
+      // Search for files with "Sales Sheet" in name OR categorized as Sales Sheet
+      query = query
+        .eq('brand', queryAnalysis.brandFilter)
+        .or(`file_name.ilike.%Sales Sheet%,subcategory_2.eq.Sales Sheet`);
+        
+      const { data: salesSheets, error } = await query;
+      
+      if (!error && salesSheets && salesSheets.length > 0) {
+        console.log(`Found ${salesSheets.length} sales sheets for ${queryAnalysis.brandFilter}`);
+        return salesSheets.map(file => {
+          const fileName = file.file_name || 'Unknown Document';
+          const fileUrl = file.file_url || '#';
+          return `**${fileName}** - ${fileUrl}`;
+        });
+      }
+    }
+
+    // Fallback: search by brand for any documents
+    if (queryAnalysis.brandFilter) {
+      query = supabase.from('drive_files').select('*').limit(20);
+      query = query.eq('brand', queryAnalysis.brandFilter);
+      
+      const { data: files, error } = await query;
+      if (!error && files && files.length > 0) {
+        return files.map(file => {
+          const fileName = file.file_name || 'Unknown Document';
+          const fileUrl = file.file_url || '#';
+          return `**${fileName}** - ${fileUrl}`;
+        });
+      }
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Document search error:', error);
+    return [];
+  }
+}
+
+// LEGALITY SEARCH FUNCTIONS
+async function analyzeLegalityQuery(query: string, supabase: any) {
+  const lowerQuery = query.toLowerCase();
+  
+  // Extract state
   let stateFilter = null;
   const stateKeywords = ['florida', 'california', 'texas', 'new york', 'colorado', 'oregon', 'washington'];
   for (const state of stateKeywords) {
@@ -340,121 +314,66 @@ async function analyzeQuery(query: string, supabase: any) {
     }
   }
 
-  console.log('Enhanced query analysis:', {
-    needsSearch,
-    isLegalityQuery,
-    isProductQuery,
-    isBrandQuery, 
-    isDocumentQuery,
-    isSalesSheetQuery,
-    brandFilter,
-    stateFilter,
-    searchTerms: lowerQuery.split(' ').filter(term => term.length > 2)
-  });
+  // Extract product terms
+  const productTerms = lowerQuery.split(' ').filter(term => term.length > 2);
 
   return {
-    needsSearch,
-    isLegalityQuery,
-    isProductQuery,
-    isBrandQuery, 
-    isDocumentQuery,
-    isSalesSheetQuery,
-    brandFilter,
     stateFilter,
-    searchTerms: lowerQuery.split(' ').filter(term => term.length > 2)
+    productTerms
   };
 }
 
-// ... keep existing code (searchStateAllowedProducts function)
-
-// ... keep existing code (searchProducts function)
-
-// ... keep existing code (searchBrands function)
-
-// ENHANCED: Search Drive files with improved sales sheet prioritization
-async function searchDriveFiles(supabase: any, queryAnalysis: any) {
+async function searchStateLegality(supabase: any, queryAnalysis: any) {
   try {
-    console.log('Searching drive files with analysis:', queryAnalysis);
-    
-    let query = supabase
-      .from('drive_files')
-      .select('*')
-      .limit(20);
+    if (!queryAnalysis.stateFilter) return [];
 
-    // ENHANCED: Prioritize sales sheets when specifically requested
-    if (queryAnalysis.isSalesSheetQuery && queryAnalysis.brandFilter) {
-      console.log('Sales sheet query detected, prioritizing sales sheets for brand:', queryAnalysis.brandFilter);
-      
-      // First, try to find files with "Sales Sheet" in the name or category
-      query = query
-        .eq('brand', queryAnalysis.brandFilter)
-        .or(`file_name.ilike.%Sales Sheet%,subcategory_2.eq.Sales Sheet`);
-        
-      const { data: salesSheetFiles, error: salesSheetError } = await query;
-      
-      if (!salesSheetError && salesSheetFiles && salesSheetFiles.length > 0) {
-        console.log(`Found ${salesSheetFiles.length} sales sheet files for ${queryAnalysis.brandFilter}`);
-        
-        // Return formatted sales sheet results
-        return salesSheetFiles.map(file => {
-          const fileName = file.file_name || 'Unknown Document';
-          const fileUrl = file.file_url || '#';
-          const brandInfo = file.brand ? ` (${file.brand})` : '';
-          
-          return `**${fileName}**${brandInfo} - ${fileUrl}`;
-        });
-      }
-    }
+    // Search state allowed products
+    const { data: stateProducts, error } = await supabase
+      .from('state_allowed_products')
+      .select(`
+        products (name, brands (name))
+      `)
+      .eq('states.name', queryAnalysis.stateFilter);
 
-    // Reset query for fallback search if no sales sheets found
-    query = supabase
-      .from('drive_files')
-      .select('*')
-      .limit(20);
+    if (error || !stateProducts) return [];
 
-    // Apply brand filter if specified - search in both file_name and brand columns
-    if (queryAnalysis.brandFilter) {
-      console.log('Applying brand filter to drive files:', queryAnalysis.brandFilter);
-      // Use exact match for brand column and contains match for file_name
-      query = query.or(`brand.eq."${queryAnalysis.brandFilter}",file_name.ilike.%${queryAnalysis.brandFilter}%`);
-    } else if (queryAnalysis.isDocumentQuery) {
-      // For document queries without specific brand, search for common document terms
-      const searchTerms = queryAnalysis.searchTerms.join(' ');
-      console.log('Searching for document terms:', searchTerms);
-      
-      // Search in file_name for any of the search terms
-      const conditions = queryAnalysis.searchTerms.map(term => `file_name.ilike.%${term}%`);
-      if (conditions.length > 0) {
-        query = query.or(conditions.join(','));
-      }
-    }
-
-    const { data: files, error } = await query;
-
-    if (error) {
-      console.error('Drive files search error:', error);
-      return [];
-    }
-
-    if (!files || files.length === 0) {
-      console.log('No drive files found');
-      return [];
-    }
-
-    console.log(`Found ${files.length} drive files`);
-
-    // Return structured format for documents that preserves original names and links
-    return files.map(file => {
-      const fileName = file.file_name || 'Unknown Document';
-      const fileUrl = file.file_url || '#';
-      const brandInfo = file.brand ? ` (${file.brand})` : '';
-      
-      // Format for AI to use: **FileName** - DirectLink
-      return `**${fileName}**${brandInfo} - ${fileUrl}`;
+    return stateProducts.map(item => {
+      const product = item.products;
+      const brand = product?.brands?.name || 'Unknown Brand';
+      return `${product?.name || 'Unknown Product'} by ${brand} is legal in ${queryAnalysis.stateFilter}`;
     });
 
   } catch (error) {
-    console.error('Drive files search error:', error);
+    console.error('Legality search error:', error);
+    return [];
+  }
+}
+
+// GENERAL SEARCH FUNCTIONS
+async function analyzeGeneralQuery(query: string, supabase: any) {
+  const lowerQuery = query.toLowerCase();
+  const searchTerms = lowerQuery.split(' ').filter(term => term.length > 2);
+  
+  return { searchTerms };
+}
+
+async function searchGeneral(supabase: any, queryAnalysis: any) {
+  try {
+    // Simple search across products and brands
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('name, brands (name)')
+      .limit(10);
+
+    if (error || !products) return [];
+
+    return products.map(product => {
+      const brand = product.brands?.name || 'Unknown Brand';
+      return `${product.name} by ${brand}`;
+    });
+
+  } catch (error) {
+    console.error('General search error:', error);
     return [];
   }
 }
