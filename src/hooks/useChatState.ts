@@ -1,8 +1,7 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Chat, Message } from "@/types/chat";
+import { Chat, Message, MessageMetadata } from "@/types/chat";
 import { useChatModeDetection } from "./useChatModeDetection";
 
 export interface ChatThread {
@@ -56,7 +55,9 @@ export const useChatState = () => {
             content: msg.content,
             role: msg.role as "system" | "assistant" | "user",
             createdAt: msg.timestamp || new Date().toISOString(),
-            metadata: msg.metadata || undefined,
+            metadata: (msg.metadata && typeof msg.metadata === 'object' && !Array.isArray(msg.metadata)) 
+              ? msg.metadata as MessageMetadata 
+              : undefined,
           }));
 
           return {
