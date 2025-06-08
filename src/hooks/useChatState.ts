@@ -49,10 +49,20 @@ export const useChatState = () => {
 
           if (messagesError) throw messagesError;
 
+          // Transform database messages to Message type
+          const transformedMessages: Message[] = (messages || []).map(msg => ({
+            id: msg.id,
+            chatId: msg.chat_id,
+            content: msg.content,
+            role: msg.role as "system" | "assistant" | "user",
+            createdAt: msg.timestamp || new Date().toISOString(),
+            metadata: msg.metadata || undefined,
+          }));
+
           return {
             id: chat.id,
             title: chat.title,
-            messages: messages || [],
+            messages: transformedMessages,
             createdAt: chat.created_at,
             updatedAt: chat.updated_at,
           };
@@ -99,6 +109,38 @@ export const useChatState = () => {
     setCurrentThreadId(threadId);
   }, []);
 
+  const deleteThread = useCallback(async (threadId: string) => {
+    if (!user) return;
+
+    try {
+      // Delete messages first
+      await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('chat_id', threadId);
+
+      // Delete chat
+      const { error } = await supabase
+        .from('chats')
+        .delete()
+        .eq('id', threadId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setThreads(prev => prev.filter(thread => thread.id !== threadId));
+      
+      // If this was the current thread, clear selection
+      if (currentThreadId === threadId) {
+        setCurrentThreadId(null);
+      }
+    } catch (error) {
+      console.error('Error deleting thread:', error);
+      throw error;
+    }
+  }, [user, currentThreadId]);
+
   const sendMessage = useCallback(async (content: string) => {
     if (!user || !currentThreadId || isLoading) return;
 
@@ -110,11 +152,11 @@ export const useChatState = () => {
       console.log('Detected mode:', mode, 'for query:', content);
 
       // Add user message
-      const userMessage = {
+      const userMessage: Message = {
         id: crypto.randomUUID(),
         chatId: currentThreadId,
         content,
-        role: 'user' as const,
+        role: 'user',
         createdAt: new Date().toISOString(),
       };
 
@@ -158,11 +200,11 @@ export const useChatState = () => {
       if (error) throw error;
 
       // Add AI response
-      const aiMessage = {
+      const aiMessage: Message = {
         id: crypto.randomUUID(),
         chatId: currentThreadId,
         content: data.response,
-        role: 'assistant' as const,
+        role: 'assistant',
         createdAt: new Date().toISOString(),
         metadata: {
           sourceInfo: data.sourceInfo
@@ -216,6 +258,7 @@ export const useChatState = () => {
     isLoading,
     sendMessage,
     createNewThread,
-    selectThread
+    selectThread,
+    deleteThread
   };
 };
