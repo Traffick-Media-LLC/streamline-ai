@@ -145,11 +145,12 @@ const ChatPage = () => {
           )}
           
           {/* Sticky Input Area */}
-          <div className="sticky bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur p-6 min-h-[88px] flex-shrink-0 z-10">
+          <div className="sticky bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur p-6 min-h-[120px] flex-shrink-0 z-10">
             <div className="max-w-4xl mx-auto">
-              <form onSubmit={handleSubmit} className="flex items-center gap-2">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                {/* Mode Selection - Full width on top */}
                 <Select value={selectedMode} onValueChange={(value: ChatMode) => setSelectedMode(value)}>
-                  <SelectTrigger className="w-[180px] h-10">
+                  <SelectTrigger className="w-full h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -158,21 +159,25 @@ const ChatPage = () => {
                     <SelectItem value="general">General</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input 
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="How can I help you today?"
-                  className="flex-1"
-                  disabled={isLoading}
-                />
-                <Button 
-                  type="submit" 
-                  size="icon" 
-                  disabled={!input.trim() || isLoading}
-                >
-                  <SendHorizontal className="h-5 w-5" />
-                </Button>
+                
+                {/* Input and Send Button Row */}
+                <div className="flex items-center gap-2">
+                  <Input 
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="How can I help you today?"
+                    className="flex-1"
+                    disabled={isLoading}
+                  />
+                  <Button 
+                    type="submit" 
+                    size="icon" 
+                    disabled={!input.trim() || isLoading}
+                  >
+                    <SendHorizontal className="h-5 w-5" />
+                  </Button>
+                </div>
               </form>
             </div>
           </div>
