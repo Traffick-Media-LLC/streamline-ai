@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Chat, Message, MessageMetadata } from "@/types/chat";
 import { useChatModeDetection, ChatMode } from "./useChatModeDetection";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 export interface ChatThread {
   id: string;
@@ -83,7 +83,6 @@ export const useChatState = () => {
     } catch (error) {
       console.error('Error loading threads:', error);
       toast({
-        title: "Error",
         description: "Failed to load chat history. Please try refreshing the page.",
         variant: "destructive"
       });
@@ -93,7 +92,6 @@ export const useChatState = () => {
   const createNewThread = useCallback(async () => {
     if (!user) {
       toast({
-        title: "Error",
         description: "You must be logged in to create a new chat.",
         variant: "destructive"
       });
@@ -128,7 +126,6 @@ export const useChatState = () => {
     } catch (error) {
       console.error('Error creating thread:', error);
       toast({
-        title: "Error",
         description: "Failed to create new chat. Please try again.",
         variant: "destructive"
       });
@@ -169,13 +166,11 @@ export const useChatState = () => {
       }
       
       toast({
-        title: "Success",
         description: "Chat deleted successfully."
       });
     } catch (error) {
       console.error('Error deleting thread:', error);
       toast({
-        title: "Error",
         description: "Failed to delete chat. Please try again.",
         variant: "destructive"
       });
@@ -186,7 +181,6 @@ export const useChatState = () => {
   const sendMessage = useCallback(async (content: string, explicitMode?: ChatMode) => {
     if (!user) {
       toast({
-        title: "Error",
         description: "You must be logged in to send messages.",
         variant: "destructive"
       });
@@ -318,7 +312,6 @@ export const useChatState = () => {
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
-        title: "Error",
         description: "Failed to send message. Please try again.",
         variant: "destructive"
       });
