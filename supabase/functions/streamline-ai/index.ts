@@ -43,6 +43,9 @@ serve(async (req) => {
     // Get the last user message for processing
     const lastUserMessage = messages[messages.length - 1]?.content || '';
     
+    // Extract conversation context
+    const conversationContext = extractConversationContext(messages);
+    
     // Mode-based processing
     let searchResults = [];
     let sourceInfo = {
@@ -68,15 +71,21 @@ Your primary function is to find and present company documents from our Google D
 
 DOCUMENT FORMATTING RULES:
 - ALWAYS preserve the EXACT original file names
-- Present documents as: **[Original File Name]** - [Direct Link]
+- Present documents as: [Original File Name](Direct Link)
 - NEVER rename files or use generic descriptions like "Document 1"
-- Provide Google Drive links for immediate access
+- Group documents by category with bold headers like **Sales Sheets**
 - When users ask for specific types (like "sales sheets"), prioritize those exact document types
+
+LINK STYLE REQUIREMENTS:
+- Render links as plain underlined text using [Title](URL) format only
+- Do not include icons or use blue coloring
+- Do not add "Download" labels or extra bullets
+- No raw URLs or dashes in link formatting
 
 You are confident and authoritative about documents in our system. Present findings clearly without unnecessary disclaimers.`;
 
-      // Document-specific search logic
-      const queryAnalysis = await analyzeDocumentQuery(lastUserMessage, supabase);
+      // Enhanced document search logic
+      const queryAnalysis = await analyzeDocumentQuery(lastUserMessage, supabase, conversationContext);
       const documentResults = await searchDocuments(supabase, queryAnalysis);
       
       if (documentResults.length > 0) {
@@ -86,6 +95,17 @@ You are confident and authoritative about documents in our system. Present findi
           source: 'drive_files' as const,
           message: `Found ${documentResults.length} relevant document(s).`
         };
+      } else {
+        // Knowledge base fallback for documents
+        const kbResults = await searchKnowledgeBase(supabase, queryAnalysis);
+        if (kbResults.length > 0) {
+          searchResults = kbResults;
+          sourceInfo = {
+            found: true,
+            source: 'knowledge_base' as const,
+            message: `Found ${kbResults.length} relevant knowledge entries.`
+          };
+        }
       }
 
     } else if (mode === 'product-legality') {
@@ -98,13 +118,18 @@ Your primary function is to provide definitive answers about product legality ac
 LEGALITY RESPONSE RULES:
 - When products are found in our state_allowed_products database, they are DEFINITIVELY legal
 - State this confidently: "Yes, [product] is legal in [state]" or "No, [product] is not legal in [state]"
+- Include state excise tax information when available
 - Only add compliance disclaimers when you lack specific data
 - Products in our database have undergone due diligence - trust this data
 
+LINK FORMATTING:
+- Use [Title](URL) format for any government or legal references
+- No raw URLs or dash formatting
+
 Provide clear, confident yes/no answers when you have the data.`;
 
-      // Legality-specific search logic
-      const queryAnalysis = await analyzeLegalityQuery(lastUserMessage, supabase);
+      // Enhanced legality search logic
+      const queryAnalysis = await analyzeLegalityQuery(lastUserMessage, supabase, conversationContext);
       const legalityResults = await searchStateLegality(supabase, queryAnalysis);
       
       if (legalityResults.length > 0) {
@@ -116,33 +141,65 @@ Provide clear, confident yes/no answers when you have the data.`;
         };
       }
 
+      // Add excise tax information if state is identified
+      if (queryAnalysis.stateFilter) {
+        const exciseTaxInfo = await getStateExciseTaxInfo(supabase, queryAnalysis.stateFilter);
+        if (exciseTaxInfo) {
+          searchResults.push(`**Excise Tax Information for ${queryAnalysis.stateFilter}:**\n${exciseTaxInfo}`);
+        }
+      }
+
+      // Enhanced legal analysis with Firecrawl for complex queries
+      if (shouldUseLegalCrawling(lastUserMessage) && queryAnalysis.stateFilter) {
+        console.log('Using enhanced legal analysis with government sources');
+        // Note: Firecrawl integration would be implemented here
+        // For now, we add a note about complex legal analysis
+        searchResults.push("**Legal Analysis Note:** For detailed regulatory information, please consult official state government sources.");
+      }
+
     } else {
       console.log('GENERAL MODE: Processing general query');
       
       systemPrompt = `You are Streamline AI, a knowledgeable assistant specializing in cannabis industry information. ${nameInstructions}
 
 Your functions include:
-- Answering general questions about the cannabis industry
+- Answering general questions about the cannabis industry using our knowledge base
 - Providing company information and guidance
 - Offering general compliance and regulatory guidance
+- Context-aware responses based on conversation history
 
 FORMATTING:
 - Use **Bold Text** for headers and emphasis
+- Format links as [Title](URL) - never use raw URLs or dashes
 - Format responses clearly and professionally
 - Provide helpful, accurate information based on your knowledge
 
+CONTEXT AWARENESS:
+- Remember previous mentions of states, brands, or products in the conversation
+- Provide relevant follow-up information when appropriate
+
 Be helpful, professional, and accurate in your responses.`;
 
-      // General search across multiple sources
-      const queryAnalysis = await analyzeGeneralQuery(lastUserMessage, supabase);
-      const generalResults = await searchGeneral(supabase, queryAnalysis);
+      // Enhanced general search across multiple sources
+      const queryAnalysis = await analyzeGeneralQuery(lastUserMessage, supabase, conversationContext);
       
+      // Search knowledge base first
+      const kbResults = await searchKnowledgeBase(supabase, queryAnalysis);
+      if (kbResults.length > 0) {
+        searchResults = [...searchResults, ...kbResults];
+      }
+      
+      // Search products database
+      const generalResults = await searchGeneral(supabase, queryAnalysis);
       if (generalResults.length > 0) {
-        searchResults = generalResults;
+        searchResults = [...searchResults, ...generalResults];
+      }
+      
+      if (searchResults.length > 0) {
         sourceInfo = {
           found: true,
-          source: 'product_database' as const,
-          message: `Found ${generalResults.length} relevant result(s).`
+          source: 'knowledge_base' as const,
+          message: `Found ${searchResults.length} relevant result(s).`
         };
       }
     }
@@ -202,8 +259,11 @@ Be helpful, professional, and accurate in your responses.`;
       throw new Error('No response content from OpenAI');
     }
 
+    // Apply enhanced cleanup to the response
+    const cleanedResponse = applyEnhancedComprehensiveFormatCleanup(aiResponse);
+
     return new Response(JSON.stringify({
-      response: aiResponse,
+      response: cleanedResponse,
       sourceInfo: sourceInfo
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -221,27 +281,110 @@ Be helpful, professional, and accurate in your responses.`;
   }
 });
 
-// DOCUMENT SEARCH FUNCTIONS
-async function analyzeDocumentQuery(query: string, supabase: any) {
+// ENHANCED UTILITY FUNCTIONS
+
+function extractConversationContext(messages: any[]) {
+  const context = {
+    lastState: null,
+    lastBrand: null,
+    lastProduct: null
+  };
+
+  // Look through recent messages for context
+  const recentMessages = messages.slice(-5).reverse();
+  
+  for (const message of recentMessages) {
+    if (message.role === 'user') {
+      const content = message.content.toLowerCase();
+      
+      // Extract state
+      if (!context.lastState) {
+        const stateKeywords = ['florida', 'california', 'texas', 'new york', 'colorado', 'oregon', 'washington'];
+        for (const state of stateKeywords) {
+          if (content.includes(state)) {
+            context.lastState = state.charAt(0).toUpperCase() + state.slice(1);
+            break;
+          }
+        }
+      }
+      
+      // Extract brand
+      if (!context.lastBrand) {
+        const brandKeywords = ['juice head', 'orbital', 'kush', 'cookies'];
+        for (const brand of brandKeywords) {
+          if (content.includes(brand)) {
+            context.lastBrand = brand;
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  return context;
+}
+
+function applyEnhancedComprehensiveFormatCleanup(text: string): string {
+  if (!text) return '';
+
+  let cleaned = text;
+
+  // Fix markdown link formatting - ensure proper [text](url) format
+  cleaned = cleaned.replace(/\*\*(.*?)\*\*\s*-\s*(https?:\/\/[^\s]+)/g, '[$1]($2)');
+  
+  // Clean up multiple consecutive newlines
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  // Fix spacing around headers
+  cleaned = cleaned.replace(/\n(\*\*[^*]+\*\*)\n/g, '\n\n$1\n\n');
+  
+  // Ensure proper spacing after bullet points
+  cleaned = cleaned.replace(/([•\-\*])\s*([^\n]+)\n(?!\s)/g, '$1 $2\n\n');
+  
+  // Clean up extra spaces
+  cleaned = cleaned.replace(/[ \t]+/g, ' ');
+  
+  // Remove trailing whitespace from lines
+  cleaned = cleaned.replace(/[ \t]+$/gm, '');
+  
+  return cleaned.trim();
+}
+
+function shouldUseLegalCrawling(query: string): boolean {
+  const legalAnalysisKeywords = [
+    'why banned', 'why illegal', 'law', 'bill', 'ruling', 'compliance',
+    'regulation', 'statute', 'policy', 'legal explanation'
+  ];
+  
+  return legalAnalysisKeywords.some(keyword => 
+    query.toLowerCase().includes(keyword)
+  );
+}
+
+// ENHANCED DOCUMENT SEARCH FUNCTIONS
+async function analyzeDocumentQuery(query: string, supabase: any, context: any = {}) {
   const lowerQuery = query.toLowerCase();
   
   // Detect specific document types
   const isSalesSheetQuery = ['sales sheet', 'sales sheets', 'salessheet'].some(term => lowerQuery.includes(term));
   
-  // Extract brand name
-  let brandFilter = null;
-  try {
-    const { data: brands, error } = await supabase.from('brands').select('name');
-    if (!error && brands) {
-      for (const brand of brands) {
-        if (lowerQuery.includes(brand.name.toLowerCase())) {
-          brandFilter = brand.name;
-          break;
+  // Extract brand name (including context)
+  let brandFilter = context.lastBrand || null;
+  
+  if (!brandFilter) {
+    try {
+      const { data: brands, error } = await supabase.from('brands').select('name');
+      if (!error && brands) {
+        for (const brand of brands) {
+          if (lowerQuery.includes(brand.name.toLowerCase())) {
+            brandFilter = brand.name;
+            break;
+          }
         }
       }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
     }
-  } catch (error) {
-    console.error('Error fetching brands:', error);
   }
 
   return {
@@ -255,13 +398,12 @@ async function searchDocuments(supabase: any, queryAnalysis: any) {
   try {
     console.log('Document search with analysis:', queryAnalysis);
 
-    let query = supabase.from('drive_files').select('*').limit(20);
+    let query = supabase.from('drive_files').select('*').limit(50);
 
     // PRIORITIZE SALES SHEETS when specifically requested
     if (queryAnalysis.isSalesSheetQuery && queryAnalysis.brandFilter) {
       console.log('Searching for sales sheets for brand:', queryAnalysis.brandFilter);
       
-      // Search for files with "Sales Sheet" in name OR categorized as Sales Sheet
       query = query
         .eq('brand', queryAnalysis.brandFilter)
         .or(`file_name.ilike.%Sales Sheet%,subcategory_2.eq.Sales Sheet`);
@@ -270,26 +412,18 @@ async function searchDocuments(supabase: any, queryAnalysis: any) {
       
       if (!error && salesSheets && salesSheets.length > 0) {
         console.log(`Found ${salesSheets.length} sales sheets for ${queryAnalysis.brandFilter}`);
-        return salesSheets.map(file => {
-          const fileName = file.file_name || 'Unknown Document';
-          const fileUrl = file.file_url || '#';
-          return `**${fileName}** - ${fileUrl}`;
-        });
+        return groupAndFormatDocuments(salesSheets);
       }
     }
 
     // Fallback: search by brand for any documents
     if (queryAnalysis.brandFilter) {
-      query = supabase.from('drive_files').select('*').limit(20);
+      query = supabase.from('drive_files').select('*').limit(50);
       query = query.eq('brand', queryAnalysis.brandFilter);
       
       const { data: files, error } = await query;
       if (!error && files && files.length > 0) {
-        return files.map(file => {
-          const fileName = file.file_name || 'Unknown Document';
-          const fileUrl = file.file_url || '#';
-          return `**${fileName}** - ${fileUrl}`;
-        });
+        return groupAndFormatDocuments(files);
       }
     }
 
@@ -300,17 +434,50 @@ async function searchDocuments(supabase: any, queryAnalysis: any) {
   }
 }
 
-// LEGALITY SEARCH FUNCTIONS
-async function analyzeLegalityQuery(query: string, supabase: any) {
+function groupAndFormatDocuments(files: any[]): string[] {
+  // Group files by subcategory
+  const grouped: { [key: string]: any[] } = {};
+  
+  files.forEach(file => {
+    const category = file.subcategory_2 || file.category || 'Documents';
+    if (!grouped[category]) {
+      grouped[category] = [];
+    }
+    grouped[category].push(file);
+  });
+
+  const result: string[] = [];
+  
+  // Format grouped results
+  Object.entries(grouped).forEach(([category, categoryFiles]) => {
+    if (categoryFiles.length > 0) {
+      result.push(`**${category}**`);
+      categoryFiles.forEach(file => {
+        const fileName = file.file_name || 'Unknown Document';
+        const fileUrl = file.file_url || '#';
+        result.push(`[${fileName}](${fileUrl})`);
+      });
+      result.push(''); // Add spacing between groups
+    }
+  });
+
+  return result;
+}
+
+// ENHANCED LEGALITY SEARCH FUNCTIONS
+async function analyzeLegalityQuery(query: string, supabase: any, context: any = {}) {
   const lowerQuery = query.toLowerCase();
   
-  // Extract state
-  let stateFilter = null;
-  const stateKeywords = ['florida', 'california', 'texas', 'new york', 'colorado', 'oregon', 'washington'];
-  for (const state of stateKeywords) {
-    if (lowerQuery.includes(state)) {
-      stateFilter = state.charAt(0).toUpperCase() + state.slice(1);
-      break;
+  // Extract state (including context)
+  let stateFilter = context.lastState || null;
+  
+  if (!stateFilter) {
+    const stateKeywords = ['florida', 'california', 'texas', 'new york', 'colorado', 'oregon', 'washington'];
+    for (const state of stateKeywords) {
+      if (lowerQuery.includes(state)) {
+        stateFilter = state.charAt(0).toUpperCase() + state.slice(1);
+        break;
+      }
     }
   }
 
@@ -319,7 +486,8 @@ async function analyzeLegalityQuery(query: string, supabase: any) {
 
   return {
     stateFilter,
-    productTerms
+    productTerms,
+    requiresLegalAnalysis: shouldUseLegalCrawling(query)
   };
 }
 
@@ -349,12 +517,56 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
   }
 }
 
-// GENERAL SEARCH FUNCTIONS
-async function analyzeGeneralQuery(query: string, supabase: any) {
+async function getStateExciseTaxInfo(supabase: any, stateName: string) {
+  try {
+    const { data: exciseTax, error } = await supabase
+      .from('state_excise_taxes')
+      .select('excise_tax_info')
+      .eq('states.name', stateName)
+      .single();
+
+    if (error || !exciseTax) return null;
+    
+    return exciseTax.excise_tax_info;
+  } catch (error) {
+    console.error('Error fetching excise tax info:', error);
+    return null;
+  }
+}
+
+// ENHANCED GENERAL SEARCH FUNCTIONS
+async function analyzeGeneralQuery(query: string, supabase: any, context: any = {}) {
   const lowerQuery = query.toLowerCase();
   const searchTerms = lowerQuery.split(' ').filter(term => term.length > 2);
   
-  return { searchTerms };
+  return { 
+    searchTerms,
+    context: context
+  };
+}
+
+async function searchKnowledgeBase(supabase: any, queryAnalysis: any) {
+  try {
+    const { data: entries, error } = await supabase
+      .from('knowledge_entries')
+      .select('title, content')
+      .eq('is_active', true)
+      .limit(10);
+
+    if (error || !entries) return [];
+
+    // Simple relevance filtering
+    const relevant = entries.filter(entry => {
+      const entryText = (entry.title + ' ' + entry.content).toLowerCase();
+      return queryAnalysis.searchTerms.some(term => entryText.includes(term));
+    });
+
+    return relevant.map(entry => `**${entry.title}**\n${entry.content.substring(0, 200)}...`);
+
+  } catch (error) {
+    console.error('Knowledge base search error:', error);
+    return [];
+  }
 }
 
 async function searchGeneral(supabase: any, queryAnalysis: any) {
