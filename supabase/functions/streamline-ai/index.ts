@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -59,10 +58,19 @@ FORMATTING INSTRUCTIONS:
 - When listing products, use clean bullet points or numbered lists
 - Format responses clearly and professionally
 
+DOCUMENT HANDLING INSTRUCTIONS:
+- When presenting documents from our drive, preserve the EXACT original file names
+- Present each document with its actual name and direct download link
+- Use this format: "**[Original File Name]** - [Direct Link]"
+- Do NOT create arbitrary numbering systems or rename files
+- Do NOT use generic descriptions like "Document 1", "Sales Sheet A", etc.
+- Always provide the actual Google Drive links for immediate access
+
 CONFIDENCE GUIDELINES:
 - When products are found in the state_allowed_products database, they are DEFINITIVELY legal - state this confidently without disclaimers
 - Only add compliance disclaimers when you lack specific data or when dealing with general regulatory questions
 - Products in our database have already undergone due diligence - trust this data
+- When documents are found in our drive, present them as authoritative company materials
 
 Always be helpful, professional, and accurate in your responses. When you have specific information from our databases, present it confidently.`;
     };
@@ -83,11 +91,25 @@ Always be helpful, professional, and accurate in your responses. When you have s
       message: 'No relevant information found.'
     };
 
-    // Search strategy based on query type - prioritize state_allowed_products for legality
+    // Search strategy based on query type - prioritize drive files for document queries
     if (queryAnalysis.needsSearch) {
       try {
-        // PRIORITY: Search state allowed products first for definitive legality questions
-        if (queryAnalysis.isLegalityQuery && queryAnalysis.stateFilter) {
+        // PRIORITY 1: Search Drive files first for document queries (especially with brand filter)
+        if (queryAnalysis.isDocumentQuery) {
+          console.log('Document query detected, searching drive files...');
+          const driveResults = await searchDriveFiles(supabase, queryAnalysis);
+          if (driveResults.length > 0) {
+            searchResults = driveResults;
+            sourceInfo = {
+              found: true,
+              source: 'drive_files' as const,
+              message: `Found ${driveResults.length} relevant document(s).`
+            };
+          }
+        }
+
+        // PRIORITY 2: Search state allowed products for definitive legality questions
+        if (queryAnalysis.isLegalityQuery && queryAnalysis.stateFilter && searchResults.length === 0) {
           const stateResults = await searchStateAllowedProducts(supabase, queryAnalysis);
           if (stateResults.length > 0) {
             searchResults.push(...stateResults);
@@ -99,22 +121,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
           }
         }
 
-        // Search Drive files - HIGH PRIORITY for document queries, search even if we have other results
-        if (queryAnalysis.isDocumentQuery) {
-          console.log('Document query detected, searching drive files...');
-          const driveResults = await searchDriveFiles(supabase, queryAnalysis);
-          if (driveResults.length > 0) {
-            // For document queries, replace previous results with drive results
-            searchResults = driveResults;
-            sourceInfo = {
-              found: true,
-              source: 'drive_files' as const,
-              message: `Found ${driveResults.length} relevant document(s).`
-            };
-          }
-        }
-
-        // Search products database if query seems product-related and no results yet
+        // PRIORITY 3: Search products database if query seems product-related and no results yet
         if (queryAnalysis.isProductQuery && searchResults.length === 0) {
           const productResults = await searchProducts(supabase, queryAnalysis);
           if (productResults.length > 0) {
@@ -127,7 +134,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
           }
         }
 
-        // Search brand database if query seems brand-related and no results yet
+        // PRIORITY 4: Search brand database if query seems brand-related and no results yet
         if (queryAnalysis.isBrandQuery && searchResults.length === 0) {
           const brandResults = await searchBrands(supabase, queryAnalysis);
           if (brandResults.length > 0) {
@@ -140,7 +147,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
           }
         }
 
-        // Search Drive files as fallback for any query if no other results found
+        // FALLBACK: Search Drive files for any query if no other results found
         if (searchResults.length === 0 && !queryAnalysis.isDocumentQuery) {
           console.log('No results found, trying drive files as fallback...');
           const driveResults = await searchDriveFiles(supabase, queryAnalysis);
@@ -167,7 +174,11 @@ Always be helpful, professional, and accurate in your responses. When you have s
     // Prepare context for AI
     let contextInfo = '';
     if (searchResults.length > 0) {
-      contextInfo = `\n\nRelevant information found:\n${searchResults.map(result => `- ${result}`).join('\n')}`;
+      if (sourceInfo.source === 'drive_files') {
+        contextInfo = `\n\nAvailable Documents:\n${searchResults.join('\n')}`;
+      } else {
+        contextInfo = `\n\nRelevant information found:\n${searchResults.map(result => `- ${result}`).join('\n')}`;
+      }
     }
 
     // Prepare messages for OpenAI
@@ -543,9 +554,15 @@ async function searchDriveFiles(supabase: any, queryAnalysis: any) {
 
     console.log(`Found ${files.length} drive files`);
 
-    return files.map(file => 
-      `Document: ${file.file_name}${file.brand ? ` (${file.brand})` : ''} - ${file.file_url || 'No link available'}`
-    );
+    // Return structured format for documents that preserves original names and links
+    return files.map(file => {
+      const fileName = file.file_name || 'Unknown Document';
+      const fileUrl = file.file_url || '#';
+      const brandInfo = file.brand ? ` (${file.brand})` : '';
+      
+      // Format for AI to use: **FileName** - DirectLink
+      return `**${fileName}**${brandInfo} - ${fileUrl}`;
+    });
 
   } catch (error) {
     console.error('Drive files search error:', error);
