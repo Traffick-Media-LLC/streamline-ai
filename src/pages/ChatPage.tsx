@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { History, SendHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -11,6 +12,7 @@ import ChatHistoryPanel from "@/components/chat/ChatHistoryPanel";
 import ChatThread from "@/components/chat/ChatThread";
 import TopicCards from "@/components/chat/TopicCards";
 import { useChatState } from "@/hooks/useChatState";
+import { ChatMode } from "@/hooks/useChatModeDetection";
 
 const ChatPage = () => {
   const { user } = useAuth();
@@ -18,6 +20,7 @@ const ChatPage = () => {
   const isMobile = useIsMobile();
   const inputRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState("");
+  const [selectedMode, setSelectedMode] = useState<ChatMode>("general");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
   const {
@@ -55,7 +58,7 @@ const ChatPage = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    sendMessage(input);
+    sendMessage(input, selectedMode);
     setInput("");
   };
 
@@ -71,6 +74,32 @@ const ChatPage = () => {
   const handleNewChat = () => {
     createNewThread();
     setIsHistoryOpen(false);
+  };
+
+  const getPlaceholderText = () => {
+    switch (selectedMode) {
+      case 'document-search':
+        return "Search for sales sheets, brochures, or other documents...";
+      case 'product-legality':
+        return "Ask about product legality in specific states...";
+      case 'general':
+        return "Ask me anything about the cannabis industry...";
+      default:
+        return "Ask about product legality, regulations, or request documents...";
+    }
+  };
+
+  const getModeLabel = (mode: ChatMode) => {
+    switch (mode) {
+      case 'document-search':
+        return "Document Search";
+      case 'product-legality':
+        return "Product Legality";
+      case 'general':
+        return "General";
+      default:
+        return "General";
+    }
   };
 
   const hasActiveChat = currentThread && currentThread.messages.length > 0;
@@ -134,11 +163,21 @@ const ChatPage = () => {
           <div className="sticky bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur p-6 min-h-[88px] flex-shrink-0 z-10">
             <div className="max-w-4xl mx-auto">
               <form onSubmit={handleSubmit} className="flex items-center gap-2">
+                <Select value={selectedMode} onValueChange={(value: ChatMode) => setSelectedMode(value)}>
+                  <SelectTrigger className="w-[180px] h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="document-search">Document Search</SelectItem>
+                    <SelectItem value="product-legality">Product Legality</SelectItem>
+                    <SelectItem value="general">General</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Input 
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask about product legality, regulations, or request documents..."
+                  placeholder={getPlaceholderText()}
                   className="flex-1"
                   disabled={isLoading}
                 />

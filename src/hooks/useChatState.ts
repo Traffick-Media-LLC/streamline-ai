@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Chat, Message, MessageMetadata } from "@/types/chat";
-import { useChatModeDetection } from "./useChatModeDetection";
+import { useChatModeDetection, ChatMode } from "./useChatModeDetection";
 
 export interface ChatThread {
   id: string;
@@ -142,15 +142,15 @@ export const useChatState = () => {
     }
   }, [user, currentThreadId]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, explicitMode?: ChatMode) => {
     if (!user || !currentThreadId || isLoading) return;
 
     setIsLoading(true);
     
     try {
-      // Detect the mode for this query
-      const mode = detectMode(content);
-      console.log('Detected mode:', mode, 'for query:', content);
+      // Use explicit mode if provided, otherwise detect from content
+      const mode = explicitMode || detectMode(content);
+      console.log('Using mode:', mode, 'for query:', content);
 
       // Add user message
       const userMessage: Message = {
@@ -194,7 +194,7 @@ export const useChatState = () => {
           chatId: currentThreadId,
           userId: user.id,
           userInfo,
-          mode // Pass the detected mode
+          mode // Pass the mode (either explicit or detected)
         }
       });
 
