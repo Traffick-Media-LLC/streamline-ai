@@ -76,19 +76,6 @@ const ChatPage = () => {
     setIsHistoryOpen(false);
   };
 
-  const getPlaceholderText = () => {
-    switch (selectedMode) {
-      case 'document-search':
-        return "Search for sales sheets, brochures, or other documents...";
-      case 'product-legality':
-        return "Ask about product legality in specific states...";
-      case 'general':
-        return "Ask me anything about the cannabis industry...";
-      default:
-        return "Ask about product legality, regulations, or request documents...";
-    }
-  };
-
   const getModeLabel = (mode: ChatMode) => {
     switch (mode) {
       case 'document-search':
@@ -177,7 +164,7 @@ const ChatPage = () => {
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={getPlaceholderText()}
+                  placeholder="How can I help you today?"
                   className="flex-1"
                   disabled={isLoading}
                 />
