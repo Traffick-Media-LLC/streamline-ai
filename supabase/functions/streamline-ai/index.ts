@@ -99,11 +99,13 @@ Always be helpful, professional, and accurate in your responses. When you have s
           }
         }
 
-        // Search Drive files for documents - HIGH PRIORITY for document queries
+        // Search Drive files - HIGH PRIORITY for document queries, search even if we have other results
         if (queryAnalysis.isDocumentQuery) {
+          console.log('Document query detected, searching drive files...');
           const driveResults = await searchDriveFiles(supabase, queryAnalysis);
           if (driveResults.length > 0) {
-            searchResults.push(...driveResults);
+            // For document queries, replace previous results with drive results
+            searchResults = driveResults;
             sourceInfo = {
               found: true,
               source: 'drive_files' as const,
@@ -139,7 +141,8 @@ Always be helpful, professional, and accurate in your responses. When you have s
         }
 
         // Search Drive files as fallback for any query if no other results found
-        if (searchResults.length === 0) {
+        if (searchResults.length === 0 && !queryAnalysis.isDocumentQuery) {
+          console.log('No results found, trying drive files as fallback...');
           const driveResults = await searchDriveFiles(supabase, queryAnalysis);
           if (driveResults.length > 0) {
             searchResults.push(...driveResults);
@@ -250,13 +253,20 @@ async function analyzeQuery(query: string, supabase: any) {
   const brandKeywords = ['brand', 'company', 'manufacturer', 'producer'];
   const isBrandQuery = brandKeywords.some(keyword => lowerQuery.includes(keyword));
   
-  // EXPANDED: Detect document/file queries with more keywords
+  // EXPANDED: Detect document/file queries with more keywords including "sales sheets"
   const documentKeywords = [
     'document', 'file', 'pdf', 'report', 'certificate', 'lab', 'test', 'coa', 'compliance',
     'brochure', 'brochures', 'sales', 'sheet', 'sheets', 'material', 'materials', 
-    'marketing', 'flyer', 'flyers', 'catalog', 'spec', 'specs', 'datasheet'
+    'marketing', 'flyer', 'flyers', 'catalog', 'spec', 'specs', 'datasheet',
+    'sales sheet', 'sales sheets' // Added specific multi-word terms
   ];
   const isDocumentQuery = documentKeywords.some(keyword => lowerQuery.includes(keyword));
+
+  console.log('Document query analysis:', {
+    query: lowerQuery,
+    isDocumentQuery,
+    matchedKeywords: documentKeywords.filter(keyword => lowerQuery.includes(keyword))
+  });
 
   // Enhanced brand detection - check against actual brand names in database
   let brandFilter = null;
@@ -268,46 +278,32 @@ async function analyzeQuery(query: string, supabase: any) {
       .select('name');
     
     if (!error && brands) {
-      // Check each word in the query against brand names
-      const queryWords = lowerQuery.split(/\s+/);
-      
+      // Check for exact brand matches first (case insensitive)
       for (const brand of brands) {
         const brandName = brand.name.toLowerCase();
         
-        // Direct brand name match
+        // Direct brand name match (case insensitive)
         if (lowerQuery.includes(brandName)) {
           brandFilter = brand.name;
+          console.log(`Found exact brand match: ${brand.name}`);
           break;
         }
-        
-        // Check individual words for partial matches
-        for (const word of queryWords) {
-          if (word === 'mcro' && brandName === 'mcro') {
-            brandFilter = 'MCRO';
-            break;
-          }
-          if (brandName.includes(word) && word.length > 2) {
-            brandFilter = brand.name;
-            break;
-          }
-        }
-        
-        if (brandFilter) break;
       }
       
-      // Special handling for common brand name variations
+      // Special handling for common brand name variations if no exact match
       if (!brandFilter) {
         const brandVariations = {
+          'juice head': 'Juice Head',
+          'juicehead': 'Juice Head', 
           'mcro': 'MCRO',
           'galaxy treats': 'Galaxy Treats',
           'galazy treats': 'Galaxy Treats', // Common typo
-          'juice head': 'Juice Head',
-          'juicehead': 'Juice Head'
         };
         
         for (const [variation, actualName] of Object.entries(brandVariations)) {
           if (lowerQuery.includes(variation)) {
             brandFilter = actualName;
+            console.log(`Found brand variation match: ${variation} -> ${actualName}`);
             break;
           }
         }
@@ -519,12 +515,18 @@ async function searchDriveFiles(supabase: any, queryAnalysis: any) {
     // Apply brand filter if specified - search in both file_name and brand columns
     if (queryAnalysis.brandFilter) {
       console.log('Applying brand filter to drive files:', queryAnalysis.brandFilter);
-      query = query.or(`file_name.ilike.%${queryAnalysis.brandFilter}%,brand.ilike.%${queryAnalysis.brandFilter}%`);
+      // Use exact match for brand column and contains match for file_name
+      query = query.or(`brand.eq."${queryAnalysis.brandFilter}",file_name.ilike.%${queryAnalysis.brandFilter}%`);
     } else if (queryAnalysis.isDocumentQuery) {
       // For document queries without specific brand, search for common document terms
-      const docTerms = ['brochure', 'sales', 'sheet', 'spec', 'catalog', 'flyer', 'marketing'];
-      const orConditions = docTerms.map(term => `file_name.ilike.%${term}%`).join(',');
-      query = query.or(orConditions);
+      const searchTerms = queryAnalysis.searchTerms.join(' ');
+      console.log('Searching for document terms:', searchTerms);
+      
+      // Search in file_name for any of the search terms
+      const conditions = queryAnalysis.searchTerms.map(term => `file_name.ilike.%${term}%`);
+      if (conditions.length > 0) {
+        query = query.or(conditions.join(','));
+      }
     }
 
     const { data: files, error } = await query;
