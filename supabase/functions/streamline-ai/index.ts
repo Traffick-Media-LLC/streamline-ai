@@ -111,9 +111,15 @@ You are confident and authoritative about documents in our system. Present findi
     } else if (mode === 'product-legality') {
       console.log('PRODUCT LEGALITY MODE: Processing legality query');
       
-      systemPrompt = `You are Streamline AI, a cannabis compliance specialist. ${nameInstructions}
+      systemPrompt = `You are Streamline AI, a US regulatory compliance specialist. ${nameInstructions}
 
-Your primary function is to provide definitive answers about product legality across different states.
+Your expertise covers regulatory compliance for multiple product categories across US states:
+
+PRODUCT CATEGORIES:
+- Cannabis and Hemp Products (flower, concentrates, edibles, topicals, etc.)
+- Consumable Hemp Products (CBD, Delta-8, Delta-9, HHC, etc.)
+- Nicotine Products (disposable vapes, pods, e-liquids, salts, pouches, etc.)
+- Kratom Products (including 7-hydroxymitragynine products)
 
 LEGALITY RESPONSE RULES:
 - When products are found in our state_allowed_products database, they are DEFINITIVELY legal
@@ -121,12 +127,13 @@ LEGALITY RESPONSE RULES:
 - Include state excise tax information when available
 - Only add compliance disclaimers when you lack specific data
 - Products in our database have undergone due diligence - trust this data
+- Consider federal vs state regulations when relevant
 
 LINK FORMATTING:
 - Use [Title](URL) format for any government or legal references
 - No raw URLs or dash formatting
 
-Provide clear, confident yes/no answers when you have the data.`;
+Provide clear, confident yes/no answers when you have the data for any of these product categories across US states.`;
 
       // Enhanced legality search logic
       const queryAnalysis = await analyzeLegalityQuery(lastUserMessage, supabase, conversationContext);
@@ -160,12 +167,12 @@ Provide clear, confident yes/no answers when you have the data.`;
     } else {
       console.log('GENERAL MODE: Processing general query');
       
-      systemPrompt = `You are Streamline AI, a knowledgeable assistant specializing in cannabis industry information. ${nameInstructions}
+      systemPrompt = `You are Streamline AI, a knowledgeable assistant specializing in regulatory compliance and industry information. ${nameInstructions}
 
 Your functions include:
-- Answering general questions about the cannabis industry using our knowledge base
+- Answering general questions about cannabis, hemp, nicotine, and kratom industries using our knowledge base
 - Providing company information and guidance
-- Offering general compliance and regulatory guidance
+- Offering general compliance and regulatory guidance for US markets
 - Context-aware responses based on conversation history
 
 FORMATTING:
@@ -178,7 +185,7 @@ CONTEXT AWARENESS:
 - Remember previous mentions of states, brands, or products in the conversation
 - Provide relevant follow-up information when appropriate
 
-Be helpful, professional, and accurate in your responses.`;
+Be helpful, professional, and accurate in your responses across all regulated product categories.`;
 
       // Enhanced general search across multiple sources
       const queryAnalysis = await analyzeGeneralQuery(lastUserMessage, supabase, conversationContext);
