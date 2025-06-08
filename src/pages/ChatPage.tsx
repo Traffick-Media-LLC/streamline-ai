@@ -145,12 +145,12 @@ const ChatPage = () => {
           )}
           
           {/* Sticky Input Area */}
-          <div className="sticky bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur p-6 min-h-[120px] flex-shrink-0 z-10">
+          <div className={`sticky bottom-0 left-0 right-0 border-t bg-background/95 backdrop-blur p-6 flex-shrink-0 z-10 ${isMobile ? 'min-h-[120px]' : 'min-h-[88px]'}`}>
             <div className="max-w-4xl mx-auto">
-              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                {/* Mode Selection - Full width on top */}
+              <form onSubmit={handleSubmit} className={`${isMobile ? 'flex flex-col gap-3' : 'flex items-center gap-2'}`}>
+                {/* Mode Selection */}
                 <Select value={selectedMode} onValueChange={(value: ChatMode) => setSelectedMode(value)}>
-                  <SelectTrigger className="w-full h-10">
+                  <SelectTrigger className={`h-10 ${isMobile ? 'w-full' : 'w-[180px]'}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -160,24 +160,44 @@ const ChatPage = () => {
                   </SelectContent>
                 </Select>
                 
-                {/* Input and Send Button Row */}
-                <div className="flex items-center gap-2">
-                  <Input 
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="How can I help you today?"
-                    className="flex-1"
-                    disabled={isLoading}
-                  />
-                  <Button 
-                    type="submit" 
-                    size="icon" 
-                    disabled={!input.trim() || isLoading}
-                  >
-                    <SendHorizontal className="h-5 w-5" />
-                  </Button>
-                </div>
+                {/* Input and Send Button */}
+                {isMobile ? (
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="How can I help you today?"
+                      className="flex-1"
+                      disabled={isLoading}
+                    />
+                    <Button 
+                      type="submit" 
+                      size="icon" 
+                      disabled={!input.trim() || isLoading}
+                    >
+                      <SendHorizontal className="h-5 w-5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Input 
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="How can I help you today?"
+                      className="flex-1"
+                      disabled={isLoading}
+                    />
+                    <Button 
+                      type="submit" 
+                      size="icon" 
+                      disabled={!input.trim() || isLoading}
+                    >
+                      <SendHorizontal className="h-5 w-5" />
+                    </Button>
+                  </>
+                )}
               </form>
             </div>
           </div>
