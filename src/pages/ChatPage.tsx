@@ -10,7 +10,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import ChatHistoryPanel from "@/components/chat/ChatHistoryPanel";
 import ChatThread from "@/components/chat/ChatThread";
-import TopicCards from "@/components/chat/TopicCards";
 import { useChatState } from "@/hooks/useChatState";
 import { ChatMode } from "@/hooks/useChatModeDetection";
 
@@ -133,7 +132,6 @@ const ChatPage = () => {
                 <p className="mb-8 text-muted-foreground">
                   Ask me anything about product legality, state regulations, company files, or ingredient information.
                 </p>
-                <TopicCards onSelectTopic={(topic) => setInput(topic)} />
               </div>
             </div>
           ) : (
