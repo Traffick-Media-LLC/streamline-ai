@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import ChatHistoryPanel from "@/components/chat/ChatHistoryPanel";
 import ChatThread from "@/components/chat/ChatThread";
+import TopicCards from "@/components/chat/TopicCards";
 import { useChatState } from "@/hooks/useChatState";
 import { ChatMode } from "@/hooks/useChatModeDetection";
 
@@ -57,8 +58,15 @@ const ChatPage = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+    
+    console.log('Form submitted with input:', input);
     sendMessage(input, selectedMode);
     setInput("");
+  };
+
+  const handleTopicSelect = (topic: string) => {
+    console.log('Topic selected:', topic);
+    sendMessage(topic, selectedMode);
   };
 
   const handleHistoryToggle = () => {
@@ -119,6 +127,13 @@ const ChatPage = () => {
           >
             <History className="h-5 w-5" />
           </Button>
+          
+          {/* Show current thread status */}
+          <div className="text-sm text-muted-foreground">
+            {isLoading && "Sending message..."}
+            {!currentThreadId && !isLoading && "Ready to start chatting"}
+            {currentThreadId && !isLoading && `Thread: ${currentThread?.title || 'Chat'}`}
+          </div>
         </div>
         
         {/* Chat Content */}
@@ -132,6 +147,11 @@ const ChatPage = () => {
                 <p className="mb-8 text-muted-foreground">
                   Ask me anything about product legality, state regulations, company files, or ingredient information.
                 </p>
+                
+                {/* Topic suggestion cards */}
+                <div className="mb-8">
+                  <TopicCards onSelectTopic={handleTopicSelect} />
+                </div>
               </div>
             </div>
           ) : (
