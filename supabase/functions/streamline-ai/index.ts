@@ -65,6 +65,7 @@ DOCUMENT HANDLING INSTRUCTIONS:
 - Do NOT create arbitrary numbering systems or rename files
 - Do NOT use generic descriptions like "Document 1", "Sales Sheet A", etc.
 - Always provide the actual Google Drive links for immediate access
+- When users ask for specific document types (like "sales sheets"), prioritize files that match that exact type
 
 CONFIDENCE GUIDELINES:
 - When products are found in the state_allowed_products database, they are DEFINITIVELY legal - state this confidently without disclaimers
@@ -245,7 +246,7 @@ Always be helpful, professional, and accurate in your responses. When you have s
   }
 });
 
-// Enhanced helper function to analyze user queries with improved document and brand detection
+// Enhanced helper function to analyze user queries with improved sales sheet detection
 async function analyzeQuery(query: string, supabase: any) {
   const lowerQuery = query.toLowerCase();
   
@@ -264,7 +265,7 @@ async function analyzeQuery(query: string, supabase: any) {
   const brandKeywords = ['brand', 'company', 'manufacturer', 'producer'];
   const isBrandQuery = brandKeywords.some(keyword => lowerQuery.includes(keyword));
   
-  // EXPANDED: Detect document/file queries with more keywords including "sales sheets"
+  // ENHANCED: Detect document/file queries with sales sheet priority
   const documentKeywords = [
     'document', 'file', 'pdf', 'report', 'certificate', 'lab', 'test', 'coa', 'compliance',
     'brochure', 'brochures', 'sales', 'sheet', 'sheets', 'material', 'materials', 
@@ -273,9 +274,14 @@ async function analyzeQuery(query: string, supabase: any) {
   ];
   const isDocumentQuery = documentKeywords.some(keyword => lowerQuery.includes(keyword));
 
+  // ENHANCED: Detect specific sales sheet requests
+  const salesSheetKeywords = ['sales sheet', 'sales sheets', 'sales sheet', 'salessheet', 'salessheets'];
+  const isSalesSheetQuery = salesSheetKeywords.some(keyword => lowerQuery.includes(keyword));
+
   console.log('Document query analysis:', {
     query: lowerQuery,
     isDocumentQuery,
+    isSalesSheetQuery,
     matchedKeywords: documentKeywords.filter(keyword => lowerQuery.includes(keyword))
   });
 
@@ -340,6 +346,7 @@ async function analyzeQuery(query: string, supabase: any) {
     isProductQuery,
     isBrandQuery, 
     isDocumentQuery,
+    isSalesSheetQuery,
     brandFilter,
     stateFilter,
     searchTerms: lowerQuery.split(' ').filter(term => term.length > 2)
@@ -351,174 +358,56 @@ async function analyzeQuery(query: string, supabase: any) {
     isProductQuery,
     isBrandQuery, 
     isDocumentQuery,
+    isSalesSheetQuery,
     brandFilter,
     stateFilter,
     searchTerms: lowerQuery.split(' ').filter(term => term.length > 2)
   };
 }
 
-// Fixed function to search state allowed products with proper query structure
-async function searchStateAllowedProducts(supabase: any, queryAnalysis: any) {
-  try {
-    console.log('Searching state allowed products with analysis:', queryAnalysis);
-    
-    // Get the state ID first
-    const { data: stateData, error: stateError } = await supabase
-      .from('states')
-      .select('id')
-      .ilike('name', `%${queryAnalysis.stateFilter}%`)
-      .limit(1);
-    
-    if (stateError || !stateData || stateData.length === 0) {
-      console.log('State not found:', queryAnalysis.stateFilter);
-      return [];
-    }
-    
-    const stateId = stateData[0].id;
-    
-    // Build the query with proper joins
-    let query = supabase
-      .from('state_allowed_products')
-      .select(`
-        id,
-        products!inner (
-          id,
-          name,
-          brands!inner (
-            name,
-            logo_url
-          )
-        ),
-        states!inner (
-          name
-        )
-      `)
-      .eq('state_id', stateId);
+// ... keep existing code (searchStateAllowedProducts function)
 
-    // Apply brand filter if specified - filter on the joined brands table
-    if (queryAnalysis.brandFilter) {
-      console.log('Applying brand filter to state allowed products:', queryAnalysis.brandFilter);
-      query = query.eq('products.brands.name', queryAnalysis.brandFilter);
-    }
+// ... keep existing code (searchProducts function)
 
-    const { data: allowedProducts, error } = await query.limit(20);
+// ... keep existing code (searchBrands function)
 
-    if (error) {
-      console.error('State allowed products search error:', error);
-      return [];
-    }
-
-    if (!allowedProducts || allowedProducts.length === 0) {
-      console.log('No state allowed products found');
-      return [];
-    }
-
-    console.log(`Found ${allowedProducts.length} state allowed products`);
-
-    // Format the results cleanly with proper brand attribution
-    return allowedProducts.map(item => {
-      const product = item.products;
-      const brand = product?.brands;
-      const state = item.states;
-      
-      return `${brand?.name || 'Unknown Brand'} - ${product?.name || 'Unknown Product'} (Legal in ${state?.name || 'Unknown State'})`;
-    });
-
-  } catch (error) {
-    console.error('State allowed products search error:', error);
-    return [];
-  }
-}
-
-// Search products database
-async function searchProducts(supabase: any, queryAnalysis: any) {
-  try {
-    console.log('Searching products with analysis:', queryAnalysis);
-    
-    let query = supabase
-      .from('products')
-      .select(`
-        *,
-        brands:brand_id(name, logo_url)
-      `)
-      .limit(10);
-
-    // Apply brand filter if specified
-    if (queryAnalysis.brandFilter) {
-      console.log('Applying brand filter to products:', queryAnalysis.brandFilter);
-      query = query.eq('brands.name', queryAnalysis.brandFilter);
-    }
-
-    const { data: products, error } = await query;
-
-    if (error) {
-      console.error('Product search error:', error);
-      return [];
-    }
-
-    if (!products || products.length === 0) {
-      console.log('No products found');
-      return [];
-    }
-
-    console.log(`Found ${products.length} products`);
-
-    return products.map(product => 
-      `${product.brands?.name || 'Unknown Brand'} - ${product.name}`
-    );
-
-  } catch (error) {
-    console.error('Product search error:', error);
-    return [];
-  }
-}
-
-// Search brands database
-async function searchBrands(supabase: any, queryAnalysis: any) {
-  try {
-    console.log('Searching brands with analysis:', queryAnalysis);
-    
-    let query = supabase
-      .from('brands')
-      .select('*')
-      .limit(10);
-
-    // Apply brand filter if specified
-    if (queryAnalysis.brandFilter) {
-      console.log('Applying brand filter to brands search:', queryAnalysis.brandFilter);
-      query = query.ilike('name', `%${queryAnalysis.brandFilter}%`);
-    }
-
-    const { data: brands, error } = await query;
-
-    if (error) {
-      console.error('Brand search error:', error);
-      return [];
-    }
-
-    if (!brands || brands.length === 0) {
-      console.log('No brands found');
-      return [];
-    }
-
-    console.log(`Found ${brands.length} brands`);
-
-    return brands.map(brand => 
-      `Brand: ${brand.name}${brand.description ? ` - ${brand.description}` : ''}`
-    );
-
-  } catch (error) {
-    console.error('Brand search error:', error);
-    return [];
-  }
-}
-
-// ENHANCED: Search Drive files with improved brand filtering and document searching
+// ENHANCED: Search Drive files with improved sales sheet prioritization
 async function searchDriveFiles(supabase: any, queryAnalysis: any) {
   try {
     console.log('Searching drive files with analysis:', queryAnalysis);
     
     let query = supabase
+      .from('drive_files')
+      .select('*')
+      .limit(20);
+
+    // ENHANCED: Prioritize sales sheets when specifically requested
+    if (queryAnalysis.isSalesSheetQuery && queryAnalysis.brandFilter) {
+      console.log('Sales sheet query detected, prioritizing sales sheets for brand:', queryAnalysis.brandFilter);
+      
+      // First, try to find files with "Sales Sheet" in the name or category
+      query = query
+        .eq('brand', queryAnalysis.brandFilter)
+        .or(`file_name.ilike.%Sales Sheet%,subcategory_2.eq.Sales Sheet`);
+        
+      const { data: salesSheetFiles, error: salesSheetError } = await query;
+      
+      if (!salesSheetError && salesSheetFiles && salesSheetFiles.length > 0) {
+        console.log(`Found ${salesSheetFiles.length} sales sheet files for ${queryAnalysis.brandFilter}`);
+        
+        // Return formatted sales sheet results
+        return salesSheetFiles.map(file => {
+          const fileName = file.file_name || 'Unknown Document';
+          const fileUrl = file.file_url || '#';
+          const brandInfo = file.brand ? ` (${file.brand})` : '';
+          
+          return `**${fileName}**${brandInfo} - ${fileUrl}`;
+        });
+      }
+    }
+
+    // Reset query for fallback search if no sales sheets found
+    query = supabase
       .from('drive_files')
       .select('*')
       .limit(20);
