@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -126,10 +125,12 @@ PRODUCT LEGALITY EXPERTISE:
 - Nicotine Products (disposable vapes, pods, e-liquids, salts, pouches, etc.)
 - Kratom Products (including 7-hydroxymitragynine products)
 
-RESPONSE FORMATTING:
+RESPONSE FORMATTING FOR PRODUCT LEGALITY:
+- When displaying legal products, format as a clean numbered list
+- Start with a clear header like "**Legal Galaxy Treats Products in Florida:**"
+- List products as: "1. Product Name by Brand" (no need to say "legal" - if it's in the list, it's legal)
 - Use **Bold Text** for headers and emphasis
 - Format links as [Title](URL) - never use raw URLs or dashes
-- When products are found in our database, state legality confidently
 - Include state excise tax information when available
 - For complex legal questions, use internet research to provide current information
 
@@ -438,7 +439,7 @@ async function searchDocuments(supabase: any, queryAnalysis: any) {
     console.log('Document search with analysis:', queryAnalysis);
 
     let query = supabase.from('drive_files').select('*').limit(50);
-
+    
     // PRIORITIZE SALES SHEETS when specifically requested
     if (queryAnalysis.isSalesSheetQuery && queryAnalysis.brandFilter) {
       console.log('Searching for sales sheets for brand:', queryAnalysis.brandFilter);
@@ -675,11 +676,12 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
 
     console.log('Filtered to', filteredProducts.length, 'matching products');
 
+    // Format products cleanly without redundant "legal" text
     return filteredProducts.map(item => {
       const product = item.products;
       const brand = product?.brands?.name || 'Unknown Brand';
       const productName = product?.name || 'Unknown Product';
-      return `${productName} by ${brand} is legal in ${queryAnalysis.stateFilter}`;
+      return `${productName} by ${brand}`;
     });
 
   } catch (error) {
