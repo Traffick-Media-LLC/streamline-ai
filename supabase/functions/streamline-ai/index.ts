@@ -127,11 +127,11 @@ PRODUCT LEGALITY EXPERTISE:
 
 RESPONSE FORMATTING FOR PRODUCT LEGALITY:
 - Format product lists as clean numbered lists: 1. 2. 3. etc.
-- Start with a clear header: "**Legal Galaxy Treats Products in Florida:**"
-- List each product as: "1. Product Name by Brand"
+- Start with a clear bold header: **Legal [Brand] Products in [State]:**
+- List each product as just the product name: "1. Product Name"
 - Do NOT use bullet points (*) - use numbered lists only
-- Do NOT add "legal" to each product - if it's in the list, it's legal
-- Use **bold text** (with no spaces between asterisks) for headers only
+- Do NOT repeat the brand name after each product since the header already specifies it
+- Use **bold text** for headers only (no spaces between asterisks)
 - Format links as [Title](URL) - never use raw URLs or dashes
 - Include state excise tax information when available
 - For complex legal questions, use internet research to provide current information
@@ -139,9 +139,9 @@ RESPONSE FORMATTING FOR PRODUCT LEGALITY:
 EXAMPLE FORMAT:
 **Legal Galaxy Treats Products in Florida:**
 
-1. Delta 8 Gummies by Galaxy Treats
-2. THC-A Disposables by Galaxy Treats
-3. Delta 9 Gummies by Galaxy Treats
+1. Delta 8 Gummies
+2. THC-A Disposables  
+3. Delta 9 Gummies
 
 RESEARCH APPROACH:
 - First check internal databases for definitive answers
