@@ -146,7 +146,11 @@ Be helpful, professional, and thorough in your research and responses.`;
       // Check for legality queries first
       if (isLegalityQuery(lastUserMessage)) {
         console.log('Processing legality query in general mode');
-        const legalityResults = await searchStateLegality(supabase, queryAnalysis);
+        // Use the proper legality analysis function for legality queries
+        const legalityAnalysis = await analyzeLegalityQuery(lastUserMessage, supabase, conversationContext);
+        console.log('Legality analysis result:', legalityAnalysis);
+        
+        const legalityResults = await searchStateLegality(supabase, legalityAnalysis);
         if (legalityResults.length > 0) {
           searchResults = [...searchResults, ...legalityResults];
           sourceInfo = {
@@ -157,17 +161,17 @@ Be helpful, professional, and thorough in your research and responses.`;
         }
         
         // Add excise tax information if state is identified
-        if (queryAnalysis.stateFilter) {
-          const exciseTaxInfo = await getStateExciseTaxInfo(supabase, queryAnalysis.stateFilter);
+        if (legalityAnalysis.stateFilter) {
+          const exciseTaxInfo = await getStateExciseTaxInfo(supabase, legalityAnalysis.stateFilter);
           if (exciseTaxInfo) {
-            searchResults.push(`**Excise Tax Information for ${queryAnalysis.stateFilter}:**\n${exciseTaxInfo}`);
+            searchResults.push(`**Excise Tax Information for ${legalityAnalysis.stateFilter}:**\n${exciseTaxInfo}`);
           }
         }
         
         // Use Firecrawl for complex legal analysis if needed
         if (shouldUseLegalCrawling(lastUserMessage)) {
           console.log('Using Firecrawl for enhanced legal research');
-          const firecrawlResults = await performFirecrawlSearch(lastUserMessage, queryAnalysis);
+          const firecrawlResults = await performFirecrawlSearch(lastUserMessage, legalityAnalysis);
           if (firecrawlResults.length > 0) {
             searchResults = [...searchResults, ...firecrawlResults];
             sourceInfo = {
@@ -305,7 +309,7 @@ function extractConversationContext(messages: any[]) {
       
       // Extract brand
       if (!context.lastBrand) {
-        const brandKeywords = ['juice head', 'orbital', 'kush', 'cookies'];
+        const brandKeywords = ['juice head', 'orbital', 'kush', 'cookies', 'galaxy treats'];
         for (const brand of brandKeywords) {
           if (content.includes(brand)) {
             context.lastBrand = brand;
@@ -501,16 +505,61 @@ function groupAndFormatDocuments(files: any[]): string[] {
 // ENHANCED LEGALITY SEARCH FUNCTIONS
 async function analyzeLegalityQuery(query: string, supabase: any, context: any = {}) {
   const lowerQuery = query.toLowerCase();
+  console.log('Analyzing legality query:', lowerQuery);
   
-  // Extract state (including context)
+  // Extract state (case-insensitive, including context)
   let stateFilter = context.lastState || null;
   
   if (!stateFilter) {
-    const stateKeywords = ['florida', 'california', 'texas', 'new york', 'colorado', 'oregon', 'washington'];
+    // More comprehensive state matching including common variations
+    const stateKeywords = [
+      'florida', 'fl', 'california', 'ca', 'texas', 'tx', 
+      'new york', 'ny', 'colorado', 'co', 'oregon', 'or', 'washington', 'wa'
+    ];
     for (const state of stateKeywords) {
-      if (lowerQuery.includes(state)) {
-        stateFilter = state.charAt(0).toUpperCase() + state.slice(1);
+      if (lowerQuery.includes(state.toLowerCase())) {
+        // Normalize state names
+        const stateMap = {
+          'florida': 'Florida', 'fl': 'Florida',
+          'california': 'California', 'ca': 'California',
+          'texas': 'Texas', 'tx': 'Texas',
+          'new york': 'New York', 'ny': 'New York',
+          'colorado': 'Colorado', 'co': 'Colorado',
+          'oregon': 'Oregon', 'or': 'Oregon',
+          'washington': 'Washington', 'wa': 'Washington'
+        };
+        stateFilter = stateMap[state.toLowerCase()] || state.charAt(0).toUpperCase() + state.slice(1);
         break;
+      }
+    }
+  }
+
+  // Enhanced brand extraction with multi-word brand support
+  let brandFilter = context.lastBrand || null;
+  if (!brandFilter) {
+    // Check for known multi-word brands first
+    const multiWordBrands = ['galaxy treats', 'juice head'];
+    for (const brand of multiWordBrands) {
+      if (lowerQuery.includes(brand.toLowerCase())) {
+        brandFilter = brand;
+        break;
+      }
+    }
+    
+    // If no multi-word brand found, check database
+    if (!brandFilter) {
+      try {
+        const { data: brands, error } = await supabase.from('brands').select('name');
+        if (!error && brands) {
+          for (const brand of brands) {
+            if (lowerQuery.includes(brand.name.toLowerCase())) {
+              brandFilter = brand.name;
+              break;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching brands for legality query:', error);
       }
     }
   }
@@ -518,8 +567,11 @@ async function analyzeLegalityQuery(query: string, supabase: any, context: any =
   // Extract product terms
   const productTerms = lowerQuery.split(' ').filter(term => term.length > 2);
 
+  console.log('Legality analysis result:', { stateFilter, brandFilter, productTerms });
+
   return {
     stateFilter,
+    brandFilter,
     productTerms,
     requiresLegalAnalysis: shouldUseLegalCrawling(query)
   };
@@ -527,9 +579,12 @@ async function analyzeLegalityQuery(query: string, supabase: any, context: any =
 
 async function searchStateLegality(supabase: any, queryAnalysis: any) {
   try {
-    if (!queryAnalysis.stateFilter) return [];
+    if (!queryAnalysis.stateFilter) {
+      console.log('No state filter provided for legality search');
+      return [];
+    }
 
-    console.log('Searching for legality with state:', queryAnalysis.stateFilter, 'and terms:', queryAnalysis.productTerms);
+    console.log('Searching for legality with state:', queryAnalysis.stateFilter, 'brand:', queryAnalysis.brandFilter);
 
     // First, get the state ID
     const { data: stateData, error: stateError } = await supabase
@@ -539,14 +594,14 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
       .single();
 
     if (stateError || !stateData) {
-      console.log('State not found:', queryAnalysis.stateFilter);
+      console.log('State not found:', queryAnalysis.stateFilter, 'Error:', stateError);
       return [];
     }
 
     console.log('Found state ID:', stateData.id);
 
     // Search state allowed products with proper joins
-    const { data: stateProducts, error } = await supabase
+    let query = supabase
       .from('state_allowed_products')
       .select(`
         products!inner (
@@ -558,21 +613,29 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
       `)
       .eq('state_id', stateData.id);
 
+    // If we have a brand filter, add it to the query
+    if (queryAnalysis.brandFilter) {
+      console.log('Adding brand filter:', queryAnalysis.brandFilter);
+      query = query.eq('products.brands.name', queryAnalysis.brandFilter);
+    }
+
+    const { data: stateProducts, error } = await query;
+
     if (error) {
       console.error('Error searching state products:', error);
       return [];
     }
 
     if (!stateProducts || stateProducts.length === 0) {
-      console.log('No products found for state:', queryAnalysis.stateFilter);
+      console.log('No products found for state:', queryAnalysis.stateFilter, 'brand:', queryAnalysis.brandFilter);
       return [];
     }
 
-    console.log('Found', stateProducts.length, 'products for state');
+    console.log('Found', stateProducts.length, 'products for state and brand');
 
-    // Filter products based on query terms if any
+    // Filter products based on query terms if any (only if no specific brand filter)
     let filteredProducts = stateProducts;
-    if (queryAnalysis.productTerms.length > 0) {
+    if (!queryAnalysis.brandFilter && queryAnalysis.productTerms.length > 0) {
       filteredProducts = stateProducts.filter(item => {
         const productName = item.products?.name?.toLowerCase() || '';
         const brandName = item.products?.brands?.name?.toLowerCase() || '';
