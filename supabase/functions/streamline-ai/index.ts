@@ -50,7 +50,8 @@ serve(async (req) => {
     let sourceInfo = {
       found: false,
       source: 'no_match' as const,
-      message: 'No relevant information found.'
+      message: 'No relevant information found.',
+      sources: [] as Array<{type: string, content: string, url?: string, retrievedAt?: string}>
     };
 
     // Extract user info for system prompt
@@ -104,7 +105,8 @@ You are confident and authoritative about documents in our system. Present findi
         sourceInfo = {
           found: true,
           source: 'drive_files' as const,
-          message: `Found ${documentResults.length} relevant document(s).`
+          message: `Found ${documentResults.length} relevant document(s).`,
+          sources: [{type: 'drive_files', content: `${documentResults.length} documents`}]
         };
       } else {
         // Knowledge base fallback for documents
@@ -114,7 +116,8 @@ You are confident and authoritative about documents in our system. Present findi
           sourceInfo = {
             found: true,
             source: 'knowledge_base' as const,
-            message: `Found ${kbResults.length} relevant knowledge entries.`
+            message: `Found ${kbResults.length} relevant knowledge entries.`,
+            sources: [{type: 'knowledge_base', content: `${kbResults.length} entries`}]
           };
         }
       }
@@ -124,44 +127,54 @@ You are confident and authoritative about documents in our system. Present findi
       
       systemPrompt = `You are Streamline AI, a comprehensive research assistant with access to multiple information sources. ${nameInstructions}
 
-Your capabilities include:
+CORE CAPABILITIES:
 - Product legality research across US states (cannabis, hemp, nicotine, kratom products)
 - General industry knowledge and compliance guidance
 - Company information and document awareness
-- Internet research using Firecrawl for the latest information
+- Internet research using government sources for the latest legal information
 - State regulations and excise tax information
 
-PRODUCT LEGALITY EXPERTISE:
-- Cannabis and Hemp Products (flower, concentrates, edibles, topicals, etc.)
-- Consumable Hemp Products (CBD, Delta-8, Delta-9, HHC, etc.)
-- Nicotine Products (disposable vapes, pods, e-liquids, salts, pouches, etc.)
-- Kratom Products (including 7-hydroxymitragynine products)
+LEGAL ACCURACY & SOURCE ATTRIBUTION REQUIREMENTS:
+- ALWAYS cite your sources explicitly and professionally
+- NEVER make overconfident legal claims without proper verification
+- Distinguish clearly between internal database results vs external research
+- When uncertain, explicitly state limitations and recommend official verification
 
-RESPONSE FORMATTING FOR PRODUCT LEGALITY:
+REQUIRED SOURCE CITATION FORMATS:
+- "According to our State Map database..."
+- "Based on documents in our Knowledge Base..."
+- "According to [government source URL] retrieved on [date]..."
+- "External research suggests... (Source: [URL])"
+
+PROFESSIONAL RESPONSE STRUCTURE:
+- Always be professional, helpful, and conversational—like a well-informed teammate
+- Ask clarifying questions if the user query is ambiguous
+- Break long responses into clear, readable sections
+- Use bold section headings, bullet points, and line breaks
+- Include proper disclaimers for legal information
+
+LEGAL RESPONSE PATTERN FOR UNCERTAIN CASES:
+**Database Results:** [specific findings or "No specific products found in our database"]
+**External Research:** [government source findings with URL and date]
+**Recommendation:** Always verify with official state sources before making business decisions
+
+RESPONSE FORMATTING FOR DEFINITIVE PRODUCT LEGALITY:
 - Format product lists as clean numbered lists: 1. 2. 3. etc.
 - Start with a clear bold header: **Legal [Brand] Products in [State]:**
 - List each product as just the product name: "1. Product Name"
 - Do NOT use bullet points (*) - use numbered lists only
 - Do NOT repeat the brand name after each product since the header already specifies it
-- Use **bold text** for headers only (no spaces between asterisks)
-- Format links as [Title](URL) - never use raw URLs or dashes
+- Use **bold text** for headers only
 - Include state excise tax information when available
-- For complex legal questions, use internet research to provide current information
+- ALWAYS cite the source: "According to our State Map database..."
 
-EXAMPLE FORMAT:
-**Legal Galaxy Treats Products in Florida:**
+UNCERTAINTY HANDLING:
+- When database has no definitive results, clearly state this limitation
+- Provide external research with proper attribution
+- Include disclaimers about needing official verification
+- Never make definitive legal claims based solely on external research
 
-1. Delta 8 Gummies
-2. THC-A Disposables  
-3. Delta 9 Gummies
-
-RESEARCH APPROACH:
-- First check internal databases for definitive answers
-- Use Firecrawl for internet research when internal data is insufficient
-- Provide context-aware responses based on conversation history
-- Focus on accuracy and cite sources when possible
-
-Be helpful, professional, and thorough in your research and responses.`;
+Be helpful, professional, and thorough while maintaining strict accuracy standards.`;
 
       // Enhanced general search across multiple sources
       const queryAnalysis = await analyzeGeneralQuery(lastUserMessage, supabase, conversationContext);
@@ -179,7 +192,8 @@ Be helpful, professional, and thorough in your research and responses.`;
           sourceInfo = {
             found: true,
             source: 'state_allowed_products' as const,
-            message: `Found definitive legality information for ${legalityResults.length} product(s).`
+            message: `Found definitive legality information for ${legalityResults.length} product(s).`,
+            sources: [{type: 'state_database', content: `${legalityResults.length} products confirmed legal`}]
           };
         }
         
@@ -188,20 +202,27 @@ Be helpful, professional, and thorough in your research and responses.`;
           const exciseTaxInfo = await getStateExciseTaxInfo(supabase, legalityAnalysis.stateFilter);
           if (exciseTaxInfo) {
             searchResults.push(`**Excise Tax Information for ${legalityAnalysis.stateFilter}:**\n${exciseTaxInfo}`);
+            sourceInfo.sources.push({type: 'state_database', content: 'Excise tax information'});
           }
         }
         
-        // Use Firecrawl for complex legal analysis if needed
+        // Use Firecrawl for additional research when needed
         if (shouldUseLegalCrawling(lastUserMessage)) {
           console.log('Using Firecrawl for enhanced legal research');
           const firecrawlResults = await performFirecrawlSearch(lastUserMessage, legalityAnalysis);
           if (firecrawlResults.length > 0) {
             searchResults = [...searchResults, ...firecrawlResults];
-            sourceInfo = {
-              found: true,
-              source: 'internet_knowledge' as const,
-              message: `Found ${firecrawlResults.length} additional research result(s) from web sources.`
-            };
+            const retrievedAt = new Date().toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            });
+            sourceInfo.sources.push({
+              type: 'government_source',
+              content: 'Government website research',
+              url: `https://${legalityAnalysis.stateFilter?.toLowerCase().replace(' ', '') || 'state'}.gov`,
+              retrievedAt: retrievedAt
+            });
           }
         }
       } else {
@@ -209,30 +230,47 @@ Be helpful, professional, and thorough in your research and responses.`;
         const kbResults = await searchKnowledgeBase(supabase, queryAnalysis);
         if (kbResults.length > 0) {
           searchResults = [...searchResults, ...kbResults];
+          sourceInfo.sources.push({type: 'knowledge_base', content: `${kbResults.length} entries`});
         }
         
         const generalResults = await searchGeneral(supabase, queryAnalysis);
         if (generalResults.length > 0) {
           searchResults = [...searchResults, ...generalResults];
+          sourceInfo.sources.push({type: 'general_database', content: `${generalResults.length} results`});
         }
         
         if (searchResults.length > 0) {
           sourceInfo = {
             found: true,
             source: 'knowledge_base' as const,
-            message: `Found ${searchResults.length} relevant result(s).`
+            message: `Found ${searchResults.length} relevant result(s).`,
+            sources: sourceInfo.sources
           };
         }
       }
     }
 
-    // Prepare context for AI
+    // Prepare context for AI with enhanced source attribution
     let contextInfo = '';
     if (searchResults.length > 0) {
       if (mode === 'drive-search') {
         contextInfo = `\n\nAvailable Documents:\n${searchResults.join('\n')}`;
       } else {
         contextInfo = `\n\nRelevant information found:\n${searchResults.map(result => `- ${result}`).join('\n')}`;
+        
+        // Add source information for legal queries
+        if (isLegalityQuery(lastUserMessage) && sourceInfo.sources.length > 0) {
+          contextInfo += `\n\nSources Available for Citation:\n`;
+          sourceInfo.sources.forEach(source => {
+            if (source.type === 'state_database') {
+              contextInfo += `- Internal State Map Database: ${source.content}\n`;
+            } else if (source.type === 'government_source') {
+              contextInfo += `- Government Source: ${source.url} (retrieved ${source.retrievedAt})\n`;
+            } else if (source.type === 'knowledge_base') {
+              contextInfo += `- Knowledge Base: ${source.content}\n`;
+            }
+          });
+        }
       }
     }
 
@@ -392,7 +430,7 @@ async function performFirecrawlSearch(query: string, queryAnalysis: any) {
 
     if (!crawlResponse.ok) {
       console.error('Firecrawl API error:', crawlResponse.status, await crawlResponse.text());
-      return [`**Web Research**: Unable to access government sources for ${queryAnalysis.stateFilter || 'this query'}`];
+      return [`**External Research**: Unable to access government sources for ${queryAnalysis.stateFilter || 'this query'} (Source: ${targetUrl})`];
     }
 
     const crawlData = await crawlResponse.json();
@@ -400,14 +438,19 @@ async function performFirecrawlSearch(query: string, queryAnalysis: any) {
     
     if (crawlData?.success && crawlData?.data?.markdown) {
       const content = crawlData.data.markdown.substring(0, 500); // Limit content length
-      return [`**Government Source Research for ${queryAnalysis.stateFilter || 'Legal Query'}:**\n${content}...`];
+      const retrievedDate = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      return [`**External Research**: Based on government source ${targetUrl} retrieved on ${retrievedDate}:\n\n${content}...\n\n*Note: This information should be verified with official state sources before making business decisions.*`];
     }
     
-    return [`**Web Research**: No additional information found from government sources for ${queryAnalysis.stateFilter || 'this query'}`];
+    return [`**External Research**: No additional information found from government sources for ${queryAnalysis.stateFilter || 'this query'} (Source: ${targetUrl})`];
     
   } catch (error) {
     console.error('Firecrawl search error:', error);
-    return [`**Web Research**: Research unavailable at this time for ${queryAnalysis.stateFilter || 'this query'}`];
+    return [`**External Research**: Government source research unavailable at this time for ${queryAnalysis.stateFilter || 'this query'}`];
   }
 }
 
@@ -742,11 +785,11 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
 
     console.log('Filtered to', filteredProducts.length, 'matching products');
 
-    // Format products cleanly WITHOUT redundant brand names
+    // Format products cleanly - just return product names since the header context will specify the brand
     return filteredProducts.map(item => {
       const product = item.products;
       const productName = product?.name || 'Unknown Product';
-      // Remove redundant brand name since header already specifies the brand
+      // Return just the product name since the context/header will specify it's legal in the state
       return productName;
     });
 
