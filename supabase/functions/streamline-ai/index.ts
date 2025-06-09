@@ -502,20 +502,68 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
   try {
     if (!queryAnalysis.stateFilter) return [];
 
-    // Search state allowed products
+    console.log('Searching for legality with state:', queryAnalysis.stateFilter, 'and terms:', queryAnalysis.productTerms);
+
+    // First, get the state ID
+    const { data: stateData, error: stateError } = await supabase
+      .from('states')
+      .select('id')
+      .eq('name', queryAnalysis.stateFilter)
+      .single();
+
+    if (stateError || !stateData) {
+      console.log('State not found:', queryAnalysis.stateFilter);
+      return [];
+    }
+
+    console.log('Found state ID:', stateData.id);
+
+    // Search state allowed products with proper joins
     const { data: stateProducts, error } = await supabase
       .from('state_allowed_products')
       .select(`
-        products (name, brands (name))
+        products!inner (
+          name,
+          brands!inner (
+            name
+          )
+        )
       `)
-      .eq('states.name', queryAnalysis.stateFilter);
+      .eq('state_id', stateData.id);
 
-    if (error || !stateProducts) return [];
+    if (error) {
+      console.error('Error searching state products:', error);
+      return [];
+    }
 
-    return stateProducts.map(item => {
+    if (!stateProducts || stateProducts.length === 0) {
+      console.log('No products found for state:', queryAnalysis.stateFilter);
+      return [];
+    }
+
+    console.log('Found', stateProducts.length, 'products for state');
+
+    // Filter products based on query terms if any
+    let filteredProducts = stateProducts;
+    if (queryAnalysis.productTerms.length > 0) {
+      filteredProducts = stateProducts.filter(item => {
+        const productName = item.products?.name?.toLowerCase() || '';
+        const brandName = item.products?.brands?.name?.toLowerCase() || '';
+        const combinedText = `${productName} ${brandName}`;
+        
+        return queryAnalysis.productTerms.some(term => 
+          combinedText.includes(term.toLowerCase())
+        );
+      });
+    }
+
+    console.log('Filtered to', filteredProducts.length, 'matching products');
+
+    return filteredProducts.map(item => {
       const product = item.products;
       const brand = product?.brands?.name || 'Unknown Brand';
-      return `${product?.name || 'Unknown Product'} by ${brand} is legal in ${queryAnalysis.stateFilter}`;
+      const productName = product?.name || 'Unknown Product';
+      return `${productName} by ${brand} is legal in ${queryAnalysis.stateFilter}`;
     });
 
   } catch (error) {
