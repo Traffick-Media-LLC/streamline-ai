@@ -367,21 +367,47 @@ async function performFirecrawlSearch(query: string, queryAnalysis: any) {
 
     console.log('Performing Firecrawl search for:', query);
     
-    // Construct search terms for government and regulatory sources
-    const searchTerms = [];
+    // Construct target URL based on state
+    let targetUrl = 'https://example.com'; // fallback
     if (queryAnalysis.stateFilter) {
-      searchTerms.push(`${queryAnalysis.stateFilter} government regulations`);
-    }
-    if (queryAnalysis.productTerms) {
-      searchTerms.push(...queryAnalysis.productTerms);
+      const stateCode = queryAnalysis.stateFilter.toLowerCase().replace(' ', '');
+      targetUrl = `https://${stateCode}.gov`;
     }
     
-    // For now, return a placeholder that indicates Firecrawl integration is ready
-    return [`**Web Research**: Firecrawl integration is configured and ready. Search terms: ${searchTerms.join(', ')}`];
+    console.log('Crawling URL:', targetUrl);
+    
+    const crawlResponse = await fetch('https://api.firecrawl.dev/v0/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        url: targetUrl,
+        formats: ['markdown'],
+        onlyMainContent: true,
+        maxDepth: 1
+      })
+    });
+
+    if (!crawlResponse.ok) {
+      console.error('Firecrawl API error:', crawlResponse.status, await crawlResponse.text());
+      return [`**Web Research**: Unable to access government sources for ${queryAnalysis.stateFilter || 'this query'}`];
+    }
+
+    const crawlData = await crawlResponse.json();
+    console.log('Firecrawl response status:', crawlData?.success);
+    
+    if (crawlData?.success && crawlData?.data?.markdown) {
+      const content = crawlData.data.markdown.substring(0, 500); // Limit content length
+      return [`**Government Source Research for ${queryAnalysis.stateFilter || 'Legal Query'}:**\n${content}...`];
+    }
+    
+    return [`**Web Research**: No additional information found from government sources for ${queryAnalysis.stateFilter || 'this query'}`];
     
   } catch (error) {
     console.error('Firecrawl search error:', error);
-    return [];
+    return [`**Web Research**: Research unavailable at this time for ${queryAnalysis.stateFilter || 'this query'}`];
   }
 }
 
@@ -496,6 +522,8 @@ async function searchDocuments(supabase: any, queryAnalysis: any) {
 }
 
 function groupAndFormatDocuments(files: any[]): string[] {
+  const MAX_RESULTS = 30; // Limit results to prevent overwhelming AI
+  
   // Group files by subcategory
   const grouped: { [key: string]: any[] } = {};
   
@@ -508,20 +536,36 @@ function groupAndFormatDocuments(files: any[]): string[] {
   });
 
   const result: string[] = [];
+  let totalCount = 0;
   
-  // Format grouped results with clean markdown links only
+  // Format grouped results with clean markdown links only and deduplication
   Object.entries(grouped).forEach(([category, categoryFiles]) => {
-    if (categoryFiles.length > 0) {
+    if (categoryFiles.length > 0 && totalCount < MAX_RESULTS) {
       result.push(`**${category}**`);
+      
+      const seen = new Set();
       categoryFiles.forEach(file => {
+        if (totalCount >= MAX_RESULTS) return;
+        
         const fileName = file.file_name || 'Unknown Document';
         const fileUrl = file.file_url || '#';
-        // Output ONLY clean markdown links - no extra text, colons, or labels
-        result.push(`[${fileName}](${fileUrl})`);
+        
+        // Deduplicate by filename
+        if (!seen.has(fileName)) {
+          seen.add(fileName);
+          // Output ONLY clean markdown links - no extra text, colons, or labels
+          result.push(`[${fileName}](${fileUrl})`);
+          totalCount++;
+        }
       });
       result.push(''); // Add spacing between groups
     }
   });
+
+  // Add disclaimer if results were truncated
+  if (files.length > MAX_RESULTS) {
+    result.push(`*Showing first ${MAX_RESULTS} documents. ${files.length - MAX_RESULTS} additional documents available.*`);
+  }
 
   return result;
 }
