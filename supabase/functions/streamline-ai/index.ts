@@ -123,7 +123,7 @@ You are confident and authoritative about documents in our system. Present findi
       }
 
     } else {
-      console.log('GENERAL MODE: Processing general query with enhanced capabilities');
+      console.log('GENERAL MODE: Processing general query with enhanced legal capabilities');
       
       systemPrompt = `You are Streamline AI, a comprehensive research assistant with access to multiple information sources. ${nameInstructions}
 
@@ -134,47 +134,47 @@ CORE CAPABILITIES:
 - Internet research using government sources for the latest legal information
 - State regulations and excise tax information
 
-LEGAL ACCURACY & SOURCE ATTRIBUTION REQUIREMENTS:
-- ALWAYS cite your sources explicitly and professionally
-- NEVER make overconfident legal claims without proper verification
-- Distinguish clearly between internal database results vs external research
-- When uncertain, explicitly state limitations and recommend official verification
+MANDATORY LEGAL RESPONSE FORMAT (for any legality questions):
+When answering legal questions, you MUST use this EXACT structure:
 
-REQUIRED SOURCE CITATION FORMATS:
-- "According to our State Map database..."
-- "Based on documents in our Knowledge Base..."
-- "According to [government source URL] retrieved on [date]..."
-- "External research suggests... (Source: [URL])"
+**Database Results:**
+- State "Found X legal products in our database" OR "No specific products found in our database"
+- If products found, list as numbered items (1. Product Name, 2. Product Name)
 
-PROFESSIONAL RESPONSE STRUCTURE:
-- Always be professional, helpful, and conversational—like a well-informed teammate
-- Ask clarifying questions if the user query is ambiguous
-- Break long responses into clear, readable sections
-- Use bold section headings, bullet points, and line breaks
-- Include proper disclaimers for legal information
+**Government Research:**
+- Always include: "According to [government source URL] retrieved on [date]:"
+- Provide specific legal status information
+- Quote relevant regulations or laws when available
 
-LEGAL RESPONSE PATTERN FOR UNCERTAIN CASES:
-**Database Results:** [specific findings or "No specific products found in our database"]
-**External Research:** [government source findings with URL and date]
-**Recommendation:** Always verify with official state sources before making business decisions
+**Summary:**
+- Provide clear legal status summary
+- Include specific THC limits, restrictions, or prohibitions
+- Add disclaimer: "Verify with official state sources before making business decisions"
 
-RESPONSE FORMATTING FOR DEFINITIVE PRODUCT LEGALITY:
-- Format product lists as clean numbered lists: 1. 2. 3. etc.
-- Start with a clear bold header: **Legal [Brand] Products in [State]:**
-- List each product as just the product name: "1. Product Name"
-- Do NOT use bullet points (*) - use numbered lists only
-- Do NOT repeat the brand name after each product since the header already specifies it
-- Use **bold text** for headers only
-- Include state excise tax information when available
-- ALWAYS cite the source: "According to our State Map database..."
+CRITICAL CITATION REQUIREMENTS:
+- NEVER make legal claims without citing sources
+- ALWAYS include government source URLs when available
+- ALWAYS include retrieval dates for external research
+- Use format: "According to colorado.gov retrieved on January 9, 2025:"
+- Be specific about which government agency or department
+
+RESPONSE STRUCTURE FOR LEGAL QUERIES:
+- Use bold headers: **Database Results:**, **Government Research:**, **Summary:**
+- Include bullet points for specific findings
+- Number product lists (1. 2. 3.) not bullet points (•)
+- Always cite sources with URLs and dates
+- Include THC limits and specific restrictions when discussing cannabis products
 
 UNCERTAINTY HANDLING:
-- When database has no definitive results, clearly state this limitation
-- Provide external research with proper attribution
+- When database has no results, clearly state this limitation
+- Provide external research with proper government source attribution
 - Include disclaimers about needing official verification
-- Never make definitive legal claims based solely on external research
+- Never make definitive legal claims based solely on external research without proper sources
 
-Be helpful, professional, and thorough while maintaining strict accuracy standards.`;
+PROFESSIONAL TONE:
+- Be helpful, professional, and conversational—like a well-informed teammate
+- Ask clarifying questions if the user query is ambiguous
+- Break long responses into clear, readable sections with proper formatting`;
 
       // Enhanced general search across multiple sources
       const queryAnalysis = await analyzeGeneralQuery(lastUserMessage, supabase, conversationContext);
@@ -182,10 +182,11 @@ Be helpful, professional, and thorough while maintaining strict accuracy standar
       // Check for legality queries first
       if (isLegalityQuery(lastUserMessage)) {
         console.log('Processing legality query in general mode');
-        // Use the proper legality analysis function for legality queries
+        
         const legalityAnalysis = await analyzeLegalityQuery(lastUserMessage, supabase, conversationContext);
         console.log('Legality analysis result:', legalityAnalysis);
         
+        // Search database first
         const legalityResults = await searchStateLegality(supabase, legalityAnalysis);
         if (legalityResults.length > 0) {
           searchResults = [...searchResults, ...legalityResults];
@@ -197,6 +198,24 @@ Be helpful, professional, and thorough while maintaining strict accuracy standar
           };
         }
         
+        // Enhanced Firecrawl search for government sources
+        console.log('Initiating enhanced government source research');
+        const governmentResults = await performEnhancedGovernmentResearch(lastUserMessage, legalityAnalysis);
+        if (governmentResults.length > 0) {
+          searchResults = [...searchResults, ...governmentResults];
+          const retrievedAt = new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          });
+          sourceInfo.sources.push({
+            type: 'government_source',
+            content: 'Government website research',
+            url: getGovernmentUrl(legalityAnalysis.stateFilter),
+            retrievedAt: retrievedAt
+          });
+        }
+        
         // Add excise tax information if state is identified
         if (legalityAnalysis.stateFilter) {
           const exciseTaxInfo = await getStateExciseTaxInfo(supabase, legalityAnalysis.stateFilter);
@@ -206,25 +225,6 @@ Be helpful, professional, and thorough while maintaining strict accuracy standar
           }
         }
         
-        // Use Firecrawl for additional research when needed
-        if (shouldUseLegalCrawling(lastUserMessage)) {
-          console.log('Using Firecrawl for enhanced legal research');
-          const firecrawlResults = await performFirecrawlSearch(lastUserMessage, legalityAnalysis);
-          if (firecrawlResults.length > 0) {
-            searchResults = [...searchResults, ...firecrawlResults];
-            const retrievedAt = new Date().toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            });
-            sourceInfo.sources.push({
-              type: 'government_source',
-              content: 'Government website research',
-              url: `https://${legalityAnalysis.stateFilter?.toLowerCase().replace(' ', '') || 'state'}.gov`,
-              retrievedAt: retrievedAt
-            });
-          }
-        }
       } else {
         // Regular general search
         const kbResults = await searchKnowledgeBase(supabase, queryAnalysis);
@@ -300,8 +300,8 @@ Be helpful, professional, and thorough while maintaining strict accuracy standar
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: aiMessages,
-        temperature: 0.7,
-        max_tokens: 1000,
+        temperature: 0.3, // Lower temperature for more consistent legal responses
+        max_tokens: 1500, // Increased for comprehensive legal responses
       }),
     });
 
@@ -389,13 +389,13 @@ function isLegalityQuery(query: string): boolean {
     'legal', 'legality', 'allowed', 'permitted', 'can sell', 'can i sell',
     'state law', 'regulation', 'compliance', 'approved', 'authorized',
     'banned', 'illegal', 'prohibited', 'restricted', 'law', 'bill', 'ruling',
-    'excise tax', 'tax', 'licensing', 'license', 'permit'
+    'excise tax', 'tax', 'licensing', 'license', 'permit', 'thc', 'delta'
   ];
   
   return legalityKeywords.some(keyword => query.toLowerCase().includes(keyword));
 }
 
-async function performFirecrawlSearch(query: string, queryAnalysis: any) {
+async function performEnhancedGovernmentResearch(query: string, queryAnalysis: any) {
   try {
     const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!firecrawlApiKey) {
@@ -403,55 +403,141 @@ async function performFirecrawlSearch(query: string, queryAnalysis: any) {
       return [];
     }
 
-    console.log('Performing Firecrawl search for:', query);
+    console.log('Performing enhanced government research for:', query);
     
-    // Construct target URL based on state
-    let targetUrl = 'https://example.com'; // fallback
-    if (queryAnalysis.stateFilter) {
-      const stateCode = queryAnalysis.stateFilter.toLowerCase().replace(' ', '');
-      targetUrl = `https://${stateCode}.gov`;
-    }
+    // Construct multiple target URLs based on state and query type
+    const governmentUrls = getTargetGovernmentUrls(queryAnalysis);
+    const searchTerms = buildLegalSearchTerms(query, queryAnalysis);
     
-    console.log('Crawling URL:', targetUrl);
+    console.log('Searching government URLs:', governmentUrls);
+    console.log('Using search terms:', searchTerms);
     
-    const crawlResponse = await fetch('https://api.firecrawl.dev/v0/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        url: targetUrl,
-        formats: ['markdown'],
-        onlyMainContent: true,
-        maxDepth: 1
-      })
+    const results = [];
+    const retrievedDate = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
     });
-
-    if (!crawlResponse.ok) {
-      console.error('Firecrawl API error:', crawlResponse.status, await crawlResponse.text());
-      return [`**External Research**: Unable to access government sources for ${queryAnalysis.stateFilter || 'this query'} (Source: ${targetUrl})`];
-    }
-
-    const crawlData = await crawlResponse.json();
-    console.log('Firecrawl response status:', crawlData?.success);
     
-    if (crawlData?.success && crawlData?.data?.markdown) {
-      const content = crawlData.data.markdown.substring(0, 500); // Limit content length
-      const retrievedDate = new Date().toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-      return [`**External Research**: Based on government source ${targetUrl} retrieved on ${retrievedDate}:\n\n${content}...\n\n*Note: This information should be verified with official state sources before making business decisions.*`];
+    // Try multiple government sources
+    for (const url of governmentUrls.slice(0, 2)) { // Limit to 2 sources to avoid timeout
+      try {
+        const crawlResponse = await fetch('https://api.firecrawl.dev/v0/scrape', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${firecrawlApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            url: url,
+            formats: ['markdown'],
+            onlyMainContent: true,
+            maxDepth: 1
+          })
+        });
+
+        if (crawlResponse.ok) {
+          const crawlData = await crawlResponse.json();
+          if (crawlData?.success && crawlData?.data?.markdown) {
+            const content = crawlData.data.markdown.substring(0, 800); // Increased content length
+            const relevantContent = extractRelevantLegalContent(content, searchTerms);
+            
+            if (relevantContent) {
+              results.push(`**Government Research:** According to ${url} retrieved on ${retrievedDate}:\n\n${relevantContent}\n\n*Verify with official state sources before making business decisions.*`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error crawling ${url}:`, error);
+        continue;
+      }
     }
     
-    return [`**External Research**: No additional information found from government sources for ${queryAnalysis.stateFilter || 'this query'} (Source: ${targetUrl})`];
+    return results;
     
   } catch (error) {
-    console.error('Firecrawl search error:', error);
-    return [`**External Research**: Government source research unavailable at this time for ${queryAnalysis.stateFilter || 'this query'}`];
+    console.error('Enhanced government research error:', error);
+    return [`**Government Research:** Government source research unavailable at this time for ${queryAnalysis.stateFilter || 'this query'}`];
   }
+}
+
+function getTargetGovernmentUrls(queryAnalysis: any): string[] {
+  const state = queryAnalysis.stateFilter?.toLowerCase().replace(' ', '') || 'colorado';
+  
+  // Comprehensive list of government sources for cannabis/hemp regulation
+  const urls = [
+    `https://${state}.gov`,
+    `https://www.${state}.gov/cannabis`,
+    `https://www.${state}.gov/hemp`,
+    `https://cdphe.colorado.gov`, // Colorado Department of Public Health
+    `https://www.colorado.gov/pacific/marijuana`, // Colorado specific
+    `https://ag.colorado.gov/hemp`, // Colorado Agriculture
+  ];
+  
+  // Filter to relevant URLs based on state
+  if (state === 'colorado') {
+    return urls.filter(url => url.includes('colorado'));
+  }
+  
+  return urls.slice(0, 3); // Return top 3 for other states
+}
+
+function buildLegalSearchTerms(query: string, queryAnalysis: any): string[] {
+  const baseTerms = [];
+  
+  // Extract product type
+  if (query.toLowerCase().includes('delta')) {
+    baseTerms.push('delta-8', 'delta 8', 'THC');
+  }
+  if (query.toLowerCase().includes('hemp')) {
+    baseTerms.push('hemp', 'hemp-derived');
+  }
+  if (query.toLowerCase().includes('cannabis')) {
+    baseTerms.push('cannabis', 'marijuana');
+  }
+  
+  // Add legal terms
+  baseTerms.push('legal', 'prohibited', 'banned', 'regulation', 'law');
+  
+  // Add state
+  if (queryAnalysis.stateFilter) {
+    baseTerms.push(queryAnalysis.stateFilter.toLowerCase());
+  }
+  
+  return baseTerms;
+}
+
+function extractRelevantLegalContent(content: string, searchTerms: string[]): string | null {
+  const lowerContent = content.toLowerCase();
+  
+  // Check if content contains relevant terms
+  const hasRelevantTerms = searchTerms.some(term => lowerContent.includes(term.toLowerCase()));
+  
+  if (!hasRelevantTerms) {
+    return null;
+  }
+  
+  // Extract sentences that contain legal information
+  const sentences = content.split(/[.!?]+/);
+  const relevantSentences = sentences.filter(sentence => {
+    const lowerSentence = sentence.toLowerCase();
+    return searchTerms.some(term => lowerSentence.includes(term.toLowerCase())) &&
+           (lowerSentence.includes('legal') || lowerSentence.includes('illegal') || 
+            lowerSentence.includes('prohibited') || lowerSentence.includes('allowed') ||
+            lowerSentence.includes('banned') || lowerSentence.includes('regulation'));
+  });
+  
+  if (relevantSentences.length === 0) {
+    return content.substring(0, 300) + '...';
+  }
+  
+  return relevantSentences.slice(0, 3).join('. ') + '.';
+}
+
+function getGovernmentUrl(state: string | null): string {
+  if (!state) return 'https://gov.state.us';
+  const stateCode = state.toLowerCase().replace(' ', '');
+  return `https://${stateCode}.gov`;
 }
 
 function applyEnhancedComprehensiveFormatCleanup(text: string): string {
@@ -480,18 +566,6 @@ function applyEnhancedComprehensiveFormatCleanup(text: string): string {
   return cleaned.trim();
 }
 
-function shouldUseLegalCrawling(query: string): boolean {
-  const legalAnalysisKeywords = [
-    'why banned', 'why illegal', 'law', 'bill', 'ruling', 'compliance',
-    'regulation', 'statute', 'policy', 'legal explanation'
-  ];
-  
-  return legalAnalysisKeywords.some(keyword => 
-    query.toLowerCase().includes(keyword)
-  );
-}
-
-// ENHANCED DOCUMENT SEARCH FUNCTIONS
 async function analyzeDocumentQuery(query: string, supabase: any, context: any = {}) {
   const lowerQuery = query.toLowerCase();
   
@@ -613,7 +687,6 @@ function groupAndFormatDocuments(files: any[]): string[] {
   return result;
 }
 
-// ENHANCED LEGALITY SEARCH FUNCTIONS
 async function analyzeLegalityQuery(query: string, supabase: any, context: any = {}) {
   const lowerQuery = query.toLowerCase();
   console.log('Analyzing legality query:', lowerQuery);
@@ -687,7 +760,7 @@ async function analyzeLegalityQuery(query: string, supabase: any, context: any =
     stateFilter,
     brandFilter,
     productTerms,
-    requiresLegalAnalysis: shouldUseLegalCrawling(query)
+    requiresLegalAnalysis: true
   };
 }
 
@@ -816,7 +889,6 @@ async function getStateExciseTaxInfo(supabase: any, stateName: string) {
   }
 }
 
-// ENHANCED GENERAL SEARCH FUNCTIONS
 async function analyzeGeneralQuery(query: string, supabase: any, context: any = {}) {
   const lowerQuery = query.toLowerCase();
   const searchTerms = lowerQuery.split(' ').filter(term => term.length > 2);
