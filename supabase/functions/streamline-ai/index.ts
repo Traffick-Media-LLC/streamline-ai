@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -307,10 +308,10 @@ function extractConversationContext(messages: any[]) {
         }
       }
       
-      // Extract brand
+      // Extract brand - improved to handle multi-word brands
       if (!context.lastBrand) {
-        const brandKeywords = ['juice head', 'orbital', 'kush', 'cookies', 'galaxy treats'];
-        for (const brand of brandKeywords) {
+        const multiWordBrands = ['galaxy treats', 'juice head'];
+        for (const brand of multiWordBrands) {
           if (content.includes(brand)) {
             context.lastBrand = brand;
             break;
@@ -534,10 +535,10 @@ async function analyzeLegalityQuery(query: string, supabase: any, context: any =
     }
   }
 
-  // Enhanced brand extraction with multi-word brand support
+  // Enhanced brand extraction with multi-word brand support and case-insensitive matching
   let brandFilter = context.lastBrand || null;
   if (!brandFilter) {
-    // Check for known multi-word brands first
+    // Check for known multi-word brands first (case-insensitive)
     const multiWordBrands = ['galaxy treats', 'juice head'];
     for (const brand of multiWordBrands) {
       if (lowerQuery.includes(brand.toLowerCase())) {
@@ -546,14 +547,17 @@ async function analyzeLegalityQuery(query: string, supabase: any, context: any =
       }
     }
     
-    // If no multi-word brand found, check database
+    // If no multi-word brand found, check database (case-insensitive)
     if (!brandFilter) {
       try {
+        console.log('Fetching brands from database for comparison...');
         const { data: brands, error } = await supabase.from('brands').select('name');
         if (!error && brands) {
+          console.log('Available brands:', brands.map(b => b.name));
           for (const brand of brands) {
             if (lowerQuery.includes(brand.name.toLowerCase())) {
               brandFilter = brand.name;
+              console.log('Matched brand from database:', brandFilter);
               break;
             }
           }
@@ -600,13 +604,35 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
 
     console.log('Found state ID:', stateData.id);
 
+    // If we have a brand filter, find the brand ID first
+    let brandId = null;
+    if (queryAnalysis.brandFilter) {
+      console.log('Looking for brand:', queryAnalysis.brandFilter);
+      const { data: brandData, error: brandError } = await supabase
+        .from('brands')
+        .select('id, name')
+        .ilike('name', queryAnalysis.brandFilter)
+        .single();
+
+      if (brandError || !brandData) {
+        console.log('Brand not found in database:', queryAnalysis.brandFilter, 'Error:', brandError);
+        return [];
+      }
+
+      brandId = brandData.id;
+      console.log('Found brand ID:', brandId, 'for brand:', brandData.name);
+    }
+
     // Search state allowed products with proper joins
     let query = supabase
       .from('state_allowed_products')
       .select(`
         products!inner (
+          id,
           name,
+          brand_id,
           brands!inner (
+            id,
             name
           )
         )
@@ -614,9 +640,9 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
       .eq('state_id', stateData.id);
 
     // If we have a brand filter, add it to the query
-    if (queryAnalysis.brandFilter) {
-      console.log('Adding brand filter:', queryAnalysis.brandFilter);
-      query = query.eq('products.brands.name', queryAnalysis.brandFilter);
+    if (brandId) {
+      console.log('Adding brand filter with ID:', brandId);
+      query = query.eq('products.brand_id', brandId);
     }
 
     const { data: stateProducts, error } = await query;
