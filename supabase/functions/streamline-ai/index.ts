@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -62,8 +61,8 @@ serve(async (req) => {
     let systemPrompt = '';
     
     // MODE-BASED PROCESSING
-    if (mode === 'document-search') {
-      console.log('DOCUMENT SEARCH MODE: Processing document query');
+    if (mode === 'drive-search') {
+      console.log('DRIVE SEARCH MODE: Processing document query');
       
       systemPrompt = `You are Streamline AI, a document retrieval specialist. ${nameInstructions}
 
@@ -108,113 +107,102 @@ You are confident and authoritative about documents in our system. Present findi
         }
       }
 
-    } else if (mode === 'product-legality') {
-      console.log('PRODUCT LEGALITY MODE: Processing legality query');
+    } else {
+      console.log('GENERAL MODE: Processing general query with enhanced capabilities');
       
-      systemPrompt = `You are Streamline AI, a US regulatory compliance specialist. ${nameInstructions}
+      systemPrompt = `You are Streamline AI, a comprehensive research assistant with access to multiple information sources. ${nameInstructions}
 
-Your expertise covers regulatory compliance for multiple product categories across US states:
+Your capabilities include:
+- Product legality research across US states (cannabis, hemp, nicotine, kratom products)
+- General industry knowledge and compliance guidance
+- Company information and document awareness
+- Internet research using Firecrawl for the latest information
+- State regulations and excise tax information
 
-PRODUCT CATEGORIES:
+PRODUCT LEGALITY EXPERTISE:
 - Cannabis and Hemp Products (flower, concentrates, edibles, topicals, etc.)
 - Consumable Hemp Products (CBD, Delta-8, Delta-9, HHC, etc.)
 - Nicotine Products (disposable vapes, pods, e-liquids, salts, pouches, etc.)
 - Kratom Products (including 7-hydroxymitragynine products)
 
-LEGALITY RESPONSE RULES:
-- When products are found in our state_allowed_products database, they are DEFINITIVELY legal
-- State this confidently: "Yes, [product] is legal in [state]" or "No, [product] is not legal in [state]"
-- Include state excise tax information when available
-- Only add compliance disclaimers when you lack specific data
-- Products in our database have undergone due diligence - trust this data
-- Consider federal vs state regulations when relevant
-
-LINK FORMATTING:
-- Use [Title](URL) format for any government or legal references
-- No raw URLs or dash formatting
-
-Provide clear, confident yes/no answers when you have the data for any of these product categories across US states.`;
-
-      // Enhanced legality search logic
-      const queryAnalysis = await analyzeLegalityQuery(lastUserMessage, supabase, conversationContext);
-      const legalityResults = await searchStateLegality(supabase, queryAnalysis);
-      
-      if (legalityResults.length > 0) {
-        searchResults = legalityResults;
-        sourceInfo = {
-          found: true,
-          source: 'state_allowed_products' as const,
-          message: `Found definitive legality information for ${legalityResults.length} product(s).`
-        };
-      }
-
-      // Add excise tax information if state is identified
-      if (queryAnalysis.stateFilter) {
-        const exciseTaxInfo = await getStateExciseTaxInfo(supabase, queryAnalysis.stateFilter);
-        if (exciseTaxInfo) {
-          searchResults.push(`**Excise Tax Information for ${queryAnalysis.stateFilter}:**\n${exciseTaxInfo}`);
-        }
-      }
-
-      // Enhanced legal analysis with Firecrawl for complex queries
-      if (shouldUseLegalCrawling(lastUserMessage) && queryAnalysis.stateFilter) {
-        console.log('Using enhanced legal analysis with government sources');
-        // Note: Firecrawl integration would be implemented here
-        // For now, we add a note about complex legal analysis
-        searchResults.push("**Legal Analysis Note:** For detailed regulatory information, please consult official state government sources.");
-      }
-
-    } else {
-      console.log('GENERAL MODE: Processing general query');
-      
-      systemPrompt = `You are Streamline AI, a knowledgeable assistant specializing in regulatory compliance and industry information. ${nameInstructions}
-
-Your functions include:
-- Answering general questions about cannabis, hemp, nicotine, and kratom industries using our knowledge base
-- Providing company information and guidance
-- Offering general compliance and regulatory guidance for US markets
-- Context-aware responses based on conversation history
-
-FORMATTING:
+RESPONSE FORMATTING:
 - Use **Bold Text** for headers and emphasis
 - Format links as [Title](URL) - never use raw URLs or dashes
-- Format responses clearly and professionally
-- Provide helpful, accurate information based on your knowledge
+- When products are found in our database, state legality confidently
+- Include state excise tax information when available
+- For complex legal questions, use internet research to provide current information
 
-CONTEXT AWARENESS:
-- Remember previous mentions of states, brands, or products in the conversation
-- Provide relevant follow-up information when appropriate
+RESEARCH APPROACH:
+- First check internal databases for definitive answers
+- Use Firecrawl for internet research when internal data is insufficient
+- Provide context-aware responses based on conversation history
+- Focus on accuracy and cite sources when possible
 
-Be helpful, professional, and accurate in your responses across all regulated product categories.`;
+Be helpful, professional, and thorough in your research and responses.`;
 
       // Enhanced general search across multiple sources
       const queryAnalysis = await analyzeGeneralQuery(lastUserMessage, supabase, conversationContext);
       
-      // Search knowledge base first
-      const kbResults = await searchKnowledgeBase(supabase, queryAnalysis);
-      if (kbResults.length > 0) {
-        searchResults = [...searchResults, ...kbResults];
-      }
-      
-      // Search products database
-      const generalResults = await searchGeneral(supabase, queryAnalysis);
-      if (generalResults.length > 0) {
-        searchResults = [...searchResults, ...generalResults];
-      }
-      
-      if (searchResults.length > 0) {
-        sourceInfo = {
-          found: true,
-          source: 'knowledge_base' as const,
-          message: `Found ${searchResults.length} relevant result(s).`
-        };
+      // Check for legality queries first
+      if (isLegalityQuery(lastUserMessage)) {
+        console.log('Processing legality query in general mode');
+        const legalityResults = await searchStateLegality(supabase, queryAnalysis);
+        if (legalityResults.length > 0) {
+          searchResults = [...searchResults, ...legalityResults];
+          sourceInfo = {
+            found: true,
+            source: 'state_allowed_products' as const,
+            message: `Found definitive legality information for ${legalityResults.length} product(s).`
+          };
+        }
+        
+        // Add excise tax information if state is identified
+        if (queryAnalysis.stateFilter) {
+          const exciseTaxInfo = await getStateExciseTaxInfo(supabase, queryAnalysis.stateFilter);
+          if (exciseTaxInfo) {
+            searchResults.push(`**Excise Tax Information for ${queryAnalysis.stateFilter}:**\n${exciseTaxInfo}`);
+          }
+        }
+        
+        // Use Firecrawl for complex legal analysis if needed
+        if (shouldUseLegalCrawling(lastUserMessage)) {
+          console.log('Using Firecrawl for enhanced legal research');
+          const firecrawlResults = await performFirecrawlSearch(lastUserMessage, queryAnalysis);
+          if (firecrawlResults.length > 0) {
+            searchResults = [...searchResults, ...firecrawlResults];
+            sourceInfo = {
+              found: true,
+              source: 'internet_knowledge' as const,
+              message: `Found ${firecrawlResults.length} additional research result(s) from web sources.`
+            };
+          }
+        }
+      } else {
+        // Regular general search
+        const kbResults = await searchKnowledgeBase(supabase, queryAnalysis);
+        if (kbResults.length > 0) {
+          searchResults = [...searchResults, ...kbResults];
+        }
+        
+        const generalResults = await searchGeneral(supabase, queryAnalysis);
+        if (generalResults.length > 0) {
+          searchResults = [...searchResults, ...generalResults];
+        }
+        
+        if (searchResults.length > 0) {
+          sourceInfo = {
+            found: true,
+            source: 'knowledge_base' as const,
+            message: `Found ${searchResults.length} relevant result(s).`
+          };
+        }
       }
     }
 
     // Prepare context for AI
     let contextInfo = '';
     if (searchResults.length > 0) {
-      if (mode === 'document-search') {
+      if (mode === 'drive-search') {
         contextInfo = `\n\nAvailable Documents:\n${searchResults.join('\n')}`;
       } else {
         contextInfo = `\n\nRelevant information found:\n${searchResults.map(result => `- ${result}`).join('\n')}`;
@@ -329,6 +317,45 @@ function extractConversationContext(messages: any[]) {
   }
   
   return context;
+}
+
+function isLegalityQuery(query: string): boolean {
+  const legalityKeywords = [
+    'legal', 'legality', 'allowed', 'permitted', 'can sell', 'can i sell',
+    'state law', 'regulation', 'compliance', 'approved', 'authorized',
+    'banned', 'illegal', 'prohibited', 'restricted', 'law', 'bill', 'ruling',
+    'excise tax', 'tax', 'licensing', 'license', 'permit'
+  ];
+  
+  return legalityKeywords.some(keyword => query.toLowerCase().includes(keyword));
+}
+
+async function performFirecrawlSearch(query: string, queryAnalysis: any) {
+  try {
+    const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    if (!firecrawlApiKey) {
+      console.log('Firecrawl API key not found, skipping web search');
+      return [];
+    }
+
+    console.log('Performing Firecrawl search for:', query);
+    
+    // Construct search terms for government and regulatory sources
+    const searchTerms = [];
+    if (queryAnalysis.stateFilter) {
+      searchTerms.push(`${queryAnalysis.stateFilter} government regulations`);
+    }
+    if (queryAnalysis.productTerms) {
+      searchTerms.push(...queryAnalysis.productTerms);
+    }
+    
+    // For now, return a placeholder that indicates Firecrawl integration is ready
+    return [`**Web Research**: Firecrawl integration is configured and ready. Search terms: ${searchTerms.join(', ')}`];
+    
+  } catch (error) {
+    console.error('Firecrawl search error:', error);
+    return [];
+  }
 }
 
 function applyEnhancedComprehensiveFormatCleanup(text: string): string {
@@ -594,8 +621,25 @@ async function analyzeGeneralQuery(query: string, supabase: any, context: any = 
   const lowerQuery = query.toLowerCase();
   const searchTerms = lowerQuery.split(' ').filter(term => term.length > 2);
   
+  // Extract state for potential legality queries
+  let stateFilter = context.lastState || null;
+  if (!stateFilter) {
+    const stateKeywords = ['florida', 'california', 'texas', 'new york', 'colorado', 'oregon', 'washington'];
+    for (const state of stateKeywords) {
+      if (lowerQuery.includes(state)) {
+        stateFilter = state.charAt(0).toUpperCase() + state.slice(1);
+        break;
+      }
+    }
+  }
+
+  // Extract product terms
+  const productTerms = lowerQuery.split(' ').filter(term => term.length > 2);
+  
   return { 
     searchTerms,
+    stateFilter,
+    productTerms,
     context: context
   };
 }

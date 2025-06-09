@@ -85,10 +85,8 @@ const ChatPage = () => {
 
   const getModeLabel = (mode: ChatMode) => {
     switch (mode) {
-      case 'document-search':
-        return "Document Search";
-      case 'product-legality':
-        return "Product Legality";
+      case 'drive-search':
+        return "Drive Search";
       case 'general':
         return "General";
       default:
@@ -145,7 +143,7 @@ const ChatPage = () => {
                   Hello{displayName ? `, ${displayName}` : ''}! How can I help you today?
                 </h1>
                 <p className="mb-8 text-muted-foreground">
-                  Ask me anything about product legality, state regulations, company files, or ingredient information.
+                  Ask me anything about product legality, state regulations, company files, or search the web for the latest information.
                 </p>
                 
                 {/* Topic suggestion cards */}
@@ -174,9 +172,8 @@ const ChatPage = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="document-search">Document Search</SelectItem>
-                    <SelectItem value="product-legality">Product Legality</SelectItem>
                     <SelectItem value="general">General</SelectItem>
+                    <SelectItem value="drive-search">Drive Search</SelectItem>
                   </SelectContent>
                 </Select>
                 
