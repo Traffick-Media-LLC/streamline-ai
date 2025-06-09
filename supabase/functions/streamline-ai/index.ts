@@ -72,14 +72,26 @@ DOCUMENT FORMATTING RULES:
 - ALWAYS preserve the EXACT original file names
 - Present documents as: [Original File Name](Direct Link)
 - NEVER rename files or use generic descriptions like "Document 1"
+- NEVER add extra text like "View Document" or colons after filenames
 - Group documents by category with bold headers like **Sales Sheets**
 - When users ask for specific types (like "sales sheets"), prioritize those exact document types
 
-LINK STYLE REQUIREMENTS:
+CRITICAL LINK FORMATTING:
+- Output ONLY this format: [Filename](URL)
+- Do NOT output: **Filename**: [View Document](URL)
+- Do NOT output: Filename: [Link](URL)  
+- Do NOT add colons, labels, or extra formatting
 - Render links as plain underlined text using [Title](URL) format only
 - Do not include icons or use blue coloring
-- Do not add "Download" labels or extra bullets
 - No raw URLs or dashes in link formatting
+
+NEGATIVE EXAMPLES (DO NOT DO):
+❌ **Flex Freeze JH - 345 x 600**: View Document
+❌ [View Document](url)
+❌ **File Name**: [Download](url)
+
+POSITIVE EXAMPLE (CORRECT):
+✅ [Flex Freeze JH - 345 x 600](url)
 
 You are confident and authoritative about documents in our system. Present findings clearly without unnecessary disclaimers.`;
 
@@ -497,13 +509,14 @@ function groupAndFormatDocuments(files: any[]): string[] {
 
   const result: string[] = [];
   
-  // Format grouped results
+  // Format grouped results with clean markdown links only
   Object.entries(grouped).forEach(([category, categoryFiles]) => {
     if (categoryFiles.length > 0) {
       result.push(`**${category}**`);
       categoryFiles.forEach(file => {
         const fileName = file.file_name || 'Unknown Document';
         const fileUrl = file.file_url || '#';
+        // Output ONLY clean markdown links - no extra text, colons, or labels
         result.push(`[${fileName}](${fileUrl})`);
       });
       result.push(''); // Add spacing between groups
@@ -685,12 +698,12 @@ async function searchStateLegality(supabase: any, queryAnalysis: any) {
 
     console.log('Filtered to', filteredProducts.length, 'matching products');
 
-    // Format products cleanly without redundant "legal" text
+    // Format products cleanly WITHOUT redundant brand names
     return filteredProducts.map(item => {
       const product = item.products;
-      const brand = product?.brands?.name || 'Unknown Brand';
       const productName = product?.name || 'Unknown Product';
-      return `${productName} by ${brand}`;
+      // Remove redundant brand name since header already specifies the brand
+      return productName;
     });
 
   } catch (error) {
