@@ -1,58 +1,37 @@
 
 
-## Add Anonymous Read Access to All Tables
+## Revert Anonymous Read Access Policies
 
 ### What This Does
-Adds a permissive SELECT (read-only) policy for anonymous users on every table in the database so your separate project can query data without authentication.
-
-### Why New Policies Are Needed
-The existing RLS policies are all **restrictive**, meaning they require ALL conditions to pass. Many also check `auth.uid()`, blocking anonymous access. We need to add **permissive** SELECT policies that explicitly grant read access to the `anon` role.
-
-### Tables Receiving New Policies
-
-All 18 tables will get a new permissive policy:
-
-| Table | Current Anon Read | After |
-|---|---|---|
-| app_settings | Blocked | Open |
-| brands | Likely works (has `true`) | Guaranteed |
-| chat_feedback | Blocked | Open |
-| chat_logs | Blocked | Open |
-| chat_messages | Blocked | Open |
-| chats | Blocked | Open |
-| drive_files | Likely works | Guaranteed |
-| employees | Likely works | Guaranteed |
-| file_content | Likely works | Guaranteed |
-| knowledge_entries | Active only | All active |
-| product_ingredients | Blocked | Open |
-| products | Likely works | Guaranteed |
-| profiles | Blocked | Open |
-| state_allowed_products | Likely works | Guaranteed |
-| state_excise_taxes | Blocked | Open |
-| state_notes | Likely works | Guaranteed |
-| states | Likely works | Guaranteed |
-| user_filter_preferences | Blocked | Open |
-| user_roles | Blocked | Open |
+Creates a new SQL migration that drops all 19 `anon_read_*` policies that were just added, restoring the original access rules.
 
 ### Technical Details
 
-A single SQL migration will add one **permissive** SELECT policy per table, all using `USING (true)` and targeting the `anon` role:
+A single migration will run:
 
 ```text
-CREATE POLICY "anon_read_[table]"
-  ON public.[table]
-  FOR SELECT
-  TO anon
-  USING (true);
+DROP POLICY IF EXISTS "anon_read_app_settings" ON public.app_settings;
+DROP POLICY IF EXISTS "anon_read_brands" ON public.brands;
+DROP POLICY IF EXISTS "anon_read_chat_feedback" ON public.chat_feedback;
+DROP POLICY IF EXISTS "anon_read_chat_logs" ON public.chat_logs;
+DROP POLICY IF EXISTS "anon_read_chat_messages" ON public.chat_messages;
+DROP POLICY IF EXISTS "anon_read_chats" ON public.chats;
+DROP POLICY IF EXISTS "anon_read_drive_files" ON public.drive_files;
+DROP POLICY IF EXISTS "anon_read_employees" ON public.employees;
+DROP POLICY IF EXISTS "anon_read_file_content" ON public.file_content;
+DROP POLICY IF EXISTS "anon_read_knowledge_entries" ON public.knowledge_entries;
+DROP POLICY IF EXISTS "anon_read_product_ingredients" ON public.product_ingredients;
+DROP POLICY IF EXISTS "anon_read_products" ON public.products;
+DROP POLICY IF EXISTS "anon_read_profiles" ON public.profiles;
+DROP POLICY IF EXISTS "anon_read_state_allowed_products" ON public.state_allowed_products;
+DROP POLICY IF EXISTS "anon_read_state_excise_taxes" ON public.state_excise_taxes;
+DROP POLICY IF EXISTS "anon_read_state_notes" ON public.state_notes;
+DROP POLICY IF EXISTS "anon_read_states" ON public.states;
+DROP POLICY IF EXISTS "anon_read_user_filter_preferences" ON public.user_filter_preferences;
+DROP POLICY IF EXISTS "anon_read_user_roles" ON public.user_roles;
 ```
 
-This is applied to all 18 tables. Existing policies remain untouched so your current app continues to work.
-
-### Security Note
-
-This opens **all data** (including user profiles, chat messages, roles) for anonymous read access. This is fine for your use case since you confirmed all tables should be open, but be aware that anyone with your Supabase URL and anon key can read this data.
-
-### No Code Changes Required
-
-Only database migration needed -- no frontend or edge function changes.
-
+### Impact
+- All anonymous read access will be removed
+- Existing authenticated user policies remain untouched
+- No code changes needed
