@@ -112,23 +112,25 @@ export const useStatePermissionsDataQuery = () => {
     try {
       console.log(`Directly fetching products for state ID: ${stateId}`);
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from('state_allowed_products')
         .select(`
           product_id,
           state_id,
-          products (
+          products!inner (
             id,
             name,
             brand_id,
-            brands (
+            brands!inner (
               id, 
               name,
-              logo_url
+              logo_url,
+              is_visible
             )
           )
-        `)
-        .eq('state_id', stateId);
+        `) as any)
+        .eq('state_id', stateId)
+        .eq('products.brands.is_visible', true);
         
       if (error) throw error;
       
