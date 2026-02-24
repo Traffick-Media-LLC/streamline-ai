@@ -41,9 +41,10 @@ export const useProductsData = () => {
 
   const fetchBrands = async () => {
     console.log("Fetching brands data...");
-    const { data, error } = await supabase
+    const { data, error } = await (supabase
       .from('brands')
-      .select('*')
+      .select('*') as any)
+      .eq('is_visible', true)
       .order('name');
     
     if (error) throw error;

@@ -38,16 +38,19 @@ export type Database = {
       brands: {
         Row: {
           id: number
+          is_visible: boolean
           logo_url: string | null
           name: string
         }
         Insert: {
           id?: number
+          is_visible?: boolean
           logo_url?: string | null
           name: string
         }
         Update: {
           id?: number
+          is_visible?: boolean
           logo_url?: string | null
           name?: string
         }
