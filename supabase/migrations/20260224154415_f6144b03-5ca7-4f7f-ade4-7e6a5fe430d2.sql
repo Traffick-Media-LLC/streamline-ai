@@ -1,0 +1,1 @@
+ALTER TABLE public.brands ADD COLUMN is_visible boolean NOT NULL DEFAULT true;

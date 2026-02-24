@@ -16,12 +16,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Pencil, Trash2, Plus } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 interface Brand {
   id: number;
   name: string;
   logo_url: string | null;
+  is_visible: boolean;
 }
 
 const BrandsManagement: React.FC = () => {
@@ -120,6 +122,31 @@ const BrandsManagement: React.FC = () => {
       toast({
         title: "Error",
         description: "Failed to update brand. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Toggle brand visibility
+  const handleToggleVisibility = async (id: number, is_visible: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('brands')
+        .update({ is_visible } as any)
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      setBrands(prev => prev.map(b => b.id === id ? { ...b, is_visible } : b));
+      toast({
+        title: "Success",
+        description: `Brand ${is_visible ? 'shown' : 'hidden'} successfully!`,
+      });
+    } catch (error) {
+      console.error('Error toggling brand visibility:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update brand visibility.",
         variant: "destructive",
       });
     }
@@ -227,7 +254,7 @@ const BrandsManagement: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredBrands.length > 0 ? (
             filteredBrands.map((brand) => (
-              <Card key={brand.id} className="overflow-hidden">
+              <Card key={brand.id} className={`overflow-hidden transition-opacity ${!brand.is_visible ? 'opacity-50' : ''}`}>
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-center">
                     <CardTitle className="text-xl flex items-center gap-3">
@@ -237,7 +264,12 @@ const BrandsManagement: React.FC = () => {
                       </Avatar>
                       {brand.name}
                     </CardTitle>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={brand.is_visible}
+                        onCheckedChange={(checked) => handleToggleVisibility(brand.id, checked)}
+                        aria-label={`Toggle visibility for ${brand.name}`}
+                      />
                       <Button 
                         variant="ghost" 
                         size="icon" 
