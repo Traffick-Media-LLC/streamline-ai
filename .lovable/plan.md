@@ -1,57 +1,42 @@
 
 
-## Restrict Sign-ups to @streamlinevape.com (Server-Side)
+## Show "Restricted Access" Page Instead of Auto Sign-Out
 
-### Problem
-Client-side domain checks can be bypassed. The restriction must be enforced at the database level so no one can create an account with a non-company email, regardless of how they authenticate.
+Instead of immediately signing out non-company email users, show them a dedicated page explaining access is restricted to Streamline employees, with a button to sign out manually.
 
-### Solution: PostgreSQL Database Trigger + Client-Side UX
+### Changes
 
-#### 1. Database Migration: Block non-company sign-ups at the database level
+**1. New file: `src/pages/RestrictedPage.tsx`**
 
-Create a PostgreSQL trigger function that fires **before insert** on `auth.users`. If the new user's email does not end with `@streamlinevape.com`, the trigger raises an exception, preventing the row from being created.
+A full-page component that displays:
+- Streamline logo
+- "Access Restricted" heading
+- Message: "This application is restricted to Streamline employees only. Please sign in with your @streamlinevape.com email address."
+- "Sign Out" button that calls `supabase.auth.signOut()` and redirects to `/auth`
 
-```sql
-CREATE OR REPLACE FUNCTION public.enforce_email_domain()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.email IS NULL OR NOT NEW.email LIKE '%@streamlinevape.com' THEN
-    RAISE EXCEPTION 'Registration is restricted to @streamlinevape.com email addresses';
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+**2. Update `src/App.tsx`**
 
-CREATE TRIGGER enforce_email_domain_trigger
-  BEFORE INSERT ON auth.users
-  FOR EACH ROW
-  EXECUTE FUNCTION public.enforce_email_domain();
-```
+Add a new route: `/restricted` pointing to `RestrictedPage`. This route is NOT protected -- it needs to be accessible to signed-in non-company users.
 
-This is the real enforcement layer. Even if someone calls the Supabase API directly, the database will reject the sign-up.
+**3. Update `src/contexts/AuthContext.tsx`**
 
-#### 2. Client-side validation (UX only, not security)
+Instead of calling `supabase.auth.signOut()` when a non-company email is detected, keep the user signed in but add a new context flag `isRestricted: true`. Remove the auto sign-out logic added in the last diff.
 
-These changes provide a better user experience by showing friendly error messages before hitting the server.
+**4. Update `src/components/ProtectedRoute.tsx`**
 
-**`src/components/auth/AuthForm.tsx`**
-- In the email sign-up handler, check if the email ends with `@streamlinevape.com` before calling `signUp()`. Show a toast error if it doesn't match.
-- Add a small info note under the form: "Access restricted to @streamlinevape.com accounts"
+After confirming the user is authenticated, check if their email ends with `@streamlinevape.com`. If not, redirect to `/restricted` instead of rendering the protected content.
 
-**`src/contexts/AuthContext.tsx`**
-- In `onAuthStateChange`, if a `SIGNED_IN` event fires with a non-company email (e.g., someone signs in via Google with a personal account), immediately sign them out and show an error. This handles the Google OAuth case where the user picks a non-company Google account.
+### Flow
 
-#### 3. Files Changed
+1. User signs in with Google using a personal email
+2. Auth succeeds, user lands in the app
+3. `ProtectedRoute` checks email domain, redirects to `/restricted`
+4. User sees a clear message and can sign out manually
 
 | File | Change |
 |------|--------|
-| New migration SQL | Database trigger to block non-company emails |
-| `src/components/auth/AuthForm.tsx` | Client-side domain check + info text |
-| `src/contexts/AuthContext.tsx` | Sign-out non-company Google accounts |
-
-#### Technical Notes
-- The database trigger runs at the PostgreSQL level, so it cannot be bypassed from the client
-- Google Sign In will still redirect, but the sign-up will fail server-side if the Google account isn't `@streamlinevape.com`, and the AuthContext check will handle the UX gracefully
-- Existing users with non-company emails (if any) are not affected -- the trigger only fires on new sign-ups
-- No changes needed to edge functions or RLS policies
+| `src/pages/RestrictedPage.tsx` | New page with restriction message and sign-out button |
+| `src/App.tsx` | Add `/restricted` route |
+| `src/contexts/AuthContext.tsx` | Remove auto sign-out, keep session for non-company emails |
+| `src/components/ProtectedRoute.tsx` | Redirect non-company emails to `/restricted` |
 
