@@ -51,8 +51,13 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   // If not authenticated, redirect to auth - BUT only if not already on auth page
   if (!isAuthenticated && !isAuthPage) {
     console.log("Not authenticated, redirecting to auth page");
-    // Add current path as state to redirect back after login
     return <Navigate to="/auth" state={{ from: location.pathname }} />;
+  }
+
+  // If authenticated but not a company email, redirect to restricted page
+  if (isAuthenticated && user?.email && !user.email.endsWith('@streamlinevape.com')) {
+    console.log("Non-company email detected, redirecting to restricted page");
+    return <Navigate to="/restricted" />;
   }
 
   // If admin role is required but user is not admin
