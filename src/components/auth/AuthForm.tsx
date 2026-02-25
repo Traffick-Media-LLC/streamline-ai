@@ -57,6 +57,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ from, loading: externalLoading }) =
         }
       } else {
         // Sign up with email
+        if (!email.endsWith('@streamlinevape.com')) {
+          toast.error("Access restricted to @streamlinevape.com email addresses");
+          setEmailLoading(false);
+          return;
+        }
+        
         if (password !== confirmPassword) {
           toast.error("Passwords do not match");
           setEmailLoading(false);
@@ -232,6 +238,10 @@ const AuthForm: React.FC<AuthFormProps> = ({ from, loading: externalLoading }) =
           </Tabs>
         </TabsContent>
       </Tabs>
+      
+      <p className="text-xs text-center text-muted-foreground mt-4">
+        Access restricted to @streamlinevape.com accounts
+      </p>
     </Animated>
   );
 };
