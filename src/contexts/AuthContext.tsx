@@ -49,17 +49,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       async (event, newSession) => {
         console.log("Auth state changed:", event, "Session:", newSession?.user?.id);
         
-        // Block non-company emails (e.g. Google OAuth with personal account)
-        if (event === 'SIGNED_IN' && newSession?.user) {
-          const email = newSession.user.email || '';
-          if (!email.endsWith('@streamlinevape.com')) {
-            console.warn("Non-company email detected, signing out:", email);
-            await supabase.auth.signOut();
-            toast.error("Access restricted to @streamlinevape.com email addresses");
-            if (mounted) setLoading(false);
-            return;
-          }
-        }
+        // Non-company emails are allowed to sign in but will be redirected
+        // to /restricted by ProtectedRoute
         
         if (mounted) {
           const newUser = newSession?.user ?? null;

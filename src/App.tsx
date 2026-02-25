@@ -21,6 +21,7 @@ const AuthPage = lazy(() => import("./pages/AuthPage"));
 const KnowledgeManager = lazy(() => import("./components/KnowledgeManager"));
 const EmployeeDirectory = lazy(() => import("./pages/EmployeeDirectory"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
+const RestrictedPage = lazy(() => import("./pages/RestrictedPage"));
 
 // Admin Pages
 const BrandsPage = lazy(() => import("./pages/admin/BrandsPage"));
@@ -63,6 +64,13 @@ const App = () => {
                   <Route path="/auth" element={
                     <Suspense fallback={<PageLoader />}>
                       <AuthPage />
+                    </Suspense>
+                  } />
+                  
+                  {/* Restricted access page - NOT protected */}
+                  <Route path="/restricted" element={
+                    <Suspense fallback={<PageLoader />}>
+                      <RestrictedPage />
                     </Suspense>
                   } />
                   
