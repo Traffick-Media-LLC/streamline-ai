@@ -1,6 +1,7 @@
 
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { isAllowedEmail } from "@/utils/isAllowedEmail";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ShieldAlert } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -55,7 +56,7 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
   }
 
   // If authenticated but not a company email, redirect to restricted page
-  if (isAuthenticated && user?.email && !user.email.endsWith('@streamlinevape.com')) {
+  if (isAuthenticated && user?.email && !isAllowedEmail(user.email)) {
     console.log("Non-company email detected, redirecting to restricted page");
     return <Navigate to="/restricted" />;
   }

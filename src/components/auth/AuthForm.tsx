@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { Mail, Lock } from "lucide-react";
+import { isAllowedEmail } from "@/utils/isAllowedEmail";
 
 interface AuthFormProps {
   from: string;
@@ -57,8 +58,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ from, loading: externalLoading }) =
         }
       } else {
         // Sign up with email
-        if (!email.endsWith('@streamlinevape.com')) {
-          toast.error("Access restricted to @streamlinevape.com email addresses");
+        if (!isAllowedEmail(email)) {
+          toast.error("Access restricted to authorized email addresses");
           setEmailLoading(false);
           return;
         }
