@@ -1,42 +1,34 @@
 
 
-## Show "Restricted Access" Page Instead of Auto Sign-Out
+## Allow michael@offlimits.dev to Bypass Email Restriction
 
-Instead of immediately signing out non-company email users, show them a dedicated page explaining access is restricted to Streamline employees, with a button to sign out manually.
+A simple allowlist will be added so that `michael@offlimits.dev` can access the app alongside `@streamlinevape.com` users.
 
 ### Changes
 
-**1. New file: `src/pages/RestrictedPage.tsx`**
+**1. Create a shared helper: `src/utils/isAllowedEmail.ts`**
 
-A full-page component that displays:
-- Streamline logo
-- "Access Restricted" heading
-- Message: "This application is restricted to Streamline employees only. Please sign in with your @streamlinevape.com email address."
-- "Sign Out" button that calls `supabase.auth.signOut()` and redirects to `/auth`
+A single utility function that checks if an email is allowed. This centralizes the logic so it's easy to add/remove exceptions later.
 
-**2. Update `src/App.tsx`**
+```typescript
+const ALLOWED_DOMAINS = ['@streamlinevape.com'];
+const ALLOWED_EMAILS = ['michael@offlimits.dev'];
 
-Add a new route: `/restricted` pointing to `RestrictedPage`. This route is NOT protected -- it needs to be accessible to signed-in non-company users.
+export function isAllowedEmail(email: string): boolean {
+  return ALLOWED_DOMAINS.some(d => email.endsWith(d)) 
+    || ALLOWED_EMAILS.includes(email.toLowerCase());
+}
+```
 
-**3. Update `src/contexts/AuthContext.tsx`**
+**2. Update `src/components/ProtectedRoute.tsx`**
 
-Instead of calling `supabase.auth.signOut()` when a non-company email is detected, keep the user signed in but add a new context flag `isRestricted: true`. Remove the auto sign-out logic added in the last diff.
+Replace the inline `endsWith('@streamlinevape.com')` check (line 58) with `isAllowedEmail(user.email)`.
 
-**4. Update `src/components/ProtectedRoute.tsx`**
+**3. Update `src/components/auth/AuthForm.tsx`**
 
-After confirming the user is authenticated, check if their email ends with `@streamlinevape.com`. If not, redirect to `/restricted` instead of rendering the protected content.
+Replace the inline `endsWith('@streamlinevape.com')` check (line 60) with `isAllowedEmail(email)`.
 
-### Flow
+**4. Fix pre-existing build error in `src/pages/MapPage.tsx`**
 
-1. User signs in with Google using a personal email
-2. Auth succeeds, user lands in the app
-3. `ProtectedRoute` checks email domain, redirects to `/restricted`
-4. User sees a clear message and can sign out manually
-
-| File | Change |
-|------|--------|
-| `src/pages/RestrictedPage.tsx` | New page with restriction message and sign-out button |
-| `src/App.tsx` | Add `/restricted` route |
-| `src/contexts/AuthContext.tsx` | Remove auto sign-out, keep session for non-company emails |
-| `src/components/ProtectedRoute.tsx` | Redirect non-company emails to `/restricted` |
+The TypeScript error on line 18 (`Type instantiation is excessively deep`) will be fixed by adding a type assertion to the Supabase query.
 
