@@ -15,7 +15,7 @@ async function fetchStateProducts(stateName: string) {
   const {
     data: products,
     error
-  } = await supabase.from('state_allowed_products').select(`
+  } = await (supabase.from('state_allowed_products').select(`
       products!inner (
         name,
         brands!inner (
@@ -26,7 +26,7 @@ async function fetchStateProducts(stateName: string) {
       states!inner (
         name
       )
-    `).eq('states.name', stateName).eq('products.brands.is_visible' as any, true);
+    `) as any).eq('states.name', stateName).eq('products.brands.is_visible', true);
     
   if (error) {
     console.error('Error fetching state products:', error);
